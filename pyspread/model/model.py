@@ -1483,9 +1483,37 @@ class CodeArray(DataArray):
                 return numpy.array([_f for _f in val if _f is not None],
                                    dtype="O")
 
+        def cell_single_ref(addr: str) -> Any:
+            """Refer a cell from spreadsheet-like address string"""
+            col_str = None
+            row_str = None
+            for i, ch in enumerate(addr):
+                if ch.isalpha():
+                    continue
+                col_str = addr[:i]
+                row_str = addr[i:]
+                break
+
+            if not col_str or not row_str:
+                return
+
+            try:
+                row_num = int(row_str) - 1
+            except ValueError:
+                return
+
+            col_str = col_str.upper()
+            col_num = 0
+            for ch in col_str:
+                col_num *= 26
+                col_num += ord(ch) - ord('A')
+
+            return self[row_num, col_num, key[2]]
+
         env_dict = {'X': key[0], 'Y': key[1], 'Z': key[2], 'bz2': bz2,
                     'base64': base64, 'nn': nn, 'help': help, 'Figure': Figure,
-                    'R': key[0], 'C': key[1], 'T': key[2], 'S': self}
+                    'R': key[0], 'C': key[1], 'T': key[2], 'S': self,
+                    'cell_single_ref': cell_single_ref}
         env = self._get_updated_environment(env_dict=env_dict)
 
         if self.safe_mode:
