@@ -2092,16 +2092,24 @@ class GridTableModel(QAbstractTableModel):
         return QAbstractTableModel.flags(self,
                                          index) | Qt.ItemFlag.ItemIsEditable
 
-    def headerData(self, idx: QModelIndex, _, role: Qt.ItemDataRole) -> str:
+    def headerData(self, idx: int, orientation: Qt.Orientation, role: Qt.ItemDataRole) -> str:
         """Overloaded for displaying numbers in header
 
         :param idx: Index of header for which data is returned
+        :param orientation: The orientation the header is in
         :param role: Role of data to be returned
 
         """
 
         if role == Qt.ItemDataRole.DisplayRole:
-            return str(idx)
+            if orientation == Qt.Orientation.Vertical:
+                return str(idx + 1)
+            if orientation == Qt.Orientation.Horizontal:
+                i = idx
+                tens = i // 26
+                ones = i % 26
+                tens_chr = "" if tens == 0 else chr(ord("A") + tens - 1)
+                return tens_chr + chr(ord("A") + ones)
 
     def reset(self):
         """Deletes all grid data including undo data"""
