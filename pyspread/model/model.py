@@ -1483,6 +1483,23 @@ class CodeArray(DataArray):
                 return numpy.array([_f for _f in val if _f is not None],
                                    dtype="O")
 
+        #  --- Expression Parser START ---  #
+        def handle_empty_exp_parser(cell: str) -> bool:
+            """Returns true if cell is empty"""
+            if cell is None or cell == "":
+                return True
+            return False
+
+        def mixed_mode_exp_parser(cell: str) -> tuple[typing.Any, bool]:
+            """Python code if starts with ">", else string"""
+            if cell.startswith(">"):
+                return cell[1:], True
+            if cell.startswith('\''):
+                cell = cell[1:]
+            return cell, False
+        #  --- Expression Parser END ---  #
+
+        #  --- External Reference Parser START ---  #
         def cell_single_ref(addr: str) -> Any:
             """Refer a cell from spreadsheet-like address string"""
             col_str = None
@@ -1509,6 +1526,7 @@ class CodeArray(DataArray):
                 col_num += ord(ch) - ord('A')
 
             return self[row_num, col_num, key[2]]
+        #  --- External Reference Parser END ---  #
 
         env_dict = {'X': key[0], 'Y': key[1], 'Z': key[2], 'bz2': bz2,
                     'base64': base64, 'nn': nn, 'help': help, 'Figure': Figure,
