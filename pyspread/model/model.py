@@ -1357,7 +1357,8 @@ class CodeArray(DataArray):
         code = self(key)
 
         if code is None:
-            return
+            # TODO: implement a proper const / enum for truly empty cells
+            return ...
 
         # Cached cell handling
 
@@ -1541,7 +1542,9 @@ class CodeArray(DataArray):
             return cell_contents
 
         if handle_empty_exp_parser(cell_contents):
-            return ...  # TODO: implement a proper const / enum for truly empty cells
+            # ... (Ellipsis) is another singleton object like None, True, False.
+            # TODO: implement a proper const / enum for truly empty cells
+            return ...
 
         obj, is_code = mixed_mode_exp_parser(cell_contents)
         if not is_code:

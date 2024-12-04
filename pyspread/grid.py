@@ -1957,6 +1957,8 @@ class GridTableModel(QAbstractTableModel):
         def safe_str(obj) -> str:
             """Returns str(obj), on RecursionError returns error message"""
             try:
+                if obj is ...:  # TODO: implement a proper const / enum for truly empty cells
+                    return ""
                 if obj.__class__ in class_format_functions:
                     format_function = class_format_functions[obj.__class__]
                     return format_function(obj)
@@ -1970,14 +1972,12 @@ class GridTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             value = self.code_array[key]
             renderer = self.code_array.cell_attributes[key].renderer
-            if renderer == "image" or value is None:
+            if renderer == "image":
                 return ""
             return safe_str(value)
 
         if role == Qt.ItemDataRole.ToolTipRole:
             value = self.code_array[key]
-            if value is None:
-                return ""
             return wrap_text(safe_str(value))
 
         if role == Qt.ItemDataRole.DecorationRole:
