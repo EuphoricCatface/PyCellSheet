@@ -42,6 +42,8 @@ into the following layers.
 """
 
 from __future__ import absolute_import
+
+import typing
 from builtins import filter
 from builtins import str
 from builtins import zip
@@ -1453,11 +1455,11 @@ class CodeArray(DataArray):
 
         return res
 
-    def _eval_cell(self, key: Tuple[int, int, int], code: str) -> Any:
+    def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
         """Evaluates one cell and returns its result
 
         :param key: Key of cell to be evaled
-        :param code: Code to be evaled
+        :param cell_contents: Whatever the user typed in
 
         """
 
@@ -1536,15 +1538,18 @@ class CodeArray(DataArray):
 
         if self.safe_mode:
             # Safe mode is active
-            return code
+            return cell_contents
 
-        if code is None:
-            # Cell is not present
-            return
+        if handle_empty_exp_parser(cell_contents):
+            return ...  # TODO: implement a proper const / enum for truly empty cells
 
-        if isgenerator(code):
-            # We have a generator object
-            return numpy.array(self._make_nested_list(code), dtype="O")
+        obj, is_code = mixed_mode_exp_parser(cell_contents)
+        if not is_code:
+            return obj
+        if not isinstance(obj, str):
+            # TODO: Make proper exceptions rather than using AssertionError
+            return AssertionError("Expression Parser decided obj is code but obj is not str")
+        cell_contents = obj
 
         try:
             signal.signal(signal.SIGALRM, self.handler)
@@ -1554,7 +1559,7 @@ class CodeArray(DataArray):
             pass
 
         try:
-            result = self.exec_then_eval(code, env, {})
+            result = self.exec_then_eval(cell_contents, env, {})
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
