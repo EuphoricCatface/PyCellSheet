@@ -114,6 +114,7 @@ try:
     from pyspread.lib.typechecks import is_stringlike
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
+    from pyspread.lib.custom_classes import EmptyCell, PythonCode, Range
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -122,6 +123,7 @@ except ImportError:
     from lib.typechecks import is_stringlike
     from lib.selection import Selection
     from lib.string_helpers import ZEN
+    from lib.custom_classes import EmptyCell, PythonCode, Range
 
 
 class_format_functions = {}
@@ -1357,8 +1359,7 @@ class CodeArray(DataArray):
         code = self(key)
 
         if code is None:
-            # TODO: implement a proper const / enum for truly empty cells
-            return ...
+            return EmptyCell
 
         # Cached cell handling
 
@@ -1542,9 +1543,7 @@ class CodeArray(DataArray):
             return cell_contents
 
         if handle_empty_exp_parser(cell_contents):
-            # ... (Ellipsis) is another singleton object like None, True, False.
-            # TODO: implement a proper const / enum for truly empty cells
-            return ...
+            return EmptyCell
 
         obj, is_code = mixed_mode_exp_parser(cell_contents)
         if not is_code:

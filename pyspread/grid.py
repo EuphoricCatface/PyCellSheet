@@ -92,6 +92,7 @@ try:
                                 HorizontalHeaderContextMenu,
                                 VerticalHeaderContextMenu)
     from pyspread.widgets import CellButton
+    from pyspread.lib.custom_classes import EmptyCell
 except ImportError:
     import commands
     from dialogs import DiscardDataDialog
@@ -110,6 +111,7 @@ except ImportError:
     from menus import (GridContextMenu, TableChoiceContextMenu,
                        HorizontalHeaderContextMenu, VerticalHeaderContextMenu)
     from widgets import CellButton
+    from lib.custom_classes import EmptyCell
 
 FONTSTYLES = (QFont.Style.StyleNormal,
               QFont.Style.StyleItalic,
@@ -1957,7 +1959,7 @@ class GridTableModel(QAbstractTableModel):
         def safe_str(obj) -> str:
             """Returns str(obj), on RecursionError returns error message"""
             try:
-                if obj is ...:  # TODO: implement a proper const / enum for truly empty cells
+                if obj is EmptyCell:
                     return ""
                 if obj.__class__ in class_format_functions:
                     format_function = class_format_functions[obj.__class__]
