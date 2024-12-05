@@ -1496,11 +1496,9 @@ class CodeArray(DataArray):
 
         def mixed_mode_exp_parser(cell: str) -> tuple[typing.Any, bool]:
             """Python code if starts with ">", else string"""
-            if cell.startswith(">"):
-                return cell[1:], True
-            if cell.startswith('\''):
-                cell = cell[1:]
-            return cell, False
+            if cell.startswith("'"):
+                return cell[1:], False
+            return cell, True
         #  --- Expression Parser END ---  #
 
         #  --- External Reference Parser START ---  #
