@@ -1565,7 +1565,7 @@ class CodeArray(DataArray):
             result = RuntimeError(err)
 
         except Exception as err:
-            result = Exception(err)
+            result = err
 
         finally:
             try:

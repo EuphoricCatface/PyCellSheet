@@ -1976,11 +1976,16 @@ class GridTableModel(QAbstractTableModel):
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
                 return ""
+            if isinstance(value, Exception):
+                return value.__class__.__name__
             return safe_str(value)
 
         if role == Qt.ItemDataRole.ToolTipRole:
             value = self.code_array[key]
-            return wrap_text(safe_str(value))
+            output = safe_str(value) \
+                if isinstance(value, Exception) \
+                else value.__class__.__name__
+            return wrap_text(safe_str(output))
 
         if role == Qt.ItemDataRole.DecorationRole:
             renderer = self.code_array.cell_attributes[key].renderer
