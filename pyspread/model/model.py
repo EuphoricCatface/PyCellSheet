@@ -1424,7 +1424,7 @@ class CodeArray(DataArray):
 
         return env
 
-    def exec_then_eval(self, code: str,
+    def exec_then_eval(self, code: PythonCode,
                        _globals: dict = None, _locals: dict = None):
         """execs multiline code and returns eval of last code line
 
@@ -1494,11 +1494,11 @@ class CodeArray(DataArray):
                 return True
             return False
 
-        def mixed_mode_exp_parser(cell: str) -> tuple[typing.Any, bool]:
+        def mixed_mode_exp_parser(cell: str) -> Union[Any, PythonCode]:
             """Python code if starts with ">", else string"""
             if cell.startswith("'"):
-                return cell[1:], False
-            return cell, True
+                return cell[1:]
+            return PythonCode(cell)
         #  --- Expression Parser END ---  #
 
         #  --- External Reference Parser START ---  #
@@ -1543,13 +1543,9 @@ class CodeArray(DataArray):
         if handle_empty_exp_parser(cell_contents):
             return EmptyCell
 
-        obj, is_code = mixed_mode_exp_parser(cell_contents)
-        if not is_code:
-            return obj
-        if not isinstance(obj, str):
-            # TODO: Make proper exceptions rather than using AssertionError
-            return AssertionError("Expression Parser decided obj is code but obj is not str")
-        cell_contents = obj
+        parsed = mixed_mode_exp_parser(cell_contents)
+        if not isinstance(parsed, PythonCode):
+            return parsed
 
         try:
             signal.signal(signal.SIGALRM, self.handler)
@@ -1559,7 +1555,7 @@ class CodeArray(DataArray):
             pass
 
         try:
-            result = self.exec_then_eval(cell_contents, env, {})
+            result = self.exec_then_eval(parsed, env, {})
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
