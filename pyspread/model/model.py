@@ -1555,7 +1555,8 @@ class CodeArray(DataArray):
             pass
 
         try:
-            result = self.exec_then_eval(parsed, env, {})
+            # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
+            result = self.exec_then_eval(parsed.lstrip(), env, {})
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
