@@ -54,14 +54,19 @@ def MONTH(date_: date)\
         -> int:
     return date_.month
 
-def NETWORKDAYS(start_date: date, end_date: date, holidays: Optional[list[date]] = None)\
-        -> int:
-    raise NotImplementedError("NETWORKDAYS is not implemented yet")
 
-def NETWORKDAYS_INTL(start_date: date, end_date: date, weekend: Union[int, str] = 1,
-                     holidays: Optional[list[date]] = None)\
-        -> int:
-    raise NotImplementedError("NETWORKDAYS_INTL is not implemented yet")
+class NETWORKDAYS:
+    @staticmethod
+    def __call__(start_date: date, end_date: date, holidays: Optional[list[date]] = None)\
+            -> int:
+        raise NotImplementedError("NETWORKDAYS is not implemented yet")
+
+    @staticmethod
+    def INTL(start_date: date, end_date: date, weekend: Union[int, str] = 1,
+             holidays: Optional[list[date]] = None)\
+            -> int:
+        raise NotImplementedError("NETWORKDAYS.INTL is not implemented yet")
+
 
 def NOW():
     return datetime.now()
@@ -98,11 +103,16 @@ def WEEKDAY(date_: date, type_: int = 1)\
 def WEEKNUM(date_: date, type_: int = 1):
     raise NotImplementedError("WEEKNUM is not implemented yet")
 
-def WORKDAY():
-    raise NotImplementedError("WORKDAY is not implemented yet")
 
-def WORKDAY_INTL():
-    raise NotImplementedError("WORKDAY_INTL is not implemented yet")
+class WORKDAY:
+    @staticmethod
+    def __call__(start_date: date, num_days: int, holidays: Optional[list[date]] = None):
+        raise NotImplementedError("WORKDAY is not implemented yet")
+
+    @staticmethod
+    def INTL(start_date: date, num_days: int, weekend: Union[int, str] = 1, holidays: Optional[list[date]] = None):
+        raise NotImplementedError("WORKDAY.INTL is not implemented yet")
+
 
 def YEAR(date_: date):
     return date_.year
