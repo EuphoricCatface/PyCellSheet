@@ -1,6 +1,11 @@
 from datetime import datetime, date, time, timedelta
 from typing import Union, Optional, SupportsIndex
 
+try:
+    from pyspread.lib.custom_classes import Range
+except ImportError:
+    from lib.custom_classes import Range
+
 
 def DATE(year: SupportsIndex, month: SupportsIndex, day: SupportsIndex)\
         -> date:
@@ -57,7 +62,7 @@ def MONTH(date_: date)\
 
 class NETWORKDAYS:
     @staticmethod
-    def __call__(start_date: date, end_date: date, holidays: Optional[list[date]] = None)\
+    def __call__(start_date: date, end_date: date, holidays: Optional[Range] = None)\
             -> int:
         raise NotImplementedError("NETWORKDAYS is not implemented yet")
 
@@ -106,11 +111,11 @@ def WEEKNUM(date_: date, type_: int = 1):
 
 class WORKDAY:
     @staticmethod
-    def __call__(start_date: date, num_days: int, holidays: Optional[list[date]] = None):
+    def __call__(start_date: date, num_days: int, holidays: Optional[Range] = None):
         raise NotImplementedError("WORKDAY is not implemented yet")
 
     @staticmethod
-    def INTL(start_date: date, num_days: int, weekend: Union[int, str] = 1, holidays: Optional[list[date]] = None):
+    def INTL(start_date: date, num_days: int, weekend: Union[int, str] = 1, holidays: Optional[Range] = None):
         raise NotImplementedError("WORKDAY.INTL is not implemented yet")
 
 
