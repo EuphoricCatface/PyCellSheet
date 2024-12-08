@@ -61,7 +61,7 @@ class MacroPanel(QDialog):
         self.default_text_color = self.result_viewer.textColor()
         self.error_text_color = QColor("red")
 
-        self.button_box.clicked.connect(self.on_apply)
+        self.button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.on_apply)
 
     def _init_widgets(self):
         """Inititialize widgets"""
@@ -78,7 +78,11 @@ class MacroPanel(QDialog):
         self.splitter.addWidget(self.result_viewer)
 
         self.button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Apply)
+            QDialogButtonBox.StandardButton.Apply |
+            QDialogButtonBox.StandardButton.Discard
+        )
+
+        self.button_box.button(QDialogButtonBox.StandardButton.Discard).setText("Discard")
 
     def _layout(self):
         """Layout dialog widgets"""
