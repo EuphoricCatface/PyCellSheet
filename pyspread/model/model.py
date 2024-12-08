@@ -1618,7 +1618,8 @@ class CodeArray(DataArray):
                      'decimal', 'signal', 'Any', 'Dict', 'Iterable', 'List',
                      'NamedTuple', 'Sequence', 'Tuple', 'Union', '_R_', '_C_',
                      '_table_from_address', 'CellRange',
-                     'class_format_functions']
+                     'class_format_functions',
+                     "EmptyCell", "PythonCode", "Range"]
 
         try:
             from moneyed import Money
