@@ -11,11 +11,13 @@ def DATE(year: SupportsIndex, month: SupportsIndex, day: SupportsIndex)\
         -> date:
     return date(year, month, day)
 
+
 def DATEDIF(start: date, end: date, unit: Optional[str] = None)\
         -> timedelta:
     if unit is not None:
         raise NotImplementedError("`unit` operation is not supported yet on DATEDIF")
     return end - start
+
 
 def DATEVALUE(date_string: str)\
         -> date:
@@ -25,35 +27,44 @@ def DATEVALUE(date_string: str)\
         raise NotImplementedError("Install `dateutil` python package to use DATEVALUE")
     return dateutil.parser.parse(date_string).date()
 
+
 def DAY(date_: date)\
         -> int:
     return date_.day
 
+
 def DAYS(end_date: date, start_date: date):
     return (start_date - end_date).days
 
+
 def DAYS360():
     raise NotImplementedError("DAYS360 is not implemented yet")
+
 
 def EDATE(start_date: date, months: int)\
         -> date:
     raise NotImplementedError("EDATE is not implemented yet")
 
+
 def EOMONTH(start_date: date, months: int)\
         -> int:
     raise NotImplementedError("EOMONTH is not implemented yet")
+
 
 def HOUR(time_: time)\
         -> int:
     return time_.hour
 
+
 def ISOWEEKNUM(date_: date)\
         -> int:
     return date_.isocalendar()[1]
 
+
 def MINUTE(time_: time)\
         -> int:
     return time_.minute
+
 
 def MONTH(date_: date)\
         -> int:
@@ -76,14 +87,18 @@ class NETWORKDAYS:
 def NOW():
     return datetime.now()
 
+
 def SECOND(time_: time):
     return time_.second
+
 
 def TIME(hour: SupportsIndex, minute: SupportsIndex, second: SupportsIndex):
     return time(hour, minute, second)
 
+
 def TODAY():
     return date.today()
+
 
 def TIMEVALUE(time_string: str)\
         -> time:
@@ -92,6 +107,7 @@ def TIMEVALUE(time_string: str)\
     except ImportError:
         raise NotImplementedError("Install `dateutil` python package to use TIMEVALUE")
     return dateutil.parser.parse(time_string).time()
+
 
 def WEEKDAY(date_: date, type_: int = 1)\
         -> int:
@@ -104,6 +120,7 @@ def WEEKDAY(date_: date, type_: int = 1)\
             return date_.weekday()
         case _:
             raise ValueError("type_ value should be 1, 2 or 3")
+
 
 def WEEKNUM(date_: date, type_: int = 1):
     raise NotImplementedError("WEEKNUM is not implemented yet")
@@ -122,8 +139,10 @@ class WORKDAY:
 def YEAR(date_: date):
     return date_.year
 
+
 def YEARFRAC():
     raise NotImplementedError("YEARFRAC is not implemented yet")
+
 
 def EPOCHTODATE(timestamp: float, unit: int)\
         -> datetime:
