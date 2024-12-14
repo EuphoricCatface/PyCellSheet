@@ -50,14 +50,8 @@ from builtins import zip
 from builtins import range
 
 import ast
-import base64
-import bz2
 from collections import defaultdict
 from copy import copy, deepcopy
-import datetime
-import decimal
-from decimal import Decimal  # Needed
-from importlib import reload
 from inspect import getmembers, isfunction, isgenerator
 import io
 from itertools import product
