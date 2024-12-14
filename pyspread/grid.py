@@ -2139,10 +2139,6 @@ class GridTableModel(QAbstractTableModel):
             # self.main_window.undo_stack.clear()
             self.code_array.result_cache.clear()
 
-            # Clear globals
-            self.code_array.clear_globals()
-            self.code_array.reload_modules()
-
 
 class GridCellDelegate(QStyledItemDelegate):
     """QStyledItemDelegate for main grid QTableView"""

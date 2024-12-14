@@ -55,7 +55,6 @@ class IconPath:
     imprt = ACTION_PATH / 'document-import.svg'
     export = ACTION_PATH / 'document-export.svg'
     approve = ACTION_PATH / 'document-approve.svg'
-    clear_globals = ACTION_PATH / 'edit-clear.svg'
     page_setup = ACTION_PATH / 'document-page-setup.svg'
     print_preview = ACTION_PATH / 'document-print-preview.svg'
     print = ACTION_PATH / 'document-print.svg'

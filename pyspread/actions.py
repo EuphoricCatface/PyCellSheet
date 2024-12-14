@@ -165,12 +165,6 @@ class MainWindowActions(AttrDict):
                               statustip='Approve, unfreeze and sign the '
                                         'current file')
 
-        self.clear_globals = Action(self.parent, "&Clear globals",
-                                    self.parent.on_clear_globals,
-                                    icon=Icon.clear_globals,
-                                    statustip='Deletes global variables '
-                                              'and reloads base modules')
-
         self.print_preview = Action(self.parent, "Print preview",
                                     self.parent.on_preview,
                                     icon=Icon.print_preview,
