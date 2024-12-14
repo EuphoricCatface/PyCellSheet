@@ -2774,4 +2774,6 @@ class TableChoice(QTabBar):
             grid.verticalScrollBar().setValue(v_pos)
             grid.horizontalScrollBar().setValue(h_pos)
 
+        self.main_window.macro_panel.update_current_table(current)
+
         self.last = current

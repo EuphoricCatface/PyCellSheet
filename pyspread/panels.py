@@ -52,6 +52,7 @@ class MacroPanel(QDialog):
 
         self.parent = parent
         self.code_array = code_array
+        self.current_table = 0
 
         self._init_widgets()
         self._layout()
@@ -93,7 +94,7 @@ class MacroPanel(QDialog):
 
         self.setLayout(layout)
 
-    def _is_invalid_code(self) -> str:
+    def _is_invalid_code(self, current_table) -> str:
         """Preliminary code check
 
         Returns a string with the error message if code is not valid Python.
@@ -102,7 +103,7 @@ class MacroPanel(QDialog):
         """
 
         try:
-            ast.parse(self.code_array.macros)
+            ast.parse(self.code_array.macros[current_table])
 
         except Exception:
             # Grab the traceback and return it
@@ -119,21 +120,25 @@ class MacroPanel(QDialog):
     def on_apply(self):
         """Event handler for Apply button"""
 
-        self.code_array.macros = self.macro_editor.toPlainText()
+        self.code_array.macros[self.current_table] = self.macro_editor.toPlainText()
 
-        err = self._is_invalid_code()
+        err = self._is_invalid_code(self.current_table)
         if err:
             self.update_result_viewer(err=err)
         else:
-            self.update_result_viewer(*self.code_array.execute_macros())
+            self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
 
         self.parent.grid.gui_update()
 
     def update(self):
         """Update macro content"""
 
-        self.macro_editor.setPlainText(self.code_array.macros)
-        self.on_apply()
+        self.macro_editor.setPlainText(self.code_array.dict_grid.macros_draft[self.current_table])
+
+    def update_current_table(self, current):
+        self.code_array.dict_grid.macros_draft[self.current_table] = self.macro_editor.toPlainText()
+        self.current_table = current
+        self.update()
 
     def update_result_viewer(self, result: str = "", err: str = ""):
         """Update event result following execution by main window

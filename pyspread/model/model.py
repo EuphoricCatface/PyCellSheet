@@ -53,7 +53,7 @@ import ast
 import base64
 import bz2
 from collections import defaultdict
-from copy import copy
+from copy import copy, deepcopy
 import datetime
 import decimal
 from decimal import Decimal  # Needed
@@ -470,8 +470,10 @@ class DictGrid(KeyValueStore):
         # Instance of :class:`CellAttributes`
         self.cell_attributes = CellAttributes()
 
-        # Macros as string
-        self.macros = u""
+        # PerSheetInitScripts as string list
+        self.macros: list[str] = [u"" for _ in range(shape[2])]
+        self.macros_draft: list[str] = [u"" for _ in range(shape[2])]
+        self.sheet_globals: dict[int, dict[str, typing.Any]] = dict()
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
         self.col_widths = defaultdict(float)  # Keys have format (col, table)
@@ -559,7 +561,7 @@ class DataArray:
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
         :param macros: Macros
-        :type macros: str
+        :type macros: list[str]
 
         """
 
@@ -594,7 +596,7 @@ class DataArray:
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
         :param macros: Macros
-        :type macros: str
+        :type macros: list[str]
 
         """
 
@@ -656,13 +658,13 @@ class DataArray:
         self.cell_attributes.extend(value)
 
     @property
-    def macros(self) -> str:
+    def macros(self) -> list[str]:
         """macros interface to dict_grid"""
 
         return self.dict_grid.macros
 
     @macros.setter
-    def macros(self, macros: str):
+    def macros(self, macros: list[str]):
         """Sets  macros string"""
 
         self.dict_grid.macros = macros
@@ -1524,11 +1526,11 @@ class CodeArray(DataArray):
             return self[row_num, col_num, key[2]]
         #  --- External Reference Parser END ---  #
 
-        env_dict = {'X': key[0], 'Y': key[1], 'Z': key[2], 'bz2': bz2,
-                    'base64': base64, 'nn': nn, 'help': help, 'Figure': Figure,
-                    'R': key[0], 'C': key[1], 'T': key[2], 'S': self,
-                    'cell_single_ref': cell_single_ref}
-        env = self._get_updated_environment(env_dict=env_dict)
+        # env_dict = {'X': key[0], 'Y': key[1], 'Z': key[2], 'bz2': bz2,
+        #             'base64': base64, 'nn': nn, 'help': help, 'Figure': Figure,
+        #             'R': key[0], 'C': key[1], 'T': key[2], 'S': self,
+        #             'cell_single_ref': cell_single_ref}
+        # env = self._get_updated_environment(env_dict=env_dict)
 
         if self.safe_mode:
             # Safe mode is active
@@ -1548,6 +1550,8 @@ class CodeArray(DataArray):
             # No Unix system
             pass
 
+        # TODO: deepcopy
+        env = self.dict_grid.sheet_globals[key[2]]
         try:
             # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
             result = self.exec_then_eval(parsed.lstrip(), env, {})
@@ -1661,7 +1665,7 @@ class CodeArray(DataArray):
 
         return globals()
 
-    def execute_macros(self) -> Tuple[str, str]:
+    def execute_macros(self, current_table) -> Tuple[str, str]:
         """Executes all macros and returns result string and error string
 
         Executes macros only when not in safe_mode
@@ -1676,15 +1680,15 @@ class CodeArray(DataArray):
             self[key]
 
         # Windows exec does not like Windows newline
-        self.macros = self.macros.replace('\r\n', '\n')
+        self.macros[current_table] = self.macros[current_table].replace('\r\n', '\n')
 
-        # Set up environment for evaluation
-        globals().update(self._get_updated_environment())
-        for var in "XYZRCT":
-            try:
-                del globals()[var]
-            except KeyError:
-                pass
+        # # Set up environment for evaluation
+        # globals().update(self._get_updated_environment())
+        # for var in "XYZRCT":
+        #     try:
+        #         del globals()[var]
+        #     except KeyError:
+        #         pass
 
         # Create file-like string to capture output
         code_out = io.StringIO()
@@ -1702,8 +1706,9 @@ class CodeArray(DataArray):
             # No POSIX system
             pass
 
+        sheet_globals = {}
         try:
-            exec(self.macros, globals())
+            exec(self.macros[current_table], sheet_globals)
             try:
                 signal.alarm(0)
             except AttributeError:
@@ -1727,6 +1732,7 @@ class CodeArray(DataArray):
         # Reset result cache
         self.result_cache.clear()
 
+        self.dict_grid.sheet_globals[current_table] = sheet_globals
         return results, errs
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
