@@ -1449,12 +1449,6 @@ class CodeArray(DataArray):
         exec(compile(block, '<string>', mode='exec'), _globals, _locals)
         res = eval(compile(last, '<string>', mode='eval'), _globals, _locals)
 
-        if hasattr(last_body, "targets"):
-            for target in last_body.targets:
-                _globals[target.id] = res
-
-        globals().update(_globals)
-
         return res
 
     def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
