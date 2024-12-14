@@ -2,9 +2,9 @@ from datetime import datetime, date, time, timedelta
 from typing import Union, Optional, SupportsIndex
 
 try:
-    from pyspread.lib.custom_classes import Range
+    from pyspread.lib.pycellsheet import Range
 except ImportError:
-    from lib.custom_classes import Range
+    from lib.pycellsheet import Range
 
 
 def DATE(year: SupportsIndex, month: SupportsIndex, day: SupportsIndex)\

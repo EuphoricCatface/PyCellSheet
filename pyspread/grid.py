@@ -92,7 +92,7 @@ try:
                                 HorizontalHeaderContextMenu,
                                 VerticalHeaderContextMenu)
     from pyspread.widgets import CellButton
-    from pyspread.lib.custom_classes import EmptyCell
+    from pyspread.lib.pycellsheet import EmptyCell
 except ImportError:
     import commands
     from dialogs import DiscardDataDialog
@@ -111,7 +111,7 @@ except ImportError:
     from menus import (GridContextMenu, TableChoiceContextMenu,
                        HorizontalHeaderContextMenu, VerticalHeaderContextMenu)
     from widgets import CellButton
-    from lib.custom_classes import EmptyCell
+    from lib.pycellsheet import EmptyCell
 
 FONTSTYLES = (QFont.Style.StyleNormal,
               QFont.Style.StyleItalic,

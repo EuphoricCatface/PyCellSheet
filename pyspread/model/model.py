@@ -108,7 +108,7 @@ try:
     from pyspread.lib.typechecks import is_stringlike
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
-    from pyspread.lib.custom_classes import EmptyCell, PythonCode, Range
+    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -117,7 +117,7 @@ except ImportError:
     from lib.typechecks import is_stringlike
     from lib.selection import Selection
     from lib.string_helpers import ZEN
-    from lib.custom_classes import EmptyCell, PythonCode, Range
+    from lib.pycellsheet import EmptyCell, PythonCode, Range
 
 
 class_format_functions = {}

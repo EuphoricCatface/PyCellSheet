@@ -1,8 +1,8 @@
 try:
-    from pyspread.lib.custom_classes import EmptyCell
+    from pyspread.lib.pycellsheet import EmptyCell
     from pyspread.lib.spreadsheet.errors import SpreadsheetErrorNa
 except ImportError:
-    from lib.custom_classes import EmptyCell
+    from lib.pycellsheet import EmptyCell
 
 
 def AND(*args):
