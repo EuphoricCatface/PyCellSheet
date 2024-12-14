@@ -1491,7 +1491,7 @@ class CodeArray(DataArray):
             return False
 
         def mixed_mode_exp_parser(cell: str) -> Union[Any, PythonCode]:
-            """Python code if starts with ">", else string"""
+            """String if starts with "'", else PythonCode"""
             if cell.startswith("'"):
                 return cell[1:]
             return PythonCode(cell)
