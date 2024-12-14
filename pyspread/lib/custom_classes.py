@@ -2,8 +2,17 @@
 from typing import Any
 
 
-EmptyCell = object()
+class Empty:
+    def __str__(self):
+        return ""
 
+    def __int__(self):
+        return 0
+
+    def __float__(self):
+        return 0.0
+
+EmptyCell = Empty()
 
 class PythonCode(str):
     pass
