@@ -43,7 +43,7 @@ into the following layers.
 
 from __future__ import absolute_import
 
-import typing
+import typing, types
 from builtins import filter
 from builtins import str
 from builtins import zip
@@ -467,7 +467,8 @@ class DictGrid(KeyValueStore):
         # PerSheetInitScripts as string list
         self.macros: list[str] = [u"" for _ in range(shape[2])]
         self.macros_draft: list[str] = [u"" for _ in range(shape[2])]
-        self.sheet_globals: dict[int, dict[str, typing.Any]] = dict()
+        self.sheet_globals_copyable: dict[int, dict[str, typing.Any]] = {i: dict() for i in range(shape[2])}
+        self.sheet_globals_uncopyable: dict[int, dict[str, typing.Any]] = {i: dict() for i in range(shape[2])}
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
         self.col_widths = defaultdict(float)  # Keys have format (col, table)
@@ -1544,8 +1545,8 @@ class CodeArray(DataArray):
             # No Unix system
             pass
 
-        # TODO: deepcopy
-        env = self.dict_grid.sheet_globals[key[2]]
+        env = deepcopy(self.dict_grid.sheet_globals_copyable[key[2]])
+        env.update(self.dict_grid.sheet_globals_uncopyable[key[2]])
         try:
             # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
             result = self.exec_then_eval(parsed.lstrip(), env, {})
@@ -1659,7 +1660,15 @@ class CodeArray(DataArray):
         # Reset result cache
         self.result_cache.clear()
 
-        self.dict_grid.sheet_globals[current_table] = sheet_globals
+        for k, v in sheet_globals.items():
+            try:
+                self.dict_grid.sheet_globals_copyable[current_table][k] = deepcopy(v)
+            except TypeError:
+                if type(v) not in [types.ModuleType]:
+                    # TODO: proper warning
+                    errs += (f"WARNING: Per-sheet global variable {k}({type(v).__name__}) is not deepcopyable, "
+                             f"but is unknown if it can be safely used without doing so.\n")
+                self.dict_grid.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
