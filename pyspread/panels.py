@@ -80,10 +80,8 @@ class MacroPanel(QDialog):
 
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Apply |
-            QDialogButtonBox.StandardButton.Discard
+            QDialogButtonBox.StandardButton.Reset
         )
-
-        self.button_box.button(QDialogButtonBox.StandardButton.Discard).setText("Discard")
 
     def _layout(self):
         """Layout dialog widgets"""
