@@ -99,6 +99,7 @@ class MacroPanel(QDialog):
         self.error_text_color = QColor("red")
 
         self.button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.on_apply)
+        self.button_box.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(self.on_reset)
 
     def _init_widgets(self):
         """Inititialize widgets"""
@@ -203,3 +204,9 @@ class MacroPanel(QDialog):
             self.result_viewer.setTextColor(self.error_text_color)
             self.result_viewer.append(err)
             self.result_viewer.setTextColor(self.default_text_color)
+
+    def on_reset(self):
+        if self.current_table in self.code_array.dict_grid.macros_draft:
+            del self.code_array.dict_grid.macros_draft[self.current_table]
+        self.macro_editor.setPlainText(self.code_array.dict_grid.macros[self.current_table])
+        self.applied_indicator.setProperty("applied", True)
