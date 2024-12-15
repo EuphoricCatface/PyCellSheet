@@ -95,7 +95,7 @@ class MacroPanel(QDialog):
         self._init_widgets()
         self._layout()
 
-        self.update()
+        self.update_()
 
         self.default_text_color = self.result_viewer.textColor()
         self.error_text_color = QColor("red")
@@ -174,7 +174,7 @@ class MacroPanel(QDialog):
 
         self.parent.grid.gui_update()
 
-    def update(self):
+    def update_(self):
         """Update macro content"""
         # NYI: store&load evaluation results
 
@@ -189,7 +189,7 @@ class MacroPanel(QDialog):
         if not self.applied_indicator.property("applied"):
             self.code_array.dict_grid.macros_draft[self.current_table] = self.macro_editor.toPlainText()
         self.current_table = current
-        self.update()
+        self.update_()
 
     def update_result_viewer(self, result: str = "", err: str = ""):
         """Update event result following execution by main window
