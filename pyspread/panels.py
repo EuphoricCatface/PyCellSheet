@@ -31,10 +31,10 @@ from io import StringIO
 from sys import exc_info
 from traceback import print_exception
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtProperty
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QSplitter
-from PyQt6.QtWidgets import QTextEdit
+from PyQt6.QtWidgets import QTextEdit, QLabel
 
 try:
     from pyspread.lib.spelltextedit import SpellTextEdit
@@ -46,6 +46,42 @@ except ImportError:
 
 class MacroPanel(QDialog):
     """The macro panel"""
+
+    class AppliedIndicator(QLabel):
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setText("Draft")
+            self.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            self._applied = True
+            self.stylesheet_update()
+
+        def stylesheet_update(self):
+            self.setStyleSheet("")
+            self.setStyleSheet(
+                "QLabel {background-color: #1f000000; font-weight: bold; padding: 1px} \n"
+                "QLabel[applied=true] { color: blue } \n"
+                "QLabel[applied=false] { color: red } \n"
+            )
+
+        def paintEvent(self, a0):
+            super().paintEvent(a0)
+            if self.parent():
+                self.move(
+                    self.parent().width() - self.width(), 0
+                )
+
+        @pyqtProperty(bool)
+        def applied(self):
+            return self._applied
+
+        @applied.setter
+        def applied(self, applied):
+            if self._applied == applied:
+                return
+            self._applied = applied
+            self.setText("Applied" if applied else "Draft")
+            self.stylesheet_update()
 
     def __init__(self, parent, code_array):
         super().__init__()
@@ -69,6 +105,10 @@ class MacroPanel(QDialog):
 
         font_family = self.parent.settings.macro_editor_font_family
         self.macro_editor = SpellTextEdit(self, font_family=font_family)
+        self.applied_indicator = MacroPanel.AppliedIndicator(self.macro_editor)
+        self.macro_editor.textChanged.connect(
+            lambda: self.applied_indicator.setProperty("applied", False)
+        )
 
         self.result_viewer = QTextEdit(self)
         self.result_viewer.setReadOnly(True)
@@ -125,16 +165,25 @@ class MacroPanel(QDialog):
             self.update_result_viewer(err=err)
         else:
             self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
+            if self.current_table in self.code_array.dict_grid.macros_draft:
+                del self.code_array.dict_grid.macros_draft[self.current_table]
+            self.applied_indicator.setProperty("applied", True)
 
         self.parent.grid.gui_update()
 
     def update(self):
         """Update macro content"""
 
-        self.macro_editor.setPlainText(self.code_array.dict_grid.macros_draft[self.current_table])
+        if self.current_table in self.code_array.dict_grid.macros_draft:
+            self.macro_editor.setPlainText(self.code_array.dict_grid.macros_draft[self.current_table])
+            self.applied_indicator.setProperty("applied", False)
+        else:
+            self.macro_editor.setPlainText(self.code_array.dict_grid.macros[self.current_table])
+            self.applied_indicator.setProperty("applied", True)
 
     def update_current_table(self, current):
-        self.code_array.dict_grid.macros_draft[self.current_table] = self.macro_editor.toPlainText()
+        if not self.applied_indicator.property("applied"):
+            self.code_array.dict_grid.macros_draft[self.current_table] = self.macro_editor.toPlainText()
         self.current_table = current
         self.update()
 
