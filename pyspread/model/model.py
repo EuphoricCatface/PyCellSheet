@@ -1467,18 +1467,6 @@ class CodeArray(DataArray):
             from pydoc import render_doc, plaintext
             return render_doc(*args, renderer=plaintext)
 
-        # Flatten helper function
-        def nn(val: numpy.array) -> numpy.array:
-            """Returns flat numpy array without None values"""
-            try:
-                return numpy.array([_f for _f in val.flat if _f is not None],
-                                   dtype="O")
-
-            except AttributeError:
-                # Probably no numpy array
-                return numpy.array([_f for _f in val if _f is not None],
-                                   dtype="O")
-
         #  --- Expression Parser START ---  #
         def handle_empty_exp_parser(cell: str) -> bool:
             """Returns true if cell is empty"""
@@ -1522,12 +1510,6 @@ class CodeArray(DataArray):
             return self[row_num, col_num, key[2]]
         #  --- External Reference Parser END ---  #
 
-        # env_dict = {'X': key[0], 'Y': key[1], 'Z': key[2], 'bz2': bz2,
-        #             'base64': base64, 'nn': nn, 'help': help, 'Figure': Figure,
-        #             'R': key[0], 'C': key[1], 'T': key[2], 'S': self,
-        #             'cell_single_ref': cell_single_ref}
-        # env = self._get_updated_environment(env_dict=env_dict)
-
         if self.safe_mode:
             # Safe mode is active
             return cell_contents
@@ -1548,9 +1530,13 @@ class CodeArray(DataArray):
 
         env = deepcopy(self.dict_grid.sheet_globals_copyable[key[2]])
         env.update(self.dict_grid.sheet_globals_uncopyable[key[2]])
+        local = {
+            "help": help,
+            "cell_single_ref": cell_single_ref
+        }
         try:
             # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-            result = self.exec_then_eval(parsed.lstrip(), env, {})
+            result = self.exec_then_eval(parsed.lstrip(), env, local)
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
