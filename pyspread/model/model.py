@@ -439,7 +439,7 @@ class KeyValueStore(dict):
 
 
 class DictGrid(KeyValueStore):
-    """Core data class with all information that is stored in a `.pys` file.
+    """Core data class with all information that is stored in a `.pycs` file.
 
     Besides grid code access via standard `dict` operations, it provides
     the following attributes:
@@ -538,7 +538,7 @@ class DataArray:
 
 
         - Data is the central content interface for loading / saving data.
-        - It shall be used for loading and saving from and to `.pys` and other
+        - It shall be used for loading and saving from and to `.pycs` and other
           files.
         - It shall be used for loading and saving macros.
         - However, it is not used for importing and exporting data because

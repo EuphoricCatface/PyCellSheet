@@ -644,8 +644,8 @@ class FileDialogBase:
     title = "Choose file"
 
     filters_list = [
-        "Pyspread un-compressed (*.pysu)",
-        "Pyspread compressed (*.pys)",
+        "PyCellSheet un-compressed (*.pycsu)",
+        "PyCellSheet compressed (*.pycs)",
     ]
     if openpyxl is not None:
         filters_list.append("Office Open XML - Tabellendokument (*.xlsx)")

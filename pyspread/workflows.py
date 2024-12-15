@@ -69,7 +69,7 @@ try:
                 CellKeyDialog, FindDialog, ReplaceDialog, CsvFileImportDialog,
                 CsvImportDialog, CsvExportDialog, CsvExportAreaDialog,
                 FileExportDialog, SvgExportAreaDialog, SinglePageArea)
-    from pyspread.interfaces.pys import PysReader, PysWriter
+    from pyspread.interfaces.pycs import PycsReader, PycsWriter
     from pyspread.interfaces.xlsx import XlsxReader
     from pyspread.lib.attrdict import AttrDict
     from pyspread.lib.hashing import sign, verify
@@ -87,7 +87,7 @@ except ImportError:
                 CellKeyDialog, FindDialog, ReplaceDialog, CsvFileImportDialog,
                 CsvImportDialog, CsvExportDialog, CsvExportAreaDialog,
                 FileExportDialog, SvgExportAreaDialog, SinglePageArea)
-    from interfaces.pys import PysReader, PysWriter
+    from interfaces.pycs import PycsReader, PycsWriter
     from interfaces.xlsx import XlsxReader
     from lib.attrdict import AttrDict
     from lib.hashing import sign, verify
@@ -295,12 +295,12 @@ class Workflows:
             self.main_window.safe_mode = True
 
         # File format handling
-        if filepath.suffix == ".pysu":
+        if filepath.suffix == ".pycsu":
             fopen = open
-            freader = PysReader
-        elif filepath.suffix == ".pys":
+            freader = PycsReader
+        elif filepath.suffix == ".pycs":
             fopen = bz2.open
-            freader = PysReader
+            freader = PycsReader
         elif filepath.suffix == ".xlsx":
             if openpyxl is None:
                 msg = f"openpyxl is not installed. {filepath} not opened."
@@ -453,7 +453,7 @@ class Workflows:
     def _save(self, filepath: Path):
         """Save filepath using chosen_filter
 
-        Compresses save file if filepath.suffix is `.pys`
+        Compresses save file if filepath.suffix is `.pycs`
 
         :param filepath: Path of file to be saved
 
@@ -472,13 +472,13 @@ class Workflows:
         with NamedTemporaryFile(delete=False) as tempfile:
             filename = tempfile.name
             try:
-                pys_writer = PysWriter(code_array)
+                pycs_writer = PycsWriter(code_array)
                 try:
                     for _, line in file_progress_gen(
-                            self.main_window, pys_writer, title, label,
-                            len(pys_writer)):
+                            self.main_window, pycs_writer, title, label,
+                            len(pycs_writer)):
                         line = bytes(line, "utf-8")
-                        if filepath.suffix == ".pys":
+                        if filepath.suffix == ".pycs":
                             line = bz2.compress(line)
                         tempfile.write(line)
 

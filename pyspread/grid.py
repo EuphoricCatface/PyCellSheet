@@ -82,8 +82,8 @@ try:
                                       DefaultCellAttributeDict,
                                       class_format_functions)
     from pyspread.lib.attrdict import AttrDict
-    from pyspread.interfaces.pys import (qt52qt6_fontweights,
-                                         qt62qt5_fontweights)
+    from pyspread.interfaces.pycs import (qt52qt6_fontweights,
+                                          qt62qt5_fontweights)
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import quote, wrap_text
     from pyspread.lib.qimage2ndarray import array2qimage
@@ -103,7 +103,7 @@ except ImportError:
     from model.model import (CodeArray, CellAttribute, DefaultCellAttributeDict,
                             class_format_functions)
     from lib.attrdict import AttrDict
-    from interfaces.pys import qt52qt6_fontweights, qt62qt5_fontweights
+    from interfaces.pycs import qt52qt6_fontweights, qt62qt5_fontweights
     from lib.selection import Selection
     from lib.string_helpers import quote, wrap_text
     from lib.qimage2ndarray import array2qimage

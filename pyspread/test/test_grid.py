@@ -62,7 +62,7 @@ with insert_path(PYSPREADPATH):
     from ..pyspread import MainWindow
     from ..commands import MakeButtonCell, RemoveButtonCell
     from ..lib.selection import Selection
-    from ..interfaces.pys import qt62qt5_fontweights
+    from ..interfaces.pycs import qt62qt5_fontweights
 
 
 app = QApplication.instance()

@@ -102,7 +102,7 @@ wx2qt_fontstyles = {
     }
 
 
-class PysReader:
+class PycsReader:
     """Reads pys v2.0 file into a code_array"""
 
     def __init__(self, pys_file: BinaryIO, code_array: CodeArray):
@@ -116,7 +116,7 @@ class PysReader:
         self.code_array = code_array
 
         self._section2reader = {
-            "[Pyspread save file version]\n": self._pys_version,
+            "[PyCellSheet save file version]\n": self._pys_version,
             "[shape]\n": self._pys2shape,
             "[macros]\n": self._pys2macros,
             "[grid]\n": self._pys2code,
@@ -156,20 +156,13 @@ class PysReader:
     # Decorators
 
     def version_handler(method: Callable) -> Callable:
-        """Chooses method`_10` of method if version < 2.0
+        """When we need to handle changes for each version, then this will handle it.
 
         :param method: Method to be replaced in case of old pys file version
 
         """
 
-        def new_method(self, *args, **kwargs):
-            if self.version <= 1.0:
-                method10 = getattr(self, method.__name__+"_10")
-                method10(*args, **kwargs)
-            else:
-                method(self, *args, **kwargs)
-
-        return new_method
+        return method
 
     # Helpers
 
@@ -206,9 +199,9 @@ class PysReader:
 
         self.version = float(line.strip())
 
-        if self.version > 2.0:
+        if self.version > 0.0:
             # Abort if file version not supported
-            msg = "File version {version} unsupported (> 2.0)."
+            msg = "File version {version} unsupported (> 0.0)."
             raise ValueError(msg.format(version=line.strip()))
 
     def _pys2shape(self, line: str):
@@ -225,80 +218,6 @@ class PysReader:
             raise ValueError(msg.format(shape=shape))
         self.code_array.shape = shape
 
-    def _code_convert_1_2(self, key: Tuple[int, int, int], code: str) -> str:
-        """Converts chart and image code from v1.0 to v2.0
-
-        :param key: Key of cell with code
-        :param code: Code in cell to be converted
-
-        """
-
-        def get_image_code(image_data: str, width: int, height: int) -> str:
-            """Returns code string for v2.0
-
-            :param image_data: b85encoded image data
-            :param width: Image width
-            :param height: Image height
-
-            """
-
-            image_buffer_tpl = 'bz2.decompress(base64.b85decode({data}))'
-            image_array_tpl = 'numpy.frombuffer({buffer}, dtype="uint8")'
-            image_matrix_tpl = '{array}.reshape({height}, {width}, 3)'
-
-            image_buffer = image_buffer_tpl.format(data=image_data)
-            image_array = image_array_tpl.format(buffer=image_buffer)
-            image_matrix = image_matrix_tpl.format(array=image_array,
-                                                   height=height, width=width)
-
-            return image_matrix
-
-        start_str = "bz2.decompress(base64.b64decode('"
-        size_start_str = "wx.ImageFromData("
-        if size_start_str in code and start_str in code:
-            size_start = code.index(size_start_str) + len(size_start_str)
-            size_str_list = code[size_start:].split(",")[:2]
-            width, height = tuple(map(int, size_str_list))
-
-            # We have a cell that displays a bitmap
-            data_start = code.index(start_str) + len(start_str)
-            data_stop = code.find("'", data_start)
-            enc_data = bytes(code[data_start:data_stop], encoding='utf-8')
-            compressed_image_data = b64decode(enc_data)
-            reenc_data = b85encode(compressed_image_data)
-            code = get_image_code(repr(reenc_data), width, height)
-
-            selection = Selection([], [], [], [], [(key[0], key[1])])
-            tab = key[2]
-            attr_dict = AttrDict([("renderer", "image")])
-            attr = CellAttribute(selection, tab, attr_dict)
-            self.cell_attributes_postfixes.append(attr)
-
-        elif "charts.ChartFigure(" in code:
-            # We have a matplotlib figure
-            selection = Selection([], [], [], [], [(key[0], key[1])])
-            tab = key[2]
-            attr_dict = AttrDict([("renderer", "matplotlib")])
-            attr = CellAttribute(selection, tab, attr_dict)
-            self.cell_attributes_postfixes.append(attr)
-
-        return code
-
-    def _pys2code_10(self, line: str):
-        """Updates code in pys code_array - for save file version 1.0
-
-        :param line: Pys file line to be parsed
-
-        """
-
-        row, col, tab, code = self._split_tidy(line, maxsplit=3)
-        key = self._get_key(row, col, tab)
-
-        if all(0 <= key[i] < self.code_array.shape[i] for i in range(3)):
-            self.code_array.dict_grid[key] = str(self._code_convert_1_2(key,
-                                                                        code))
-
-    @version_handler
     def _pys2code(self, line: str):
         """Updates code in pys code_array
 
@@ -356,56 +275,6 @@ class PysReader:
 
         return key, value
 
-    def _pys2attributes_10(self, line: str):
-        """Updates attributes in code_array - for save file version 1.0
-
-        :param line: Pys file line to be parsed
-
-        """
-
-        splitline = self._split_tidy(line)
-
-        selection_data = list(map(ast.literal_eval, splitline[:5]))
-        selection = Selection(*selection_data)
-
-        tab = int(splitline[5])
-
-        attr_dict = AttrDict()
-
-        old_merged_cells = {}
-
-        for col, ele in enumerate(splitline[6:]):
-            if not (col % 2):
-                # Odd entries are keys
-                key = ast.literal_eval(ele)
-
-            else:
-                # Even cols are values
-                value = ast.literal_eval(ele)
-
-                # Convert old wx color values and merged cells
-                key_, value_ = self._attr_convert_1to2(key, value)
-
-                if key_ is None and value_ is not None:
-                    # We have a merged cell
-                    old_merged_cells[value_[:2]] = value_
-                try:
-                    attr_dict.pop("merge_area")
-                except KeyError:
-                    pass
-                attr_dict[key_] = value_
-
-        attr = CellAttribute(selection, tab, attr_dict)
-        self.code_array.cell_attributes.append(attr)
-
-        for key in old_merged_cells:
-            selection = Selection([], [], [], [], [key])
-            attr_dict = AttrDict([("merge_area", old_merged_cells[key])])
-            attr = CellAttribute(selection, tab, attr_dict)
-            self.code_array.cell_attributes.append(attr)
-        old_merged_cells.clear()
-
-    @version_handler
     def _pys2attributes(self, line: str):
         """Updates attributes in code_array
 
@@ -512,7 +381,7 @@ class PysReader:
             line_count_str += i
         self.current_macro_remaining = int(line_count_str)
 
-class PysWriter(object):
+class PycsWriter(object):
     """Interface between code_array and pys file data
 
     Iterating over it yields pys file lines
@@ -527,10 +396,10 @@ class PysWriter(object):
 
         self.code_array = code_array
 
-        self.version = 2.0
+        self.version = 0.0  # NOT STABILIZED YET!
 
         self._section2writer = OrderedDict([
-            ("[Pyspread save file version]\n", self._version2pys),
+            ("[PyCellSheet save file version]\n", self._version2pys),
             ("[shape]\n", self._shape2pys),
             ("[macros]\n", self._macros2pys),
             ("[grid]\n", self._code2pys),

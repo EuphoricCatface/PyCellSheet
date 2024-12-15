@@ -65,7 +65,7 @@ try:
                                   ManualDialog, TutorialDialog,
                                   PrintAreaDialog, PrintPreviewDialog)
     from pyspread.installer import DependenciesDialog
-    from pyspread.interfaces.pys import qt62qt5_fontweights
+    from pyspread.interfaces.pycs import qt62qt5_fontweights
     from pyspread.panels import MacroPanel
     from pyspread.lib.hashing import genkey
     from pyspread.model.model import CellAttributes
@@ -84,7 +84,7 @@ except ImportError:
     from dialogs import (ApproveWarningDialog, PreferencesDialog, ManualDialog,
                          TutorialDialog, PrintAreaDialog, PrintPreviewDialog)
     from installer import DependenciesDialog
-    from interfaces.pys import qt62qt5_fontweights
+    from interfaces.pycs import qt62qt5_fontweights
     from panels import MacroPanel
     from lib.hashing import genkey
     from model.model import CellAttributes
