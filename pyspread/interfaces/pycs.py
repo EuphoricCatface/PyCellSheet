@@ -537,9 +537,10 @@ class PycsWriter(object):
         """
 
         macros = self.code_array.dict_grid.macros
-        macro_list = []
         for i, macro in enumerate(macros):
-            macro_list.append(f"(macro:{i}) {macro.count('\n') + 1}")
-            macro_list.append(macro)
-        macro_list.append("")  # Otherwise, the very last line of macro will not be separated from the next section.
-        yield str.join("\n", macro_list)
+            macro_list = [
+                f"(macro:{i}) {macro.count('\n') + 1}",
+                macro,
+                ""  # To append a linebreak at the end
+            ]
+            yield str.join("\n", macro_list)
