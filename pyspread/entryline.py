@@ -68,39 +68,6 @@ class Entryline(SpellTextEdit):
 
         # self.highlighter.setDocument(self.document())
 
-    # Overrides
-
-    def eventFilter(self, source: QWidget, event: QEvent):
-        """Quotes editor content for <Ctrl>+<Enter> and <Ctrl>+<Return>
-
-        Overrides SpellTextEdit default shortcut. Counts as undoable action.
-
-        :param source: Source widget of event
-        :param event: Event to be filtered
-
-        """
-
-        if event.type() == QEvent.Type.ShortcutOverride \
-           and event.modifiers() == Qt.KeyboardModifier.ControlModifier \
-           and source == self \
-           and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-
-            focused_grid = self.main_window.focused_grid
-            code = quote(source.toPlainText())
-
-            index = focused_grid.currentIndex()
-            description = "Quote code for cell {}".format(index)
-            cmd = commands.SetCellCode(code, focused_grid.model, index,
-                                       description)
-            self.main_window.undo_stack.push(cmd)
-            focused_grid.setFocus()
-            focused_grid.selectionModel().clearSelection()
-            focused_grid.current = (focused_grid.row + 1, focused_grid.column,
-                                    focused_grid.table)
-            return False
-
-        return QWidget.eventFilter(self, source, event)
-
     @contextmanager
     def disable_updates(self):
         """Disables updates and highlighter"""

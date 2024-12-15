@@ -2607,30 +2607,6 @@ class GridCellDelegate(QStyledItemDelegate):
         self.editor.installEventFilter(self)
         return self.editor
 
-    def eventFilter(self, source: QObject, event: QEvent) -> bool:
-        """Overloads `eventFilter`. Overrides QLineEdit default shortcut.
-
-        Quotes cell editor content for <Ctrl>+<Enter> and <Ctrl>+<Return>.
-        Counts as undoable action.
-
-        :param source: Source widget of event
-        :param event: Any QEvent
-
-        """
-
-        if event.type() == QEvent.Type.ShortcutOverride \
-           and source is self.editor \
-           and event.modifiers() == Qt.KeyboardModifier.ControlModifier \
-           and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-
-            code = quote(source.text())
-            index = self.grid.currentIndex()
-            description = f"Quote code for cell {index}"
-            cmd = commands.SetCellCode(code, self.grid.model, index,
-                                       description)
-            self.main_window.undo_stack.push(cmd)
-        return super().eventFilter(source, event)
-
     def setEditorData(self, editor: QWidget, index: QModelIndex):
         """Overloads `setEditorData` to use code_array data
 
