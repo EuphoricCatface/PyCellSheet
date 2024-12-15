@@ -31,7 +31,7 @@ from io import StringIO
 from sys import exc_info
 from traceback import print_exception
 
-from PyQt6.QtCore import Qt, pyqtProperty
+from PyQt6.QtCore import Qt, pyqtProperty, QModelIndex
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QSplitter
 from PyQt6.QtWidgets import QTextEdit, QLabel
@@ -171,6 +171,7 @@ class MacroPanel(QDialog):
             if self.current_table in self.code_array.dict_grid.macros_draft:
                 del self.code_array.dict_grid.macros_draft[self.current_table]
             self.applied_indicator.setProperty("applied", True)
+            self.parent.grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
 
         self.parent.grid.gui_update()
 
