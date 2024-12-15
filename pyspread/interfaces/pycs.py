@@ -229,7 +229,7 @@ class PycsReader:
         key = self._get_key(row, col, tab)
 
         if all(0 <= key[i] < self.code_array.shape[i] for i in range(3)):
-            self.code_array.dict_grid[key] = ast.literal_eval(code)
+            self.code_array.dict_grid[key] = code
 
     def _attr_convert_1to2(self, key: str, value: Any) -> Tuple[str, Any]:
         """Converts key, value attribute pair from v1.0 to v2.0
