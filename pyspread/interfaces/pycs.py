@@ -21,9 +21,9 @@
 
 """
 
-This file contains interfaces to the native pys file format.
+This file contains interfaces to the native pycs file format.
 
-PysReader and PysWriter classed are structured into the following sections:
+PycsReader and PycsWriter classed are structured into the following sections:
  * shape
  * code
  * attributes
@@ -39,8 +39,8 @@ PysReader and PysWriter classed are structured into the following sections:
  * :func:`qt62qt5_fontweights`
  * :dict:`wx2qt_fontweights`
  * :dict:`wx2qt_fontstyles`
- * :class:`PysReader`
- * :class:`PysWriter`
+ * :class:`PycsReader`
+ * :class:`PycsWriter`
 
 """
 
@@ -103,26 +103,26 @@ wx2qt_fontstyles = {
 
 
 class PycsReader:
-    """Reads pys v2.0 file into a code_array"""
+    """Reads pycs file into a code_array"""
 
-    def __init__(self, pys_file: BinaryIO, code_array: CodeArray):
+    def __init__(self, pycs_file: BinaryIO, code_array: CodeArray):
         """
-        :param pys_file: The pys or pysu file to be read
+        :param pycs_file: The pycs or pycsu file to be read
         :param code_array: Target code_array
 
         """
 
-        self.pys_file = pys_file
+        self.pycs_file = pycs_file
         self.code_array = code_array
 
         self._section2reader = {
-            "[PyCellSheet save file version]\n": self._pys_version,
-            "[shape]\n": self._pys2shape,
-            "[macros]\n": self._pys2macros,
-            "[grid]\n": self._pys2code,
-            "[attributes]\n": self._pys2attributes,
-            "[row_heights]\n": self._pys2row_heights,
-            "[col_widths]\n": self._pys2col_widths,
+            "[PyCellSheet save file version]\n": self._pycs_version,
+            "[shape]\n": self._pycs2shape,
+            "[macros]\n": self._pycs2macros,
+            "[grid]\n": self._pycs2code,
+            "[attributes]\n": self._pycs2attributes,
+            "[row_heights]\n": self._pycs2row_heights,
+            "[col_widths]\n": self._pycs2col_widths,
         }
 
         # When converting old versions, cell attributes are required that
@@ -134,14 +134,14 @@ class PycsReader:
         self.current_macro_remaining = 0
 
     def __iter__(self):
-        """Iterates over self.pys_file, replacing everything in code_array"""
+        """Iterates over self.pycs_file, replacing everything in code_array"""
 
         state = None
 
-        # Reset pys_file to start to enable multiple calls of this method
-        self.pys_file.seek(0)
+        # Reset pycs_file to start to enable multiple calls of this method
+        self.pycs_file.seek(0)
 
-        for line in self.pys_file:
+        for line in self.pycs_file:
             line = line.decode("utf8")
             if line in self._section2reader:
                 state = line
@@ -158,7 +158,7 @@ class PycsReader:
     def version_handler(method: Callable) -> Callable:
         """When we need to handle changes for each version, then this will handle it.
 
-        :param method: Method to be replaced in case of old pys file version
+        :param method: Method to be replaced in case of old pycs file version
 
         """
 
@@ -190,10 +190,10 @@ class PycsReader:
 
     # Sections
 
-    def _pys_version(self, line: str):
-        """pys file version including assertion
+    def _pycs_version(self, line: str):
+        """pycs file version including assertion
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -204,10 +204,10 @@ class PycsReader:
             msg = "File version {version} unsupported (> 0.0)."
             raise ValueError(msg.format(version=line.strip()))
 
-    def _pys2shape(self, line: str):
+    def _pycs2shape(self, line: str):
         """Updates shape in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -218,10 +218,10 @@ class PycsReader:
             raise ValueError(msg.format(shape=shape))
         self.code_array.shape = shape
 
-    def _pys2code(self, line: str):
-        """Updates code in pys code_array
+    def _pycs2code(self, line: str):
+        """Updates code in pycs code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -275,10 +275,10 @@ class PycsReader:
 
         return key, value
 
-    def _pys2attributes(self, line: str):
+    def _pycs2attributes(self, line: str):
         """Updates attributes in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -305,10 +305,10 @@ class PycsReader:
             attr = CellAttribute(selection, tab, attr_dict)
             self.code_array.cell_attributes.append(attr)
 
-    def _pys2row_heights(self, line: str):
+    def _pycs2row_heights(self, line: str):
         """Updates row_heights in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -326,10 +326,10 @@ class PycsReader:
         except ValueError:
             pass
 
-    def _pys2col_widths(self, line: str):
+    def _pycs2col_widths(self, line: str):
         """Updates col_widths in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -347,10 +347,10 @@ class PycsReader:
         except ValueError:
             pass
 
-    def _pys2macros(self, line: str):
+    def _pycs2macros(self, line: str):
         """Updates macros in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
         # self.code_array.macros += line
@@ -382,9 +382,9 @@ class PycsReader:
         self.current_macro_remaining = int(line_count_str)
 
 class PycsWriter(object):
-    """Interface between code_array and pys file data
+    """Interface between code_array and pycs file data
 
-    Iterating over it yields pys file lines
+    Iterating over it yields pycs file lines
 
     """
 
@@ -399,17 +399,17 @@ class PycsWriter(object):
         self.version = 0.0  # NOT STABILIZED YET!
 
         self._section2writer = OrderedDict([
-            ("[PyCellSheet save file version]\n", self._version2pys),
-            ("[shape]\n", self._shape2pys),
-            ("[macros]\n", self._macros2pys),
-            ("[grid]\n", self._code2pys),
-            ("[attributes]\n", self._attributes2pys),
-            ("[row_heights]\n", self._row_heights2pys),
-            ("[col_widths]\n", self._col_widths2pys),
+            ("[PyCellSheet save file version]\n", self._version2pycs),
+            ("[shape]\n", self._shape2pycs),
+            ("[macros]\n", self._macros2pycs),
+            ("[grid]\n", self._code2pycs),
+            ("[attributes]\n", self._attributes2pycs),
+            ("[row_heights]\n", self._row_heights2pycs),
+            ("[col_widths]\n", self._col_widths2pycs),
         ])
 
     def __iter__(self) -> Iterable[str]:
-        """Yields a pys_file line wise from code_array"""
+        """Yields a pycs_file line wise from code_array"""
 
         for key in self._section2writer:
             yield key
@@ -428,8 +428,8 @@ class PycsWriter(object):
 
         return lines
 
-    def _version2pys(self) -> Iterable[str]:
-        """Returns pys file version information in pys format
+    def _version2pycs(self) -> Iterable[str]:
+        """Returns pycs file version information in pycs format
 
         Format: <version>\n
 
@@ -437,8 +437,8 @@ class PycsWriter(object):
 
         yield repr(self.version) + "\n"
 
-    def _shape2pys(self) -> Iterable[str]:
-        """Returns shape information in pys format
+    def _shape2pycs(self) -> Iterable[str]:
+        """Returns shape information in pycs format
 
         Format: <rows>\t<cols>\t<tabs>\n
 
@@ -446,8 +446,8 @@ class PycsWriter(object):
 
         yield u"\t".join(map(str, self.code_array.shape)) + u"\n"
 
-    def _code2pys(self) -> Iterable[str]:
-        """Returns cell code information in pys format
+    def _code2pycs(self) -> Iterable[str]:
+        """Returns cell code information in pycs format
 
         Format: <row>\t<col>\t<tab>\t<code>\n
 
@@ -463,8 +463,8 @@ class PycsWriter(object):
 
             yield out_str
 
-    def _attributes2pys(self) -> Iterable[str]:
-        """Returns cell attributes information in pys format
+    def _attributes2pycs(self) -> Iterable[str]:
+        """Returns cell attributes information in pycs format
 
         Format:
         <selection[0]>\t[...]\t<tab>\t<key>\t<value>\t[...]\n
@@ -501,8 +501,8 @@ class PycsWriter(object):
 
             yield u"\t".join(line_list) + u"\n"
 
-    def _row_heights2pys(self) -> Iterable[str]:
-        """Returns row height information in pys format
+    def _row_heights2pycs(self) -> Iterable[str]:
+        """Returns row height information in pycs format
 
         Format: <row>\t<tab>\t<value>\n
 
@@ -515,8 +515,8 @@ class PycsWriter(object):
                 height_strings = list(map(repr, [row, tab, height]))
                 yield u"\t".join(height_strings) + u"\n"
 
-    def _col_widths2pys(self) -> Iterable[str]:
-        """Returns column width information in pys format
+    def _col_widths2pycs(self) -> Iterable[str]:
+        """Returns column width information in pycs format
 
         Format: <col>\t<tab>\t<value>\n
 
@@ -529,8 +529,8 @@ class PycsWriter(object):
                 width_strings = list(map(repr, [col, tab, width]))
                 yield u"\t".join(width_strings) + u"\n"
 
-    def _macros2pys(self) -> Iterable[str]:
-        """Returns macros information in pys format
+    def _macros2pycs(self) -> Iterable[str]:
+        """Returns macros information in pycs format
 
         Format: <macro code line>\n
 
