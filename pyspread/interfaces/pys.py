@@ -118,16 +118,20 @@ class PysReader:
         self._section2reader = {
             "[Pyspread save file version]\n": self._pys_version,
             "[shape]\n": self._pys2shape,
+            "[macros]\n": self._pys2macros,
             "[grid]\n": self._pys2code,
             "[attributes]\n": self._pys2attributes,
             "[row_heights]\n": self._pys2row_heights,
             "[col_widths]\n": self._pys2col_widths,
-            "[macros]\n": self._pys2macros,
         }
 
         # When converting old versions, cell attributes are required that
         # take place after the cell attribute readout
         self.cell_attributes_postfixes = []
+
+        # Now there are many pages of macros
+        self.current_macro = -1
+        self.current_macro_remaining = 0
 
     def __iter__(self):
         """Iterates over self.pys_file, replacing everything in code_array"""
@@ -480,9 +484,33 @@ class PysReader:
         :param line: Pys file line to be parsed
 
         """
+        # self.code_array.macros += line
 
-        self.code_array.macros += line
+        if self.current_macro_remaining:
+            if self.current_macro_remaining == 1:
+                # For the last line, we need to exclude the line break,
+                #  otherwise the scripts will gain a line break every save&load.
+                line = line.rstrip("\r\n")
+            self.code_array.macros[self.current_macro] += line
+            self.current_macro_remaining -= 1
+            return
 
+        sheet_number_str = ""  # later we will use string names
+        if not line.startswith("(macro:"):
+            raise ValueError("The save file does not follow the macro name conventions")
+        for i in iter(line[7:]):
+            if i == ")":
+                break
+            sheet_number_str += i
+        new_sheet_number = int(sheet_number_str)
+        if self.current_macro + 1 != new_sheet_number:
+            raise ValueError("The save file does not follow the macro name conventions")
+        self.current_macro = new_sheet_number
+
+        line_count_str = ""
+        for i in iter(line[9 + len(sheet_number_str)]):
+            line_count_str += i
+        self.current_macro_remaining = int(line_count_str)
 
 class PysWriter(object):
     """Interface between code_array and pys file data
@@ -504,11 +532,11 @@ class PysWriter(object):
         self._section2writer = OrderedDict([
             ("[Pyspread save file version]\n", self._version2pys),
             ("[shape]\n", self._shape2pys),
+            ("[macros]\n", self._macros2pys),
             ("[grid]\n", self._code2pys),
             ("[attributes]\n", self._attributes2pys),
             ("[row_heights]\n", self._row_heights2pys),
             ("[col_widths]\n", self._col_widths2pys),
-            ("[macros]\n", self._macros2pys),
         ])
 
     def __iter__(self) -> Iterable[str]:
@@ -640,4 +668,9 @@ class PysWriter(object):
         """
 
         macros = self.code_array.dict_grid.macros
-        yield macros
+        macro_list = []
+        for i, macro in enumerate(macros):
+            macro_list.append(f"(macro:{i}) {macro.count('\n') + 1}")
+            macro_list.append(macro)
+        macro_list.append("")  # Otherwise, the very last line of macro will not be separated from the next section.
+        yield str.join("\n", macro_list)

@@ -466,6 +466,7 @@ class DictGrid(KeyValueStore):
 
         # PerSheetInitScripts as string list
         self.macros: list[str] = [u"" for _ in range(shape[2])]
+        # later this will be dict. sheets will have string names
         self.macros_draft: dict[int, str] = dict()
         self.sheet_globals_copyable: dict[int, dict[str, typing.Any]] = {i: dict() for i in range(shape[2])}
         self.sheet_globals_uncopyable: dict[int, dict[str, typing.Any]] = {i: dict() for i in range(shape[2])}
