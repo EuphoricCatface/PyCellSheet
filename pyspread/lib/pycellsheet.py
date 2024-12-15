@@ -14,8 +14,20 @@ class Empty:
 
 EmptyCell = Empty()
 
+
 class PythonCode(str):
     pass
+
+
+class HelpText:
+    def __init__(self, query, contents):
+        if len(query) == 0:
+            self.query = "help()"
+        elif len(query) == 1:
+            self.query = f"help({query[0]})"
+        else:
+            self.query = f"help{query}"
+        self.contents = contents
 
 
 class Range(list):

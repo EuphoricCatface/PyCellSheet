@@ -108,7 +108,7 @@ try:
     from pyspread.lib.typechecks import is_stringlike
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
-    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range
+    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -117,7 +117,7 @@ except ImportError:
     from lib.typechecks import is_stringlike
     from lib.selection import Selection
     from lib.string_helpers import ZEN
-    from lib.pycellsheet import EmptyCell, PythonCode, Range
+    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText
 
 
 class_format_functions = {}
@@ -1458,14 +1458,14 @@ class CodeArray(DataArray):
         """
 
         # Help helper function that fixes help being displayed in stdout
-        def help(*args) -> str:
+        def help(*args) -> HelpText:
             """Returns help string for object arguments"""
 
             if not args:
-                return ZEN
+                return HelpText(args, ZEN)
 
             from pydoc import render_doc, plaintext
-            return render_doc(*args, renderer=plaintext)
+            return HelpText(args, render_doc(*args, renderer=plaintext))
 
         #  --- Expression Parser START ---  #
         def handle_empty_exp_parser(cell: str) -> bool:
