@@ -57,6 +57,8 @@ class MacroPanel(QDialog):
             self.stylesheet_update()
 
         def stylesheet_update(self):
+            # Qt does not guarantee the applying of new style
+            #  when a property is updated
             self.setStyleSheet("")
             self.setStyleSheet(
                 "QLabel {background-color: #1f000000; font-weight: bold; padding: 1px} \n"
@@ -174,6 +176,7 @@ class MacroPanel(QDialog):
 
     def update(self):
         """Update macro content"""
+        # NYI: store&load evaluation results
 
         if self.current_table in self.code_array.dict_grid.macros_draft:
             self.macro_editor.setPlainText(self.code_array.dict_grid.macros_draft[self.current_table])
