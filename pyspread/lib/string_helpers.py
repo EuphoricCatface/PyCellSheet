@@ -83,13 +83,13 @@ def quote(code: str) -> str:
         return code
 
 
-def wrap_text(text, width=80, maxlen=2000):
+def wrap_text(text, width=80, maxline=30):
     """Wrap text to line width
 
     :param text: The text to be wrapped
     :param width: Width of the text to be wrapped
-    :param maxlen: Maximum total text length before text in truncated and
-                   extended by [...]. If None then truncation is disabled.
+    :param maxline: Maximum total text line before text is truncated and
+                   appended by [...]. If None then truncation is disabled.
     :return: Wrapped text
 
     """
@@ -97,6 +97,11 @@ def wrap_text(text, width=80, maxlen=2000):
     if text is None:
         return
 
-    if maxlen is not None and len(text) > maxlen:
-        text = text[:maxlen] + "..."
-    return "\n".join(textwrap.wrap(text, width=width))
+    split_line = text.splitlines()
+    wrapped = []
+    for line in split_line:
+        wrapped.extend([*textwrap.wrap(line, width=width, replace_whitespace=False)])
+    if maxline is not None and len(wrapped) > maxline:
+        wrapped = wrapped[:maxline]
+        wrapped.append("...")
+    return str.join("\n", wrapped)
