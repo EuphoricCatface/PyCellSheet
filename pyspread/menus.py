@@ -332,7 +332,7 @@ class FileHistoryMenu(QMenu):
 
         self.main_window = parent.parent.main_window
 
-    def update(self):
+    def update_(self):
         """Updates file history menu"""
 
         self.clear()
