@@ -1203,6 +1203,13 @@ class DataArray:
         self._adjust_rowcol(insertion_point, no_to_insert, axis, tab=tab)
         self._adjust_cell_attributes(insertion_point, no_to_insert, axis, tab)
 
+        if axis == 2:
+            for _ in range(no_to_insert):
+                self.macros.insert(insertion_point, u"")
+                self.macros_draft.insert(insertion_point, None)
+                self.sheet_globals_copyable.insert(insertion_point, dict())
+                self.sheet_globals_uncopyable.insert(insertion_point, dict())
+
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
 
@@ -1245,6 +1252,13 @@ class DataArray:
 
         self._adjust_rowcol(deletion_point, -no_to_delete, axis, tab=tab)
         self._adjust_cell_attributes(deletion_point, -no_to_delete, axis, tab)
+
+        if axis == 2:
+            for _ in range(no_to_delete):
+                self.macros.insert(deletion_point, u"")
+                self.macros_draft.insert(deletion_point, None)
+                self.sheet_globals_copyable.insert(deletion_point, dict())
+                self.sheet_globals_uncopyable.insert(deletion_point, dict())
 
         # Now re-insert moved keys
 
