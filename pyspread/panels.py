@@ -168,8 +168,7 @@ class MacroPanel(QDialog):
             self.update_result_viewer(err=err)
         else:
             self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
-            if self.current_table in self.code_array.macros_draft:
-                del self.code_array.macros_draft[self.current_table]
+            self.code_array.macros_draft[self.current_table] = None
             self.applied_indicator.setProperty("applied", True)
             self.parent.grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
 
@@ -179,7 +178,7 @@ class MacroPanel(QDialog):
         """Update macro content"""
         # NYI: store&load evaluation results
 
-        if self.current_table in self.code_array.macros_draft:
+        if self.code_array.macros_draft[self.current_table] is not None:
             self.macro_editor.setPlainText(self.code_array.macros_draft[self.current_table])
             self.applied_indicator.setProperty("applied", False)
         else:
@@ -210,7 +209,6 @@ class MacroPanel(QDialog):
             self.result_viewer.setTextColor(self.default_text_color)
 
     def on_reset(self):
-        if self.current_table in self.code_array.macros_draft:
-            del self.code_array.macros_draft[self.current_table]
+        self.code_array.macros_draft[self.current_table] = None
         self.macro_editor.setPlainText(self.code_array.macros[self.current_table])
         self.applied_indicator.setProperty("applied", True)

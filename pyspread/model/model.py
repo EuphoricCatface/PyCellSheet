@@ -518,9 +518,9 @@ class DataArray:
         self.dict_grid = DictGrid(shape)
         self.settings = settings
 
-        self.macros_draft: dict[int, str] = dict()
-        self.sheet_globals_copyable: dict[int, dict[str, typing.Any]] = {i: dict() for i in range(shape[2])}
-        self.sheet_globals_uncopyable: dict[int, dict[str, typing.Any]] = {i: dict() for i in range(shape[2])}
+        self.macros_draft: list[typing.Optional[str]] = [None for _ in range(shape[2])]
+        self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
+        self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
