@@ -1529,8 +1529,8 @@ class CodeArray(DataArray):
             # No Unix system
             pass
 
-        env = deepcopy(self.dict_grid.sheet_globals_copyable[key[2]])
-        env.update(self.dict_grid.sheet_globals_uncopyable[key[2]])
+        env = deepcopy(self.sheet_globals_copyable[key[2]])
+        env.update(self.sheet_globals_uncopyable[key[2]])
         local = {
             "help": help,
             "cell_single_ref": cell_single_ref
@@ -1650,13 +1650,13 @@ class CodeArray(DataArray):
 
         for k, v in sheet_globals.items():
             try:
-                self.dict_grid.sheet_globals_copyable[current_table][k] = deepcopy(v)
+                self.sheet_globals_copyable[current_table][k] = deepcopy(v)
             except TypeError:
                 if type(v) not in [types.ModuleType]:
                     # TODO: proper warning
                     errs += (f"WARNING: Per-sheet global variable {k}({type(v).__name__}) is not deepcopyable, "
                              f"but is unknown if it can be safely used without doing so.\n")
-                self.dict_grid.sheet_globals_uncopyable[current_table][k] = v
+                self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
