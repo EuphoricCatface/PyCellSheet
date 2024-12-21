@@ -5,6 +5,7 @@ Application Design Note
 2024. 12. 01    Second Draft
 2024. 12. 07    Third Draft
 2024. 12. 14    Fourth Draft
+2024. 12. 21    Fifth Draft
 
 0. Meta
   - The name of this app will be PyCellSheet.
@@ -13,7 +14,13 @@ Application Design Note
   - It's made out of pyspread.
   - Its twist is that it's a bit closer to the conventional spreadsheet programs, rather than being purely pythonic.
   - It also tries to eliminate some of the implicit/invisible/nondeterministic/everything-in-global/spaghetti-ness from pyspread.
-  - After these design notes get stabilized, I'll post these on some pyspread community and ask for some feedback, and how I should deal with program structures, re-branding and packaging automations.
+  - LATER_GOAL: pyspread uses a 3d matrix as its data model. Replace it with an array of 2d matrices.
+  * This design suggests lots of per-sheet customizations, while pyspread doesn't at all.
+  * pyspread's data model supports 3d slicing. This design only requires/supports 2d ranges.
+  * This approach will solve some issues in savefile handling and sheet manipulations like insertions/deletions.
+  * As such, pyspread's syntax of `S[0, 0, 0]`/`S[1:3, 1:3, 1:3]` will be ditched.
+  - After these design notes get stabilized, I'll post these on the pyspread gitlab issue tracker and ask for some feedback, and how I should deal with program structures, re-branding and packaging automations.
+
 1. Per-Sheet Initialization Script
   - You can import libraries and define per-sheet global variables here.
   - From the cells, you can refer to the global variables from the same sheet (or from another sheet, with the sheet reference notation).
@@ -22,26 +29,32 @@ Application Design Note
   - From this init area, you can't refer to the cells, or global variables from other sheets.
   - This script is evaluated only when you issue an update.
   - The code for the last update is buffered until the next update, and will be saved in the document
-  - The draft will be discarded on the app exit, will not be saved into the document, and the app will give a warning if there is one when saving / exiting
+  - The draft will be discarded on the app exit, will not be saved into the document, and the app will give a warning if there are ones when saving / exiting
   - Existing pyspread's section of [macros] in the document file is positioned at the end of the file.
   * This is probably in order to avoid dealing with escaping
   - Our [init-script] sections will be multiple, depending on the sheet count.
-  * The escaping issue will be solved by having line count at the end of the section specifier; e.g. `[init-script:Sheet 1] 30`
-  * These init-script section names are also where the sheet names are stored.
-  - This script will, by default, also contain the seed for random, (LATER_GOAL [see topic 6] : so that random won't evaluate differently each run.)
-  - After evaluating the init script, the variables/imports are stored into a dict ({sheetname: global_dict}) to be used by the "Reference Parser" and "Python Evaluator"(introduced later)
+  * The escaping issue will be solved by having line count at the end of the section specifier; e.g. `(init-script:Sheet 1) 30` under the `[init-script]` section
+  * LATER_GOAL [numeric, serial names for now]: These init-script section names are also where the sheet names are stored.
+  - This script will, by default, also contain the seed for random, so that random will stay the same every calculate-all.
+  * ```
+    import random as random_  # Global random
+    random = random_.Random([seed])  # Per-sheet random
+    ```
+  * At the same time, the user will be able to choose `random.seed(datetime.datetime.now().timestamp())` to randomize each time.
+  - After evaluating the init script, the variables/imports are stored into a dict per sheet to be used by the "Reference Parser" and "Python Evaluator"(introduced later)
   - If there are global variables/function names that look like cell names, you get a warning.
 2. Functions / Libraries
   - The functions for the expressions will be provided via imports in the per-sheet init script, including the basic ones.
   - Importing libraries inside a cell locally is also allowed.
-  - from PyCellSheet.math import *; from PyCellSheet.date import *; from PyCellSheet.finance import *.finance; ...
+  - from PyCellSheet.math import *; from PyCellSheet.date import *; from PyCellSheet.finance import *; ...
   - Don't like/want the functions provided? Well you can just not import them!
   - If you also want the functions organized in a more pythonic way, you can just edit the import statements like `from PyCellSheet import math`.
-  - The names of the provided functions are in uppercase. Otherwise, the Python built-ins like sum() will be overwritten.
+  - The names of the provided functions are in uppercase.
+  * Otherwise, the Python built-ins like sum() will be overwritten.
   - The provided functions might be more pythonic rather than being true to the conventional spreadsheet functions.
   * `NOW()` is an alias to `datetime.datetime.now()`.
   * `DAYS()` accepts only `datetime.datetime` (or even a `datetime.timedelta`, instead of two `datetime.datetime`s!), and not `str`.
-  - Other than provided spreadsheet-like functions, `from LIBRARY import *` is discouraged.
+  - Other than the provided spreadsheet-like functions, `from LIBRARY import *` is discouraged.
   - LATER_GOAL: You can also create your own functions. A workbook will have one script for custom functions, and it will be able to be imported by the init scripts. It can be modified, exported, imported, and merged as text files.
   - LATER_GOAL: If you have duplicate function names in the imports, you get a warning.
 3. Cell Evaluation Pipeline
@@ -57,17 +70,18 @@ Application Design Note
       (str)    [   Parser   ]      [   Parser  ]      [ Evaluator ]     (Python object)                       (str)
 
 4. Expression Parser
-  - Thanks to Garmy for the suggestion which eventually became this Expression Parser.
-  - The Expression Parser is customizable per sheet.
+  - Thanks to Garmelon for the suggestion which eventually became this Expression Parser.
+  - The Expression Parser is customizable per workspace.
   - The Expression Parser gets the argument `cell`, the Cell Contents copied, in string.
   - And it returns a Python object or a PyCellSheet.???.PythonCode type object, which is a subclass of str.
   - If the return type is not PythonCode, then it is immediately the Result.
   - A PythonCode type object bypassing the rest of the evaluation pipeline is not possible.
   - If needed, you should be able to write/generate a code that evaluates to be a PythonCode after the pipeline.
-  - There's an additional, invisible Expression Parser before the main one, that immediately evaluates an empty cell, and returns PyCellSheet.???.EmptyCell constant, which is a PyCellSheet.???.EmptyCellType type object.
+  - There's an additional, invisible Expression Parser before the main one, that immediately evaluates an empty cell, and returns PyCellSheet.???.EmptyCell constant, which is a PyCellSheet.???.Empty type object.
   * This makes not ignoring None easier, and also hopefully saves computation from evaluating None on empty cells.
-  - EmptyCellType will have `__str__()` as "" and, `__int__()` and `__float__()` as zero, so that it will evaluate as an empty string / a zero in calculation context
-  - Functions like `COUNTA()` and `AVERAGE()` will be able to detect EmptyCell and exclude them from evaluation.
+  * The name of the type being Empty makes it work well with the Formatter tooltip.
+  - MAYBE: EmptyCellType will have `__str__()` as "" and, `__int__()` and `__float__()` as zero, plus a few dunder methods, so that it will evaluate as an empty string / a zero in common calculation contexts.
+  - Functions like `COUNTA()` and `AVERAGE()` will be able to detect EmptyCell and exclude them from the evaluation.
   - A warning is made, if an EmptyCell is returned from the main Expression Parser. Making a cell with its contents hidden from sight is highly discouraged.
   - Four examples are provided for the users:
   * "Pure Pythonic" mode:
@@ -116,16 +130,15 @@ Application Design Note
   - Range specifier and sheet specifier can also be explicitly written as `cell_range_ref()` and `sheet_ref()`.
   - And the single-cell version of the function is `cell_single_ref()`.
   - There will be aliases `Sh()`, `R()`, `C()` for each of `sheet_ref()`, `cell_range_ref()`, and `cell_single_ref()`
-  * Sh instead of S to avoid mixing up with existing pyspread's `S[0, 0, 0]` notation.
+  * `Sh` instead of `S` to avoid mixing up with existing pyspread's `S[0, 0, 0]` notation.
   - Sheet and cell reference can be chained like `Sh("Sheet 1").C("A1")`.
   - Also `CR()` is for `cell_ref()`, the catch-all for transforming str to combinations of `Sh()`, `C()`, `R()`.
   * This also enables things like `CR(CR("A1") + "!" + CR("A2"))` instead of `= INDIRECT(CONCATENATE(A1, "!", A2))`
   * Imagine A1 has "Sheet2" and A2 has "B3:C5".
   * This is more concise than the spreadsheet notation, and more flexible at the same time.
-  - The result of the range expression/function will be of `PyCellSheet.???.Range` type that is a 2D list (LATER_GOAL: Implement more efficient and robust class in handling rectangular 2d array. 1d list with width info, I think), additionally with the top-left cell's name/coordinate.
-  * This is because of the search functions and such.
-  * The Range type will additionally have a method to return a 1D list that has all the elements.
-  ** This will hopefully make it easier / faster to write / evaluate ones like sum() or average().
+  - The result of the range expression/function will be of `PyCellSheet.???.Range` type that is a 1d list with width info, additionally with the top-left cell's name/coordinate.
+  * Having top-left cell info is because of the search functions and such.
+  * "1d list with width" part will make a nice balance between simplicity and performance, in handling 2d rectangular arrays.
   - The return value of these reference functions will always be a deepcopy.
   * A1 `[1, 2, 5, 3, 4]`, A2 `A1.sort()` => A1 will stay the same, A2 will show `None`.
   * A1 `[1, 2, 5, 3, 4]`. A2 `a = A1; a.sort(); a` => A1 will stay the same, A2 will show the sorted list.
@@ -141,20 +154,25 @@ Application Design Note
   - A statement is delimited with semicolons or line breaks.
   - No variables will be shared outside of a cell. Only the result can be referred to by the address.
   - As mentioned in the 5th topic, global variables from the same sheet are to be supplied into the evaluator into the exec()/eval() via global dict arg.
-  - To prevent `random` from producing the same value for every cell, `random` is exempted from being deepcopied.
-  - LATER_GOAL: Proper repeatable random will only be possible after the update chaining is implemented.
+  * `copy.deepcopy` requires the object to be picklable. All picklable objects get deepcopied, and the others are simply referenced.
+  * Currently, `types.ModuleType` is not picklable and probably okay to be not deepcopied. Other un-picklable objects will make warnings.
+  * This, at least, makes taking care of `random` less troublesome. Otherwise, we'd need to specifically care that `random` is not deepcopied, to prevent it producing the same random every cell.
+  - Random will be reproducible due to the seed being in the Init Script, but it's only guaranteed on a total recalculation of a sheet, or on a sheet loading.
   - The code will be evaluated with an empty local dict supplied each time, to ensure it's evaluated inside its own local scope.
   * Like how you're recommended to make a main() in a standalone script.
-  - PyCellSheet.???.RangeOutput will enable ranged output, like `SORT()` and `UNIQUE()`. (TODO: figure out how they would write into the Results of other cells)
-  - TODO: Figure out how to evaluate things like `FILTER(A2:C6, ISBLANK(C2:C6))` or `COUNTIF()`. There has to be some clever uses of lambda functions, or built-in functions like map() or zip()
+  - The info about current cell will be supplied with a global variable named `THIS_CELL`. This enables `OFFSET()`.
+  - The info about current sheet will be provided with `THIS_CELL.sheet`.
+  - LATER_GOAL: PyCellSheet.???.RangeOutput will enable ranged output, like `SORT()` and `UNIQUE()`.
+  - LATER_GOAL: When the result is RangeOutput, RangeOutput handler will be called, and it will try to fill the affected cells with RangeOutputRef(offsetx, offsety). If there are preoccupied cells, then it will make #REF! error (like in a spreadsheet program).
+  - TODO: Figure out how to evaluate things like `FILTER(A2:C6, ISBLANK(C2:C6))` or `COUNTIF(A2:C6, ">0")`. There has to be some clever uses of lambda functions, or built-in functions like map() or zip()
   - The result of the last statement in the cell will become the Result of the cell.
   * That is, mostly like how REPL (the python shell) shows you back the calculation results (except `None` doesn't get ignored).
-  * That also means, if you have an assignment as the last statement, the cell will only show  ̶a̶ ̶`̶N̶o̶n̶e̶`̶  an error
+  * That also means, if you have an assignment as the last statement, the cell will only show  ̶a̶ ̶`̶N̶o̶n̶e̶`̶   ̶a̶n̶ ̶e̶r̶r̶o̶r̶ ...totally as expected. (Apparently `eval()` works that way?)
   * Though, why would you need that?? I said no variables will be shared anyways!
 7. Formatter
   - Formatter is a function, gets an argument `result`, returns a string.
   - Formatter evaluates the Result if it recognizes the type, else applies str().
-  - It's also editable by the user, like Expression Parser, but it has per-sheet scope and per-cell scope.
+  - It's also editable by the user, like Expression Parser, but it has per-workspace scope and per-cell scope.
   - For a sheet, Formatter has basically a bunch of `if isinstance(result, [TYPE/CLASS]):; return ...` clauses with `return str(result)` at the end.
   - This can also be implemented with match ~ case with "class patterns".
   - For a cell, Formatter is usually a single `if isinstance(result, [TYPE/CLASS]):; return ...; else raise pyspread.???.FormatterError`.
@@ -169,6 +187,11 @@ Application Design Note
   - Throughout the evaluation pipeline, a list will be available via a function. On warning, you can append a string into the list.
 TODO:
   - MAYBE / FEATURE_CREEP?: Figure out cell handle dragging
-  - For now, pyspread syntax is preserved, but it may be purged if needed
-  - If it doesn't, then toggling the headers between spreadsheet / pyspread mode will need to be implemented.
   - While "frozen cell" doesn't look very interesting, "generator cell" does. Look into it more later.
+  - Somehow embrace asyncio
+  * Run asyncio event loop in the init script.
+  * Possibly one thread per sheet.
+  * Inter-sheet access will be wrapped with `asyncio.run_coroutine_threadsafe()` or so.
+  * Expose awaitables using RangeOutput.
+  * Only await is allowed, and whatever it returns will be deepcopied.
+  * Something like AWAIT(aw, value_waiting, [value_done], [value_exception]).
