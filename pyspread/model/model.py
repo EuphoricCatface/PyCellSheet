@@ -1496,7 +1496,7 @@ class CodeArray(DataArray):
             return PythonCode(cell)
         #  --- Expression Parser END ---  #
 
-        #  --- External Reference Parser START ---  #
+        #  --- Reference Parser START ---  #
         def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
             """Calculate a coordinate from spreadsheet-like address string"""
             col_str = None
@@ -1541,7 +1541,7 @@ class CodeArray(DataArray):
                     rtn.append(self[row, col, key[2]])
 
             return rtn
-        #  --- External Reference Parser END ---  #
+        #  --- Reference Parser END ---  #
 
         if self.safe_mode:
             # Safe mode is active
