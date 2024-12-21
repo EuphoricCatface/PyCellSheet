@@ -108,7 +108,7 @@ try:
     from pyspread.lib.typechecks import is_stringlike
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
-    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText
+    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -117,7 +117,7 @@ except ImportError:
     from lib.typechecks import is_stringlike
     from lib.selection import Selection
     from lib.string_helpers import ZEN
-    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText
+    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser
 
 
 class_format_functions = {}
@@ -1482,20 +1482,6 @@ class CodeArray(DataArray):
             from pydoc import render_doc, plaintext
             return HelpText(args, render_doc(*args, renderer=plaintext))
 
-        #  --- Expression Parser START ---  #
-        def handle_empty_exp_parser(cell: str) -> bool:
-            """Returns true if cell is empty"""
-            if cell is None or cell == "":
-                return True
-            return False
-
-        def mixed_mode_exp_parser(cell: str) -> Union[Any, PythonCode]:
-            """String if starts with "'", else PythonCode"""
-            if cell.startswith("'"):
-                return cell[1:]
-            return PythonCode(cell)
-        #  --- Expression Parser END ---  #
-
         #  --- Reference Parser START ---  #
         def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
             """Calculate a coordinate from spreadsheet-like address string"""
@@ -1547,10 +1533,14 @@ class CodeArray(DataArray):
             # Safe mode is active
             return cell_contents
 
-        if handle_empty_exp_parser(cell_contents):
+        # TODO: don't initialize the parser each time
+        exp_parser = ExpressionParser()
+        exp_parser.set_parser(ExpressionParser.DEFAULT_PARSERS["Mixed"])
+
+        if exp_parser.handle_empty(cell_contents):
             return EmptyCell
 
-        parsed = mixed_mode_exp_parser(cell_contents)
+        parsed = exp_parser.parse(cell_contents)
         if not isinstance(parsed, PythonCode):
             return parsed
 

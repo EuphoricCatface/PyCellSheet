@@ -81,3 +81,60 @@ class Range:
         topleft_str = coord_to_spreadsheet_ref(self.topleft)
         contents_list = [self.__getitem__(i) for i in range(len(self))]
         return topleft_str + str(contents_list)
+
+
+class ExpressionParser:
+    DEFAULT_PARSERS = {
+        "Pure Pythonic": (
+            "return PythonCode(cell)\n"
+        ),
+        "Mixed": (
+            "# Inspired by the spreadsheet string marker\n"
+            "if cell.startswith('\\''):\n"
+            "    return cell[1:]\n"
+            "return PythonCode(cell)\n"
+        ),
+        "Reverse Mixed": (
+            "# Inspired by the python shell prompt `>>>`\n"
+            "if cell.startswith(">"):\n"
+            "    return PythonCode(cell[1:])\n"
+            "if cell.startswith('\\''):\n"
+            "    cell = cell[1:]\n"
+            "return cell\n"
+        ),
+        "Pure Spreadsheet": (
+            "if cell.startswith('='):\n"
+            "    return PythonCode(cell[1:])\n"
+            "try:\n"
+            "    return int(cell)\n"
+            "except ValueError:\n"
+            "    pass\n"
+            "try:\n"
+            "    return float(cell)\n"
+            "except ValueError:\n"
+            "    pass\n"
+            "if cell.startswith('\\''):\n"
+            "    cell = cell[1:]\n"
+            "return cell\n"
+        )
+    }
+
+    def __init__(self):
+        self.cached_fn = None
+
+    def set_parser(self, code: str):
+        local = {}
+        code_list = ["def parser(cell):"]
+        code_list.extend(map(lambda a: "    " + a, code.splitlines(keepends=False)))
+        code = str.join("\n", code_list)
+        exec(code, globals(), local)
+        self.cached_fn = local["parser"]
+
+    def parse(self, cell):
+        return self.cached_fn(cell)
+
+    def handle_empty(self, cell):
+        """Returns true if cell is empty"""
+        if cell is None or cell == "":
+            return True
+        return False
