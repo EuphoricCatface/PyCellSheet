@@ -1497,8 +1497,8 @@ class CodeArray(DataArray):
         #  --- Expression Parser END ---  #
 
         #  --- External Reference Parser START ---  #
-        def cell_single_ref(addr: str) -> Any:
-            """Refer a cell from spreadsheet-like address string"""
+        def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
+            """Calculate a coordinate from spreadsheet-like address string"""
             col_str = None
             row_str = None
             for i, ch in enumerate(addr):
@@ -1509,12 +1509,12 @@ class CodeArray(DataArray):
                 break
 
             if not col_str or not row_str:
-                return
+                raise ValueError(f"Malformed spreadsheet-type address {addr=}")
 
             try:
                 row_num = int(row_str) - 1
             except ValueError:
-                return
+                raise ValueError(f"Malformed spreadsheet-type address {addr=}")
 
             col_str = col_str.upper()
             col_num = 0
@@ -1522,7 +1522,25 @@ class CodeArray(DataArray):
                 col_num *= 26
                 col_num += ord(ch) - ord('A')
 
-            return self[row_num, col_num, key[2]]
+            return row_num, col_num
+
+        def cell_single_ref(addr: str) -> Any:
+            """Refer a cell from spreadsheet-like address string"""
+            return deepcopy(self[*spreadsheet_ref_to_coord(addr), key[2]])
+
+        def cell_range_ref(addr1: str, addr2: str) -> Range:
+            coord1 = spreadsheet_ref_to_coord(addr1)
+            coord2 = spreadsheet_ref_to_coord(addr2)
+            topleft = min(coord1[0], coord2[0]), min(coord1[1], coord2[1])
+            botright = max(coord1[0], coord2[0]), max(coord1[1], coord2[1])
+            width = botright[1] - topleft[1] + 1
+
+            rtn = Range(topleft, width)
+            for row in range(topleft[0], botright[0] + 1):
+                for col in range(topleft[1], botright[1] + 1):
+                    rtn.append(self[row, col, key[2]])
+
+            return rtn
         #  --- External Reference Parser END ---  #
 
         if self.safe_mode:
@@ -1547,7 +1565,8 @@ class CodeArray(DataArray):
         env.update(self.sheet_globals_uncopyable[key[2]])
         local = {
             "help": help,
-            "cell_single_ref": cell_single_ref
+            "cell_single_ref": cell_single_ref, "C": cell_single_ref,
+            "cell_range_ref": cell_range_ref, "R": cell_range_ref,
         }
         try:
             # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
