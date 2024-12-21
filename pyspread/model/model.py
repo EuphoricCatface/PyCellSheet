@@ -467,6 +467,7 @@ class DictGrid(KeyValueStore):
         # PerSheetInitScripts as string list
         self.macros: list[str] = [u"" for _ in range(shape[2])]
         # later this will be dict. sheets will have string names
+        self.exp_parser_code = u""
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
         self.col_widths = defaultdict(float)  # Keys have format (col, table)
@@ -521,6 +522,9 @@ class DataArray:
         self.macros_draft: list[typing.Optional[str]] = [None for _ in range(shape[2])]
         self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
+
+        self.exp_parser = ExpressionParser()
+        self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Mixed"]  # Workaround until we make a UI
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
@@ -616,6 +620,9 @@ class DataArray:
         if "macros" in kwargs:
             self.macros = kwargs["macros"]
 
+        if "exp_parser_code" in kwargs:
+            pass
+
     @property
     def row_heights(self) -> defaultdict:
         """row_heights interface to dict_grid"""
@@ -665,6 +672,19 @@ class DataArray:
         """Sets  macros string"""
 
         self.dict_grid.macros = macros
+
+    @property
+    def exp_parser_code(self) -> str:
+        """macros interface to dict_grid"""
+
+        return self.dict_grid.exp_parser_code
+
+    @exp_parser_code.setter
+    def exp_parser_code(self, exp_parser_code: str):
+        """Sets ExpressionParser string"""
+
+        self.dict_grid.exp_parser_code = exp_parser_code
+        self.exp_parser.set_parser(exp_parser_code)
 
     @property
     def shape(self) -> Tuple[int, int, int]:
@@ -1533,14 +1553,9 @@ class CodeArray(DataArray):
             # Safe mode is active
             return cell_contents
 
-        # TODO: don't initialize the parser each time
-        exp_parser = ExpressionParser()
-        exp_parser.set_parser(ExpressionParser.DEFAULT_PARSERS["Mixed"])
-
-        if exp_parser.handle_empty(cell_contents):
+        if self.exp_parser.handle_empty(cell_contents):
             return EmptyCell
-
-        parsed = exp_parser.parse(cell_contents)
+        parsed = self.exp_parser.parse(cell_contents)
         if not isinstance(parsed, PythonCode):
             return parsed
 
