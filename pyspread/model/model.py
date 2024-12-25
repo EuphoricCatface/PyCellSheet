@@ -108,7 +108,8 @@ try:
     from pyspread.lib.typechecks import is_stringlike
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
-    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser
+    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
+        ReferenceParser
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -117,7 +118,8 @@ except ImportError:
     from lib.typechecks import is_stringlike
     from lib.selection import Selection
     from lib.string_helpers import ZEN
-    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser
+    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
+        ReferenceParser
 
 
 class_format_functions = {}
@@ -1565,6 +1567,8 @@ class CodeArray(DataArray):
         except AttributeError:
             # No Unix system
             pass
+
+        parsed = ReferenceParser().parser(parsed)
 
         env = deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
