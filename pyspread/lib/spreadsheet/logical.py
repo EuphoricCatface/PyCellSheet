@@ -4,6 +4,10 @@ try:
 except ImportError:
     from lib.pycellsheet import EmptyCell
 
+__all__ = [
+    'AND', 'FALSE', 'IF', 'IFERROR', 'IFNA', 'IFS', 'LAMBDA', 'LET', 'NOT', 'OR', 'SWITCH',
+    'TRUE', 'XOR'
+]
 
 def AND(*args):
     return all(args)
