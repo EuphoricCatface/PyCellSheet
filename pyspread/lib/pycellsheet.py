@@ -207,7 +207,7 @@ class ReferenceParser:
         replacements_col = collections.deque()
         iters = re.finditer(self.COMPILED_RANGE_RE, code)
         for match in iters:
-            if len(code) <= match.end(0) and code[match.end(0) + 1] == ':':
+            if len(code) < match.end(0) and code[match.end(0) + 1] == ':':
                 continue
             colon_pos = code.find(':', match.start(0), match.end(0))
             replacements_col.append(colon_pos)
