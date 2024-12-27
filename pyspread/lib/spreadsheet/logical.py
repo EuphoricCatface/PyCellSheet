@@ -13,7 +13,7 @@ def FALSE():
     return False
 
 
-def IF(expr, true, false):
+def IF(expr, true, false=False):
     return true if expr else false
 
 
