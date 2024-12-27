@@ -3,6 +3,8 @@ import typing
 import copy
 import warnings
 import re
+import ast
+import collections
 
 
 class Empty:
@@ -143,12 +145,13 @@ class ExpressionParser:
 
 class ReferenceParser:
     COMPILED_RANGE_RE = re.compile(r"[A-Z]+[1-9][0-9]*:[A-Z][1-9][0-9]*")
+    COMPILED_CELL_RE = re.compile(r"[A-Z]+[1-9][0-9]*")
     def parser(self, code: PythonCode):
         # A1:B2 -> R("A1", "B2")
         # A1 -> C("A1")
-        # '0'!A1 -> Sh("0").C("A1")
-        # '0'!A1:B2 -> Sh("0").R("A1", "B2")
-        # '0'!non_cell -> Sh("0").G("non_cell")
+        # "0"!A1 -> Sh("0").C("A1")
+        # "0"!A1:B2 -> Sh("0").R("A1", "B2")
+        # "0"!non_cell -> Sh("0").G("non_cell")
         # Any combinations mixing [Sh(), R(), C(), G()] and [!, :] are not supported, and are not likely to work.
 
         # Matches should not happen inside strings (Comments are okay, they cannot hurt you)
@@ -168,8 +171,8 @@ class ReferenceParser:
         #  Workaround 1: Put at least one space(s) around the colon.
         #  Workaround 2: Specify the step in the slice, like arr[A1:B2:1]
 
-        def find_all_occurrences(target: str, sub: str, start=0, end=-1) -> list[int]:
-            rtn = []
+        def find_all_occurrences(target: str, sub: str, start=0, end=-1) -> collections.deque[int]:
+            rtn = collections.deque()
             start_pos = start
             while True:
                 start_pos = target.find(sub, start_pos, end)
@@ -186,14 +189,14 @@ class ReferenceParser:
         for i in replacements_exc.copy():
             if code[i+1] == '=':
                 replacements_exc.remove(i)
-        # 1-3: Search in reverse, and see if it has prepending single quote
-        # NOTE: Only plain string quoted with single quote is supported.
+        # 1-3: Search in reverse, and see if it has a prepending double-quoted sheet name
+        # NOTE: Only plain string quoted with double quote is supported.
         # f-strings, function returns, etc. are not supported and not likely to work.
         replacements_side = []
         for i in replacements_exc:
-            if code[i-1] != "'":
+            if code[i-1] != '"':
                 continue
-            quoted_start = code.rfind("'", 0, i-1)
+            quoted_start = code.rfind('"', 0, i-1)
             replacements_side.append(quoted_start)
             replacements_side.append(i-1)
             replacements_side.extend(
@@ -204,17 +207,115 @@ class ReferenceParser:
         col_match_dict = {}
         iters = re.finditer(self.COMPILED_RANGE_RE, code)
         for match in iters:
-            if len(code) < match.end(0) and code[match.end(0) + 1] == ':':
+            if len(code) <= match.end(0) and code[match.end(0) + 1] == ':':
                 continue
             colon_pos = code.find(':', match.start(0), match.end(0))
             col_match_dict[colon_pos] = match
 
+        # Step 3: Replace
         all_replacements = [
-            *replacements_exc, *replacements_side, *col_match_dict.keys()
-        ]
+            *replacements_exc, *replacements_side, *col_match_dict.keys() ]
         code_inspect = str.join("", list(
-            map(lambda enm: "_" if enm[0] in all_replacements else enm[1], enumerate(code))
-        ))
-        print(code_inspect)
+            map(lambda enm: "_" if enm[0] in all_replacements else enm[1], enumerate(code)) ))
+        parsed = ast.parse(code_inspect)
 
-        return code
+        # Step 4: Get all names
+        names_idx_name: dict[tuple[int, int], ast.Name] = dict()
+        split_lines = code_inspect.splitlines()
+        line_lengths = [0]
+        for line in split_lines:
+            line_lengths.append(line_lengths[-1] + len(line))
+        for node in ast.walk(parsed):
+            if not isinstance(node, ast.Name):
+                continue
+            start_index = line_lengths[node.lineno - 1] + node.col_offset
+            end_index = line_lengths[node.end_lineno - 1] + node.end_col_offset
+            names_idx_name[(start_index, end_index)] = node
+
+        # Step 5: Separate single-cell-like names (without a sheet reference!) first
+        single_cell_names = dict()
+        for k, v in names_idx_name.copy().items():
+            if re.fullmatch(self.COMPILED_CELL_RE, v.id):
+                single_cell_names[k] = names_idx_name.pop(k).id
+
+        # Step 6: Find applicable names
+        names_idx_applicable = dict.fromkeys(sorted(names_idx_name.keys()))
+        replacements_col = collections.deque(col_match_dict.keys())
+        for start, end in list(names_idx_applicable.keys()):
+            while replacements_exc and replacements_exc[0] < start:
+                del replacements_exc[0]
+            while replacements_col and replacements_col[0] < start:
+                del col_match_dict[replacements_col[0]]
+                del replacements_col[0]
+            exc_idx = -1
+            col_idx = -1
+            if replacements_exc and start <= replacements_exc[0] < end:
+                exc_idx = replacements_exc.popleft()
+            if replacements_col and start <= replacements_col[0] < end:
+                col_idx = replacements_col.popleft()
+                del col_match_dict[col_idx]
+            if (exc_idx == -1) and (col_idx == -1):
+                del names_idx_applicable[(start, end)]
+            else:
+                result = (exc_idx, col_idx)
+                names_idx_applicable[(start, end)] = result
+            if not (replacements_exc or replacements_col):
+                break
+
+        # Step 7: Prepare replacements
+        names_idx_replacement_str = dict()
+        single_cell_indices = collections.deque(sorted(single_cell_names.keys()))
+        for (start, end), (exc_idx, col_idx) in names_idx_applicable.items():
+            # Step 7-0: Prepare single cell reference
+            while True:
+                if not single_cell_indices:
+                    break
+                s_index = single_cell_indices.popleft()
+                if s_index[0] > end:
+                    break
+                s_str = f"C(\"{single_cell_names.pop(s_index)}\")"
+                names_idx_replacement_str[s_index] = s_str
+
+            # Step 7-1: Prepare sheet reference
+            sheet_parsed = ""
+            if exc_idx != -1:
+                sheet_name = code[start:exc_idx]
+                if sheet_name.startswith('"') and sheet_name.endswith('"'):
+                    sheet_parsed = f"Sh({sheet_name})."
+                else:
+                    sheet_parsed = f"Sh('{sheet_name}')."
+            # Step 7-2: Prepare the rest
+            range_or_cell_or_global_parsed = ""
+            if col_idx != -1:
+                range_start = (exc_idx + 1) if exc_idx != -1 else start
+                range1 = code[range_start:col_idx]
+                range2 = code[col_idx + 1:end]
+                range_or_cell_or_global_parsed = f"R(\"{range1}\", \"{range2}\")"
+            else:
+                # If this code piece doesn't have a range, then it has to have a sheet reference
+                assert exc_idx != -1, "Filtered name has neither sheet ref nor range op?"
+                var_start = exc_idx + 1
+                var_end = end
+                var = code[var_start:var_end]
+                if re.fullmatch(self.COMPILED_CELL_RE, var):
+                    range_or_cell_or_global_parsed = f"C(\"{var}\")"
+                else:
+                    range_or_cell_or_global_parsed = f"G(\"{var}\")"
+            names_idx_replacement_str[(start, end)] = [sheet_parsed, range_or_cell_or_global_parsed]
+        while single_cell_indices:
+            s_idx = single_cell_indices.popleft()
+            s_str = f"C(\"{single_cell_names.pop(s_idx)}\")"
+            names_idx_replacement_str[s_idx] = s_str
+
+        # Step 8: Finally, assemble the code with the replacements
+        last_end = 0
+        parsed_code_list = []
+        for (start, end), replacements in names_idx_replacement_str.items():
+            parsed_code_list.append(code[last_end:start])
+            parsed_code_list.extend(replacements)
+            last_end = end
+        parsed_code_list.append(code[last_end:])
+
+        parsed_code = str.join("", parsed_code_list)
+
+        return parsed_code
