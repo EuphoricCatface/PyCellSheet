@@ -1535,6 +1535,7 @@ class CodeArray(DataArray):
             "help": help,
             "cell_single_ref": cur_sheet.cell_single_ref, "C": cur_sheet.C,
             "cell_range_ref": cur_sheet.cell_range_ref, "R": cur_sheet.R,
+            "global_var": cur_sheet.global_var, "G": cur_sheet.G,
             "sheet_ref": self.ref_parser.sheet_ref, "Sh": self.ref_parser.Sh,
             "cell_ref": self.ref_parser.cell_ref, "CR": self.ref_parser.CR
         }
