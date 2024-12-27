@@ -44,11 +44,11 @@ def IFS(*args):
 
 
 def LAMBDA(name, formula_expression):
-    raise NotImplemented("LAMBDA() not implemented yet. Use Python's native lambda.")
+    raise NotImplementedError("LAMBDA() not implemented yet. Use Python's native lambda.")
 
 
 def LET(a, b):
-    raise NotImplemented("LET() not implemented yet. Do you really need this function, when you have python?")
+    raise NotImplementedError("LET() not implemented yet. Do you really need this function, when you have python?")
 
 
 def NOT(expr):
