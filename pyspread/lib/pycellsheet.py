@@ -150,6 +150,10 @@ class ReferenceParser:
     def __init__(self, code_array):
         self.code_array = code_array
 
+    @staticmethod
+    def sheet_name_to_idx(sheet_name):
+        return int(sheet_name)
+
     # NYI: cache sheet, and invalidate the cache if the sheet gets modified
     class Sheet:
         @staticmethod
@@ -183,7 +187,7 @@ class ReferenceParser:
         def __init__(self, sheet_name: str, code_array):
             self.code_array = code_array
 
-            self.sheet_idx = int(sheet_name)
+            self.sheet_idx = ReferenceParser.sheet_name_to_idx(sheet_name)
             self.sheet_global_var = copy.deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
             self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
 
@@ -214,6 +218,27 @@ class ReferenceParser:
     def sheet_ref(self, sheet_name):
         return self.Sheet(sheet_name, self.code_array)
     Sh = sheet_ref
+
+    def cell_ref(self, spreadsheet_ref_notation: str, current_sheet: "ReferenceParser.Sheet"):
+        target_sheet: "ReferenceParser.Sheet" = current_sheet
+        exc_index = -1
+        non_sheet = spreadsheet_ref_notation
+        if "!" in spreadsheet_ref_notation:
+            exc_index = spreadsheet_ref_notation.index("!")
+            sheet_name = spreadsheet_ref_notation[:exc_index]
+            sheet_name.strip('"')
+            target_sheet = self.sheet_ref(spreadsheet_ref_notation[:exc_index])
+            non_sheet = spreadsheet_ref_notation[exc_index + 1:]
+        if ":" in non_sheet:
+            col_index = non_sheet.index(":")
+            range_start = exc_index + 1
+            return target_sheet.cell_range_ref(
+                non_sheet[:col_index],
+                non_sheet[col_index + 1:]
+            )
+        else:
+            target_sheet.global_var(non_sheet)
+    CR = cell_ref
 
     def parser(self, code: PythonCode):
         # A1:B2 -> R("A1", "B2")
@@ -308,8 +333,10 @@ class ReferenceParser:
                 names_indices.append((start_index, end_index))
 
         # Step 6: Find applicable names
-        names_idx_applicable = dict.fromkeys(sorted(names_indices))
-        for start, end in list(names_idx_applicable.keys()):
+        names_idx_applicable = dict()
+        for start, end in names_indices:
+            if not (replacements_exc or replacements_col):
+                break
             while replacements_exc and replacements_exc[0] < start:
                 del replacements_exc[0]
             while replacements_col and replacements_col[0] < start:
@@ -321,12 +348,9 @@ class ReferenceParser:
             if replacements_col and start <= replacements_col[0] < end:
                 col_idx = replacements_col.popleft()
             if (exc_idx == -1) and (col_idx == -1):
-                del names_idx_applicable[(start, end)]
-            else:
-                result = (exc_idx, col_idx)
-                names_idx_applicable[(start, end)] = result
-            if not (replacements_exc or replacements_col):
-                break
+                continue
+            result = (exc_idx, col_idx)
+            names_idx_applicable[(start, end)] = result
 
         # Step 7: Prepare replacements
         names_idx_replacement_str = dict()
