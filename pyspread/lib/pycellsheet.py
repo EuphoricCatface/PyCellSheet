@@ -235,7 +235,8 @@ class ReferenceParser:
             end_index = line_lengths[node.end_lineno - 1] + node.end_col_offset
             if re.fullmatch(self.COMPILED_CELL_RE, node.id):
                 single_cell_idx_name[(start_index, end_index)] = node.id
-            names_indices.append((start_index, end_index))
+            else:
+                names_indices.append((start_index, end_index))
 
         # Step 6: Find applicable names
         names_idx_applicable = dict.fromkeys(sorted(names_indices))
@@ -262,6 +263,7 @@ class ReferenceParser:
         names_idx_replacement_str = dict()
         single_cell_indices = collections.deque(sorted(single_cell_idx_name.keys()))
         for (start, end), (exc_idx, col_idx) in names_idx_applicable.items():
+
             # Step 7-0: Prepare single cell reference
             while True:
                 if not single_cell_indices:
@@ -280,6 +282,7 @@ class ReferenceParser:
                     sheet_parsed = f"Sh({sheet_name})."
                 else:
                     sheet_parsed = f"Sh('{sheet_name}')."
+
             # Step 7-2: Prepare the rest
             range_or_cell_or_global_parsed = ""
             if col_idx != -1:
@@ -298,6 +301,7 @@ class ReferenceParser:
                 else:
                     range_or_cell_or_global_parsed = f"G(\"{var}\")"
             names_idx_replacement_str[(start, end)] = [sheet_parsed, range_or_cell_or_global_parsed]
+
         # Step 7-0-1: Prepare remaining single cell references
         while single_cell_indices:
             s_idx = single_cell_indices.popleft()
