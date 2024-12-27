@@ -203,24 +203,27 @@ class ReferenceParser:
                 find_all_occurrences(code, ' ', quoted_start, i-1)
             )
 
-        # Step 2: Range check
-        col_match_dict = {}
+        # Step 2: Range operator check
+        replacements_col = collections.deque()
         iters = re.finditer(self.COMPILED_RANGE_RE, code)
         for match in iters:
             if len(code) <= match.end(0) and code[match.end(0) + 1] == ':':
                 continue
             colon_pos = code.find(':', match.start(0), match.end(0))
-            col_match_dict[colon_pos] = match
+            replacements_col.append(colon_pos)
 
         # Step 3: Replace
-        all_replacements = [
-            *replacements_exc, *replacements_side, *col_match_dict.keys() ]
+        all_replacements = {
+            *replacements_exc, *replacements_side, *replacements_col }
         code_inspect = str.join("", list(
             map(lambda enm: "_" if enm[0] in all_replacements else enm[1], enumerate(code)) ))
         parsed = ast.parse(code_inspect)
 
         # Step 4: Get all names
-        names_idx_name: dict[tuple[int, int], ast.Name] = dict()
+        # Step 5 (combined): Separate out single-cell-like names (without a sheet reference!)
+        single_cell_idx_name = dict()
+
+        names_indices: list[tuple[int, int]] = []
         split_lines = code_inspect.splitlines()
         line_lengths = [0]
         for line in split_lines:
@@ -230,22 +233,16 @@ class ReferenceParser:
                 continue
             start_index = line_lengths[node.lineno - 1] + node.col_offset
             end_index = line_lengths[node.end_lineno - 1] + node.end_col_offset
-            names_idx_name[(start_index, end_index)] = node
-
-        # Step 5: Separate single-cell-like names (without a sheet reference!) first
-        single_cell_names = dict()
-        for k, v in names_idx_name.copy().items():
-            if re.fullmatch(self.COMPILED_CELL_RE, v.id):
-                single_cell_names[k] = names_idx_name.pop(k).id
+            if re.fullmatch(self.COMPILED_CELL_RE, node.id):
+                single_cell_idx_name[(start_index, end_index)] = node.id
+            names_indices.append((start_index, end_index))
 
         # Step 6: Find applicable names
-        names_idx_applicable = dict.fromkeys(sorted(names_idx_name.keys()))
-        replacements_col = collections.deque(col_match_dict.keys())
+        names_idx_applicable = dict.fromkeys(sorted(names_indices))
         for start, end in list(names_idx_applicable.keys()):
             while replacements_exc and replacements_exc[0] < start:
                 del replacements_exc[0]
             while replacements_col and replacements_col[0] < start:
-                del col_match_dict[replacements_col[0]]
                 del replacements_col[0]
             exc_idx = -1
             col_idx = -1
@@ -253,7 +250,6 @@ class ReferenceParser:
                 exc_idx = replacements_exc.popleft()
             if replacements_col and start <= replacements_col[0] < end:
                 col_idx = replacements_col.popleft()
-                del col_match_dict[col_idx]
             if (exc_idx == -1) and (col_idx == -1):
                 del names_idx_applicable[(start, end)]
             else:
@@ -264,7 +260,7 @@ class ReferenceParser:
 
         # Step 7: Prepare replacements
         names_idx_replacement_str = dict()
-        single_cell_indices = collections.deque(sorted(single_cell_names.keys()))
+        single_cell_indices = collections.deque(sorted(single_cell_idx_name.keys()))
         for (start, end), (exc_idx, col_idx) in names_idx_applicable.items():
             # Step 7-0: Prepare single cell reference
             while True:
@@ -273,7 +269,7 @@ class ReferenceParser:
                 s_index = single_cell_indices.popleft()
                 if s_index[0] > end:
                     break
-                s_str = f"C(\"{single_cell_names.pop(s_index)}\")"
+                s_str = f"C(\"{single_cell_idx_name.pop(s_index)}\")"
                 names_idx_replacement_str[s_index] = s_str
 
             # Step 7-1: Prepare sheet reference
@@ -302,9 +298,10 @@ class ReferenceParser:
                 else:
                     range_or_cell_or_global_parsed = f"G(\"{var}\")"
             names_idx_replacement_str[(start, end)] = [sheet_parsed, range_or_cell_or_global_parsed]
+        # Step 7-0-1: Prepare remaining single cell references
         while single_cell_indices:
             s_idx = single_cell_indices.popleft()
-            s_str = f"C(\"{single_cell_names.pop(s_idx)}\")"
+            s_str = f"C(\"{single_cell_idx_name.pop(s_idx)}\")"
             names_idx_replacement_str[s_idx] = s_str
 
         # Step 8: Finally, assemble the code with the replacements
@@ -316,6 +313,4 @@ class ReferenceParser:
             last_end = end
         parsed_code_list.append(code[last_end:])
 
-        parsed_code = str.join("", parsed_code_list)
-
-        return parsed_code
+        return str.join("", parsed_code_list)
