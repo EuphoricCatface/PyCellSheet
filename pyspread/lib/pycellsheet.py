@@ -146,6 +146,75 @@ class ExpressionParser:
 class ReferenceParser:
     COMPILED_RANGE_RE = re.compile(r"[A-Z]+[1-9][0-9]*:[A-Z][1-9][0-9]*")
     COMPILED_CELL_RE = re.compile(r"[A-Z]+[1-9][0-9]*")
+
+    def __init__(self, code_array):
+        self.code_array = code_array
+
+    # NYI: cache sheet, and invalidate the cache if the sheet gets modified
+    class Sheet:
+        @staticmethod
+        def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
+            """Calculate a coordinate from spreadsheet-like address string"""
+            col_str = None
+            row_str = None
+            for i, ch in enumerate(addr):
+                if ch.isalpha():
+                    continue
+                col_str = addr[:i]
+                row_str = addr[i:]
+                break
+
+            if not col_str or not row_str:
+                raise ValueError(f"Malformed spreadsheet-type address {addr=}")
+
+            try:
+                row_num = int(row_str) - 1
+            except ValueError:
+                raise ValueError(f"Malformed spreadsheet-type address {addr=}")
+
+            col_str = col_str.upper()
+            col_num = 0
+            for ch in col_str:
+                col_num *= 26
+                col_num += ord(ch) - ord('A')
+
+            return row_num, col_num
+
+        def __init__(self, sheet_name: str, code_array):
+            self.code_array = code_array
+
+            self.sheet_idx = int(sheet_name)
+            self.sheet_global_var = copy.deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
+            self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
+
+        def cell_single_ref(self, addr: str):
+            return copy.deepcopy(self.code_array[*self.spreadsheet_ref_to_coord(addr), self.sheet_idx])
+
+        def cell_range_ref(self, addr1: str, addr2: str) -> Range:
+            coord1 = self.spreadsheet_ref_to_coord(addr1)
+            coord2 = self.spreadsheet_ref_to_coord(addr2)
+            topleft = min(coord1[0], coord2[0]), min(coord1[1], coord2[1])
+            botright = max(coord1[0], coord2[0]), max(coord1[1], coord2[1])
+            width = botright[1] - topleft[1] + 1
+
+            rtn = Range(topleft, width)
+            for row in range(topleft[0], botright[0] + 1):
+                for col in range(topleft[1], botright[1] + 1):
+                    rtn.append(copy.deepcopy(self.code_array[row, col, self.sheet_idx]))
+
+            return rtn
+
+        def global_var(self, name):
+            return self.sheet_global_var[name]
+
+        C = cell_single_ref
+        R = cell_range_ref
+        G = global_var
+
+    def sheet_ref(self, sheet_name):
+        return self.Sheet(sheet_name, self.code_array)
+    Sh = sheet_ref
+
     def parser(self, code: PythonCode):
         # A1:B2 -> R("A1", "B2")
         # A1 -> C("A1")
