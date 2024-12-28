@@ -1651,6 +1651,8 @@ class CodeArray(DataArray):
 
         # Reset result cache
         self.result_cache.clear()
+        self.sheet_globals_copyable[current_table] = dict()
+        self.sheet_globals_uncopyable[current_table] = dict()
 
         for k, v in sheet_globals.items():
             try:
