@@ -78,8 +78,7 @@ def MONTH(date_: date)\
 
 
 class NETWORKDAYS:
-    @staticmethod
-    def __call__(start_date: date, end_date: date, holidays: Optional[Range] = None)\
+    def __new__(cls, start_date: date, end_date: date, holidays: Optional[Range] = None)\
             -> int:
         raise NotImplementedError("NETWORKDAYS is not implemented yet")
 
@@ -133,8 +132,7 @@ def WEEKNUM(date_: date, type_: int = 1):
 
 
 class WORKDAY:
-    @staticmethod
-    def __call__(start_date: date, num_days: int, holidays: Optional[Range] = None):
+    def __new__(cls, start_date: date, num_days: int, holidays: Optional[Range] = None):
         raise NotImplementedError("WORKDAY is not implemented yet")
 
     @staticmethod
