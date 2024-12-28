@@ -1,3 +1,12 @@
+import math
+import typing
+import random
+
+try:
+    from pyspread.lib.pycellsheet import EmptyCell, Range
+except ImportError:
+    from lib.pycellsheet import EmptyCell, Range
+
 __all__ = [
     'ABS', 'ACOS', 'ACOSH', 'ACOT', 'ACOTH', 'ASIN', 'ASINH', 'ATAN', 'ATAN2', 'ATANH', 'BASE',
     'CEILING', 'COMBIN', 'COMBINA', 'COS', 'COSH', 'COT', 'COTH', 'COUNTBLANK', 'COUNTIF',
@@ -10,347 +19,431 @@ __all__ = [
 ]
 
 
-def ABS(a, b):
-    raise NotImplemented("ABS() not implemented yet")
+def ABS(x):
+    return abs(x)
 
 
-def ACOS(a, b):
-    raise NotImplemented("ACOS() not implemented yet")
+def ACOS(x):
+    return math.acos(x)
 
 
-def ACOSH(a, b):
-    raise NotImplemented("ACOSH() not implemented yet")
+def ACOSH(x):
+    return math.acosh(x)
 
 
-def ACOT(a, b):
-    raise NotImplemented("ACOT() not implemented yet")
+def ACOT(x):
+    return math.atan(1 / x) if x != 0 else math.pi / 2
 
 
-def ACOTH(a, b):
-    raise NotImplemented("ACOTH() not implemented yet")
+def ACOTH(x):
+    if abs(x) <= 1:
+        raise ValueError("ACOTH is undefined for |x| ≤ 1")
+    return 0.5 * math.log((x + 1) / (x - 1))
 
 
-def ASIN(a, b):
-    raise NotImplemented("ASIN() not implemented yet")
+def ASIN(x):
+    return math.asin(x)
 
 
-def ASINH(a, b):
-    raise NotImplemented("ASINH() not implemented yet")
+def ASINH(x):
+    return math.asinh(x)
 
 
-def ATAN(a, b):
-    raise NotImplemented("ATAN() not implemented yet")
+def ATAN(x):
+    return math.atan(x)
 
 
-def ATAN2(a, b):
-    raise NotImplemented("ATAN2() not implemented yet")
+def ATAN2(y, x):
+    return math.atan2(y, x)
 
 
-def ATANH(a, b):
-    raise NotImplemented("ATANH() not implemented yet")
+def ATANH(x):
+    return math.atanh(x)
 
 
-def BASE(a, b):
-    raise NotImplemented("BASE() not implemented yet")
+def BASE(value, base, minimum_length=0):
+    match base:
+        case 2:
+            result = bin(value)[2:]  # Strip "0b" prefix
+        case 8:
+            result = oct(value)[2:]  # Strip "0o" prefix
+        case 10:
+            result = str(value)  # Decimal base
+        case 16:
+            result = hex(value)[2:].upper()  # Strip "0x" prefix and capitalize
+        case _:
+            raise NotImplementedError("Only base value of 2, 8, 10, 16 are supported")
+
+    # Add padding for positive numbers only
+    if value >= 0 and len(result) < minimum_length:
+        result = f"{result:0>{minimum_length}}"  # Right-align with '0' padding
+    return result
 
 
 class CEILING:
-    @staticmethod
-    def __call__(a, b):
-        raise NotImplemented("CEILING() not implemented yet")
+    def __new__(cls, value, factor=1):
+        # Proper implementation is NYI
+        CEILING.PRECISE(value, factor)
 
     @staticmethod
-    def MATH(a, b):
-        raise NotImplemented("CEILING.MATH() not implemented yet")
+    def MATH(value, significance=1, mode=0):
+        if significance == 0:
+            raise ValueError("Significance cannot be zero")
+
+        significance = abs(significance)
+
+        if value > 0 or mode == 0:
+            # Use math.ceil for positive values
+            return math.ceil(value / significance) * significance
+        return math.floor(value / significance) * significance
 
     @staticmethod
-    def PRECISE(a, b):
-        raise NotImplemented("CEILING.PRECISE() not implemented yet")
+    def PRECISE(number, significance=1):
+        if significance == 0:
+            raise ValueError("Significance cannot be zero")
+        return math.ceil(number / significance) * significance
 
 
-def COMBIN(a, b):
-    raise NotImplemented("COMBIN() not implemented yet")
+def COMBIN(n, k):
+    return math.comb(n, k)
 
 
-def COMBINA(a, b):
-    raise NotImplemented("COMBINA() not implemented yet")
+def COMBINA(n, k):
+    return math.factorial(n+k-1)/(math.factorial(k)*math.factorial(n-1))
 
 
-def COS(a, b):
-    raise NotImplemented("COS() not implemented yet")
+def COS(x):
+    return math.cos(x)
 
 
-def COSH(a, b):
-    raise NotImplemented("COSH() not implemented yet")
+def COSH(x):
+    return math.cosh(x)
 
 
-def COT(a, b):
-    raise NotImplemented("COT() not implemented yet")
+def COT(x):
+    return 1/math.tan(x)
 
 
-def COTH(a, b):
-    raise NotImplemented("COTH() not implemented yet")
+def COTH(x):
+    return 1/math.tanh(x)
 
 
-def COUNTBLANK(a, b):
-    raise NotImplemented("COUNTBLANK() not implemented yet")
+def COUNTBLANK(r: Range):
+    r.flatten().count(EmptyCell)
 
 
-def COUNTIF(a, b):
-    raise NotImplemented("COUNTIF() not implemented yet")
+def COUNTIF(r: Range, criterion: typing.Callable[[typing.Any], bool]):
+    len(list(filter(criterion, r.flatten())))
 
 
-def COUNTIFS(a, b):
-    raise NotImplemented("COUNTIFS() not implemented yet")
+def COUNTIFS(*args):
+    if len(args) % 2:
+        raise ValueError("Number of arguments has to be even")
+    current_range: Range
+    filtered = []
+    for i, arg in enumerate(args):
+        if i % 2 == 0:
+            current_range = arg
+            continue
+        filtered.extend(list(filter(arg, current_range.flatten())))
+    return len(filtered)
 
 
-def COUNTUNIQUE(a, b):
-    raise NotImplemented("COUNTUNIQUE() not implemented yet")
+def COUNTUNIQUE(r: Range):
+    return len(set(r.flatten()) - {EmptyCell})
 
 
-def CSC(a, b):
-    raise NotImplemented("CSC() not implemented yet")
+def CSC(x):
+    return 1/math.sin(x)
 
 
-def CSCH(a, b):
-    raise NotImplemented("CSCH() not implemented yet")
+def CSCH(x):
+    return 1/math.sinh(x)
 
 
-def DECIMAL(a, b):
-    raise NotImplemented("DECIMAL() not implemented yet")
+def DECIMAL(value, base):
+    return int(value, base=base)
 
 
-def DEGREES(a, b):
-    raise NotImplemented("DEGREES() not implemented yet")
+def DEGREES(x):
+    return x / math.pi * 180
 
 
 class ERFC:
-    @staticmethod
-    def __call__(a, b):
-        raise NotImplemented("ERFC() not implemented yet")
+    def __new__(cls, x):
+        math.erfc(x)
 
     @staticmethod
-    def PRECISE(a, b):
-        raise NotImplemented("ERFC.PRECISE() not implemented yet")
+    def PRECISE(x):
+        return ERFC(x)
 
 
-def EVEN(a, b):
+def EVEN(x):
     raise NotImplemented("EVEN() not implemented yet")
 
 
-def EXP(a, b):
-    raise NotImplemented("EXP() not implemented yet")
+def EXP(x, y):
+    return x ** y
 
 
-def FACT(a, b):
-    raise NotImplemented("FACT() not implemented yet")
+def FACT(x):
+    return math.factorial(x)
 
 
-def FACTDOUBLE(a, b):
-    raise NotImplemented("FACTDOUBLE() not implemented yet")
+def FACTDOUBLE(x):
+    if x < 0 or not isinstance(x, int):
+        raise ValueError("x must be non-negative integer")
+    rtn = 1
+    while x > 1:
+        rtn *= x
+        x -= 2
+    return rtn
 
 
 class FLOOR:
-    @staticmethod
-    def __call__(a, b):
-        raise NotImplemented("FLOOR() not implemented yet")
+    def __new__(cls, value, factor=1):
+        # Proper implementation is NYI
+        FLOOR.PRECISE(value, factor)
 
     @staticmethod
-    def MATH(a, b):
-        raise NotImplemented("FLOOR.MATH() not implemented yet")
+    def MATH(value, significance=1, mode=0):
+        if significance == 0:
+            raise ValueError("Significance cannot be zero")
+
+        significance = abs(significance)
+
+        if value > 0 or mode == 0:
+            # Use math.ceil for positive values
+            return math.floor(value / significance) * significance
+        return math.ceil(value / significance) * significance
 
     @staticmethod
-    def PRECISE(a, b):
-        raise NotImplemented("FLOOR.PRECISE() not implemented yet")
+    def PRECISE(number, significance=1):
+        if significance == 0:
+            raise ValueError("Significance cannot be zero")
+        return math.floor(number / significance) * significance
 
 
 class GAMMALN:
     @staticmethod
-    def __call__(a, b):
+    def __new__(cls, value):
         raise NotImplemented("GAMMALN() not implemented yet")
 
     @staticmethod
-    def PRECISE(a, b):
+    def PRECISE(value):
         raise NotImplemented("GAMMALN.PRECISE() not implemented yet")
 
 
-def GCD(a, b):
-    raise NotImplemented("GCD() not implemented yet")
+def GCD(*integers):
+    return math.gcd(*integers)
 
 
-def IMLN(a, b):
+def IMLN(value):
     raise NotImplemented("IMLN() not implemented yet")
 
 
-def IMPOWER(a, b):
+def IMPOWER(complex_base, exponent):
     raise NotImplemented("IMPOWER() not implemented yet")
 
 
-def IMSQRT(a, b):
+def IMSQRT(complex_number):
     raise NotImplemented("IMSQRT() not implemented yet")
 
 
-def INT(a, b):
-    raise NotImplemented("INT() not implemented yet")
+def INT(x):
+    return int(x)
 
 
-def ISEVEN(a, b):
-    raise NotImplemented("ISEVEN() not implemented yet")
+def ISEVEN(x):
+    return (x % 2) == 0
 
 
 class ISO:
     @staticmethod
-    def CEILING(a, b):
-        raise NotImplemented("ISO.CEILING() not implemented yet")
+    def CEILING(number, significance=1):
+        return CEILING.PRECISE(number, significance)
 
 
-def ISODD(a, b):
-    raise NotImplemented("ISODD() not implemented yet")
+def ISODD(x):
+    return (x % 2) == 1
 
 
-def LCM(a, b):
-    raise NotImplemented("LCM() not implemented yet")
+def LCM(*integers):
+    return math.lcm(*integers)
 
 
-def LN(a, b):
-    raise NotImplemented("LN() not implemented yet")
+def LN(x):
+    return math.log(x)
 
 
-def LOG(a, b):
-    raise NotImplemented("LOG() not implemented yet")
+def LOG(x, base):
+    return math.log(x, base)
 
 
-def LOG10(a, b):
-    raise NotImplemented("LOG10() not implemented yet")
+def LOG10(x):
+    return math.log10(x)
 
 
-def MOD(a, b):
-    raise NotImplemented("MOD() not implemented yet")
+def MOD(x, y):
+    return x % y
 
 
-def MROUND(a, b):
+def MROUND(x, y):
     raise NotImplemented("MROUND() not implemented yet")
 
 
-def MULTINOMIAL(a, b):
+def MULTINOMIAL(x, y):
     raise NotImplemented("MULTINOMIAL() not implemented yet")
 
 
-def MUNIT(a, b):
+def MUNIT(x, y):
     raise NotImplemented("MUNIT() not implemented yet")
 
 
-def ODD(a, b):
+def ODD(x, y):
     raise NotImplemented("ODD() not implemented yet")
 
 
-def PI(a, b):
-    raise NotImplemented("PI() not implemented yet")
+def PI():
+    return math.pi
 
 
-def POWER(a, b):
-    raise NotImplemented("POWER() not implemented yet")
+def POWER(x, y):
+    return x ** y
 
 
-def PRODUCT(a, b):
-    raise NotImplemented("PRODUCT() not implemented yet")
+def PRODUCT(*args):
+    rtn = 1
+    for arg in args:
+        if arg == EmptyCell:
+            continue
+        rtn *= arg
+    return rtn
 
 
-def QUOTIENT(a, b):
+def QUOTIENT(x, y):
     raise NotImplemented("QUOTIENT() not implemented yet")
 
 
-def RADIANS(a, b):
-    raise NotImplemented("RADIANS() not implemented yet")
+def RADIANS(x):
+    return x / 180 * math.pi
 
 
-def RAND(a, b):
-    raise NotImplemented("RAND() not implemented yet")
+def RAND():
+    return random.random()
 
 
-def RANDARRAY(a, b):
+def RANDARRAY(x, y):
     raise NotImplemented("RANDARRAY() not implemented yet")
 
 
-def RANDBETWEEN(a, b):
-    raise NotImplemented("RANDBETWEEN() not implemented yet")
+def RANDBETWEEN(x, y):
+    return x + (y-x) * random.random()
 
 
-def ROUND(a, b):
+def ROUND(x, y):
     raise NotImplemented("ROUND() not implemented yet")
 
 
-def ROUNDDOWN(a, b):
+def ROUNDDOWN(x, y):
     raise NotImplemented("ROUNDDOWN() not implemented yet")
 
 
-def ROUNDUP(a, b):
+def ROUNDUP(x, y):
     raise NotImplemented("ROUNDUP() not implemented yet")
 
 
-def SEC(a, b):
-    raise NotImplemented("SEC() not implemented yet")
+def SEC(x):
+    return 1/math.cos(x)
 
 
-def SECH(a, b):
-    raise NotImplemented("SECH() not implemented yet")
+def SECH(x):
+    return 1/math.cosh(x)
 
 
-def SEQUENCE(a, b):
+def SEQUENCE(x, y):
     raise NotImplemented("SEQUENCE() not implemented yet")
 
 
-def SERIESSUM(a, b):
+def SERIESSUM(x, y):
     raise NotImplemented("SERIESSUM() not implemented yet")
 
 
-def SIGN(a, b):
-    raise NotImplemented("SIGN() not implemented yet")
+def SIGN(x):
+    if x == 0:
+        return 0
+    return 1 if x > 0 else -1
 
 
-def SIN(a, b):
-    raise NotImplemented("SIN() not implemented yet")
+def SIN(x):
+    return math.sin(x)
 
 
-def SINH(a, b):
-    raise NotImplemented("SINH() not implemented yet")
+def SINH(x):
+    return math.sinh(x)
 
 
-def SQRT(a, b):
-    raise NotImplemented("SQRT() not implemented yet")
+def SQRT(x):
+    return math.sqrt(x)
 
 
-def SQRTPI(a, b):
-    raise NotImplemented("SQRTPI() not implemented yet")
+def SQRTPI(x):
+    return math.sqrt(x * math.pi)
 
 
-def SUBTOTAL(a, b):
+def SUBTOTAL(x, y):
     raise NotImplemented("SUBTOTAL() not implemented yet")
 
 
-def SUM(a, b):
-    raise NotImplemented("SUM() not implemented yet")
+def SUM(*args):
+    lst = []
+    for arg in args:
+        if isinstance(arg, Range):
+            lst.extend(arg.flatten())
+            continue
+        if isinstance(arg, list):
+            lst.extend(arg)
+            continue
+        lst.append(arg)
+    return sum(filter(lambda a: a != EmptyCell, lst))
 
 
-def SUMIF(a, b):
-    raise NotImplemented("SUMIF() not implemented yet")
+def SUMIF(r: Range, criterion, sum_range: Range | None = None):
+    if sum_range is not None and (len(r) != len(sum_range) or r.width != sum_range.width):
+        raise ValueError("The dimensions of r and sum_range don't match")
+    if sum_range is None:
+        sum_range = r
+    sum_ = 0
+    for i in range(len(r)):
+        for j in range(r.width):
+            if not criterion(r[i][j]):
+                continue
+            if sum_range[i][j] == EmptyCell:
+                continue
+            sum_ += sum_range[i][j]
+    return sum_
 
 
-def SUMIFS(a, b):
+def SUMIFS(x, y):
     raise NotImplemented("SUMIFS() not implemented yet")
 
 
-def SUMSQ(a, b):
-    raise NotImplemented("SUMSQ() not implemented yet")
+def SUMSQ(*args):
+    sum_ = 0
+    for arg in args:
+        if arg == EmptyCell:
+            continue
+        sum_ += arg * arg
+    return sum_
 
 
-def TAN(a, b):
-    raise NotImplemented("TAN() not implemented yet")
+def TAN(x):
+    return math.tan(x)
 
 
-def TANH(a, b):
-    raise NotImplemented("TANH() not implemented yet")
+def TANH(x, y):
+    return math.tanh(x)
 
 
-def TRUNC(a, b):
-    raise NotImplemented("TRUNC() not implemented yet")
+def TRUNC(value, places=0):
+    return int(value  / 10 ** -places) * 10 ** -places
