@@ -130,7 +130,7 @@ def COTH(x):
 
 
 def COUNTBLANK(r: Range):
-    r.flatten().count(EmptyCell)
+    return len(r.lst) - len(r.flatten())
 
 
 def COUNTIF(r: Range, criterion: typing.Callable[[typing.Any], bool]):
