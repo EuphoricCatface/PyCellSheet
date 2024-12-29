@@ -8,6 +8,12 @@ import collections
 
 
 class Empty:
+    def __eq__(self, other):
+        return isinstance(other, Empty)
+
+    def __repr__(self):
+        return "EmptyCell"
+
     def __str__(self):
         return ""
 
@@ -16,6 +22,36 @@ class Empty:
 
     def __float__(self):
         return 0.0
+
+    def __bool__(self):
+        return False
+
+    def __add__(self, other):
+        if isinstance(other, (int, float)):
+            return other
+        if isinstance(other, str):
+            return other
+        return NotImplemented
+
+    def __radd__(self, other):
+        self.__add__(other)
+
+    def __sub__(self, other):
+        if isinstance(other, (int, float)):
+            return -other
+        return NotImplemented
+
+    def __rsub__(self, other):
+        if isinstance(other, (int, float)):
+            return other
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)):
+            return 0
+        return NotImplemented
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
 
 EmptyCell = Empty()
 
@@ -63,7 +99,8 @@ class Range:
             warnings.warn("Length of the list is not divisible with the width")
 
     def flatten(self) -> list:
-        return self.lst
+        # The usage doesn't care about the dimensions, so we can probably ignore EmptyCell-s
+        return list(filter(lambda a: a != EmptyCell, self.lst))
 
     def __getitem__(self, item: int):
         if item >= len(self):

@@ -33,7 +33,7 @@ class AVERAGE:
                 lst.extend(arg)
                 continue
             lst.append(arg)
-        return sum(filter(lambda a: a != EmptyCell, lst))
+        return sum(lst) / len(lst)
 
     @staticmethod
     def WEIGHTED(a, b):

@@ -314,10 +314,17 @@ def POWER(x, y):
 
 def PRODUCT(*args):
     rtn = 1
+    lst = []
     for arg in args:
-        if arg == EmptyCell:
+        if isinstance(arg, Range):
+            lst.extend(arg.flatten())
             continue
-        rtn *= arg
+        if isinstance(arg, list):
+            lst.extend(arg)
+            continue
+        lst.append(arg)
+    for v in lst:
+        rtn *= v
     return rtn
 
 
@@ -405,7 +412,7 @@ def SUM(*args):
             lst.extend(arg)
             continue
         lst.append(arg)
-    return sum(filter(lambda a: a != EmptyCell, lst))
+    return sum(lst)
 
 
 def SUMIF(r: Range, criterion, sum_range: Range | None = None):
