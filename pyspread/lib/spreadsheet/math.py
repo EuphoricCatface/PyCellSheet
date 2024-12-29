@@ -3,9 +3,9 @@ import typing
 import random
 
 try:
-    from pyspread.lib.pycellsheet import EmptyCell, Range
+    from pyspread.lib.pycellsheet import EmptyCell, Range, flatten_args
 except ImportError:
-    from lib.pycellsheet import EmptyCell, Range
+    from lib.pycellsheet import EmptyCell, Range, flatten_args
 
 __all__ = [
     'ABS', 'ACOS', 'ACOSH', 'ACOT', 'ACOTH', 'ASIN', 'ASINH', 'ATAN', 'ATAN2', 'ATANH', 'BASE',
@@ -314,15 +314,7 @@ def POWER(x, y):
 
 def PRODUCT(*args):
     rtn = 1
-    lst = []
-    for arg in args:
-        if isinstance(arg, Range):
-            lst.extend(arg.flatten())
-            continue
-        if isinstance(arg, list):
-            lst.extend(arg)
-            continue
-        lst.append(arg)
+    lst = flatten_args(*args)
     for v in lst:
         rtn *= v
     return rtn
@@ -403,15 +395,7 @@ def SUBTOTAL(x, y):
 
 
 def SUM(*args):
-    lst = []
-    for arg in args:
-        if isinstance(arg, Range):
-            lst.extend(arg.flatten())
-            continue
-        if isinstance(arg, list):
-            lst.extend(arg)
-            continue
-        lst.append(arg)
+    lst = flatten_args(*args)
     return sum(lst)
 
 

@@ -1,7 +1,7 @@
 try:
-    from pyspread.lib.pycellsheet import EmptyCell, Range
+    from pyspread.lib.pycellsheet import EmptyCell, Range, flatten_args
 except ImportError:
-    from lib.pycellsheet import EmptyCell, Range
+    from lib.pycellsheet import EmptyCell, Range, flatten_args
 
 __all__ = [
     'AVEDEV', 'AVERAGE', 'AVERAGEA', 'AVERAGEIF', 'AVERAGEIFS', 'BETA', 'BETADIST', 'BETAINV',
@@ -24,15 +24,7 @@ def AVEDEV(a, b):
 
 class AVERAGE:
     def __new__(cls, *args):
-        lst = []
-        for arg in args:
-            if isinstance(arg, Range):
-                lst.extend(arg.flatten())
-                continue
-            if isinstance(arg, list):
-                lst.extend(arg)
-                continue
-            lst.append(arg)
+        lst = flatten_args(*args)
         return sum(lst) / len(lst)
 
     @staticmethod

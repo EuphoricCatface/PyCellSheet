@@ -180,6 +180,19 @@ class ExpressionParser:
         return False
 
 
+def flatten_args(*args: list | Range | typing.Any) -> list:
+    lst = []
+    for arg in args:
+        if isinstance(arg, Range):
+            lst.extend(arg.flatten())
+            continue
+        if isinstance(arg, list):
+            lst.extend(arg)
+            continue
+        lst.append(arg)
+    return lst
+
+
 class ReferenceParser:
     COMPILED_RANGE_RE = re.compile(r"[A-Z]+[1-9][0-9]*:[A-Z][1-9][0-9]*")
     COMPILED_CELL_RE = re.compile(r"[A-Z]+[1-9][0-9]*")
