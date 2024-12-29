@@ -300,11 +300,12 @@ class ReferenceParser:
             non_sheet = spreadsheet_ref_notation[exc_index + 1:]
         if ":" in non_sheet:
             col_index = non_sheet.index(":")
-            range_start = exc_index + 1
             return target_sheet.cell_range_ref(
                 non_sheet[:col_index],
                 non_sheet[col_index + 1:]
             )
+        elif self.COMPILED_CELL_RE.fullmatch(non_sheet):
+            return target_sheet.cell_single_ref(non_sheet)
         else:
             target_sheet.global_var(non_sheet)
     CR = cell_ref
