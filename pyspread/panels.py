@@ -58,7 +58,7 @@ class MacroPanel(QDialog):
 
         def stylesheet_update(self):
             # Qt does not guarantee the applying of new style
-            #  when a property is updated
+            #  when a property is updated, unless you re-apply the stylesheet.
             self.setStyleSheet("")
             self.setStyleSheet(
                 "QLabel {background-color: #1f000000; font-weight: bold; padding: 1px} \n"
