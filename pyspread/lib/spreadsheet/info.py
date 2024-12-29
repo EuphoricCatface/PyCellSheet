@@ -1,7 +1,8 @@
-__all__ = [
+_INFO_FUNCTIONS = [
     'ERROR', 'ISBLANK', 'ISDATE', 'ISEMAIL', 'ISERR', 'ISERROR', 'ISFORMULA', 'ISLOGICAL',
     'ISNA', 'ISNONTEXT', 'ISNUMBER', 'ISREF', 'ISTEXT', 'N', 'NA', 'TYPE', 'CELL'
 ]
+__all__ = _INFO_FUNCTIONS + ["_INFO_FUNCTIONS"]
 
 
 class ERROR:

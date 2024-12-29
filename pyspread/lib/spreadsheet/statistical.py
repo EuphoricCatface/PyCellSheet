@@ -3,7 +3,7 @@ try:
 except ImportError:
     from lib.pycellsheet import EmptyCell, Range, flatten_args
 
-__all__ = [
+_STATISTICAL_FUNCTIONS = [
     'AVEDEV', 'AVERAGE', 'AVERAGEA', 'AVERAGEIF', 'AVERAGEIFS', 'BETA', 'BETADIST', 'BETAINV',
     'BINOM', 'BINOMDIST', 'CHIDIST', 'CHIINV', 'CHISQ', 'CHITEST', 'CONFIDENCE', 'CORREL', 'COUNT',
     'COUNTA', 'COVAR', 'COVARIANCE', 'CRITBINOM', 'DEVSQ', 'EXPON', 'EXPONDIST', 'F', 'FDIST',
@@ -16,6 +16,7 @@ __all__ = [
     'STDEVP', 'STDEVPA', 'STEYX', 'T', 'TDIST', 'TINV', 'TRIMMEAN', 'TTEST', 'VAR', 'VARA', 'VARP',
     'VARPA', 'WEIBULL', 'Z', 'ZTEST'
 ]
+__all__ = _STATISTICAL_FUNCTIONS + ["_STATISTICAL_FUNCTIONS"]
 
 
 def AVEDEV(a, b):

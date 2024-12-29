@@ -1,7 +1,8 @@
-__all__ = [
+_DATABASE_FUNCTIONS = [
     'DAVERAGE', 'DCOUNT', 'DCOUNTA', 'DGET', 'DMAX', 'DMIN', 'DPRODUCT', 'DSTDEV', 'DSTDEVP',
     'DSUM', 'DVAR', 'DVARP'
 ]
+__all__ = _DATABASE_FUNCTIONS + ["_DATABASE_FUNCTIONS"]
 
 
 def DAVERAGE(a, b):

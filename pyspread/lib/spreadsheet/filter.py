@@ -1,6 +1,7 @@
-__all__ = [
+_FILTER_FUNCTIONS = [
     'FILTER', 'SORT', 'SORTN', 'UNIQUE'
 ]
+__all__ = _FILTER_FUNCTIONS + ["_FILTER_FUNCTIONS"]
 
 
 def FILTER(a, b):

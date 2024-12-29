@@ -4,10 +4,12 @@ try:
 except ImportError:
     from lib.pycellsheet import EmptyCell
 
-__all__ = [
+_LOGICAL_FUNCTIONS = [
     'AND', 'FALSE', 'IF', 'IFERROR', 'IFNA', 'IFS', 'LAMBDA', 'LET', 'NOT', 'OR', 'SWITCH',
     'TRUE', 'XOR'
 ]
+__all__ = _LOGICAL_FUNCTIONS + ["_LOGICAL_FUNCTIONS"]
+
 
 def AND(*args):
     return all(args)

@@ -6,11 +6,12 @@ try:
 except ImportError:
     from lib.pycellsheet import Range
 
-__all__ = [
+_DATE_FUNCTIONS = [
     'DATE', 'DATEDIF', 'DATEVALUE', 'DAY', 'DAYS', 'DAYS360', 'EDATE', 'EOMONTH', 'EPOCHTODATE',
     'HOUR', 'ISOWEEKNUM', 'MINUTE', 'MONTH', 'NETWORKDAYS', 'NOW', 'SECOND', 'TIME', 'TIMEVALUE',
     'TODAY', 'WEEKDAY', 'WEEKNUM','WORKDAY', 'YEAR', 'YEARFRAC'
 ]
+__all__ = _DATE_FUNCTIONS + ["_DATE_FUNCTIONS"]
 
 
 def DATE(year: SupportsIndex, month: SupportsIndex, day: SupportsIndex)\

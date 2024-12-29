@@ -7,7 +7,7 @@ try:
 except ImportError:
     from lib.pycellsheet import EmptyCell, Range, flatten_args
 
-__all__ = [
+_MATH_FUNCTIONS = [
     'ABS', 'ACOS', 'ACOSH', 'ACOT', 'ACOTH', 'ASIN', 'ASINH', 'ATAN', 'ATAN2', 'ATANH', 'BASE',
     'CEILING', 'COMBIN', 'COMBINA', 'COS', 'COSH', 'COT', 'COTH', 'COUNTBLANK', 'COUNTIF',
     'COUNTIFS', 'COUNTUNIQUE', 'CSC', 'CSCH', 'DECIMAL', 'DEGREES', 'ERFC', 'EVEN', 'EXP', 'FACT',
@@ -17,6 +17,7 @@ __all__ = [
     'ROUNDDOWN', 'ROUNDUP', 'SEC', 'SECH', 'SEQUENCE', 'SERIESSUM', 'SIGN', 'SIN', 'SINH', 'SQRT',
     'SQRTPI', 'SUBTOTAL', 'SUM', 'SUMIF', 'SUMIFS', 'SUMSQ', 'TAN', 'TANH', 'TRUNC'
 ]
+__all__ = _MATH_FUNCTIONS + ["_MATH_FUNCTIONS"]
 
 
 def ABS(x):

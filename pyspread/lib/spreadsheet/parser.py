@@ -1,6 +1,7 @@
-__all__ = [
+_PARSER_FUNCTIONS = [
     'CONVERT', 'TO_DATE', 'TO_DOLLARS', 'TO_PERCENT', 'TO_PURE_NUMBER', 'TO_TEXT'
 ]
+__all__ = _PARSER_FUNCTIONS + ["_PARSER_FUNCTIONS"]
 
 
 def CONVERT(a, b):

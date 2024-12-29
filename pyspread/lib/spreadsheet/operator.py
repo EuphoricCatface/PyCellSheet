@@ -1,7 +1,8 @@
-__all__ = [
+_OPERATOR_FUNCTIONS = [
     'ADD', 'CONCAT', 'DIVIDE', 'EQ', 'GT', 'GTE', 'ISBETWEEN', 'LT', 'LTE', 'MINUS', 'MULTIPLY',
     'NE', 'POW', 'UMINUS', 'UNARY_PERCENT', 'UPLUS'
 ]
+__all__ = _OPERATOR_FUNCTIONS + ["_OPERATOR_FUNCTIONS"]
 
 
 def ADD(a, b):
