@@ -517,7 +517,8 @@ class PythonEvaluator:
             for yo in range(range_output.width):
                 if xo == 0 and yo == 0:
                     continue
-                if code_array(current_key).startswith(f"C('{coord_to_spreadsheet_ref((x1, y1))}').offset"):
+                if code_array((x1 + xo, y1 + yo, current_table))\
+                        .startswith(f"C('{coord_to_spreadsheet_ref((x1, y1))}').offset"):
                     code_array[x1 + xo, y1 + yo, current_table] = ""
                 if code_array[x1 + xo, y1 + yo, current_table] != EmptyCell:
                     raise ValueError("Cannot expand RangeOutput")
