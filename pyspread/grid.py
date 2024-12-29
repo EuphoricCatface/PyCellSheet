@@ -92,7 +92,7 @@ try:
                                 HorizontalHeaderContextMenu,
                                 VerticalHeaderContextMenu)
     from pyspread.widgets import CellButton
-    from pyspread.lib.pycellsheet import EmptyCell, HelpText
+    from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput
 except ImportError:
     import commands
     from dialogs import DiscardDataDialog
@@ -111,7 +111,7 @@ except ImportError:
     from menus import (GridContextMenu, TableChoiceContextMenu,
                        HorizontalHeaderContextMenu, VerticalHeaderContextMenu)
     from widgets import CellButton
-    from lib.pycellsheet import EmptyCell, HelpText
+    from lib.pycellsheet import EmptyCell, HelpText, RangeOutput
 
 FONTSTYLES = (QFont.Style.StyleNormal,
               QFont.Style.StyleItalic,
@@ -1976,6 +1976,9 @@ class GridTableModel(QAbstractTableModel):
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
                 return ""
+            if isinstance(value, RangeOutput):
+                value = value.offset(0, 0)
+
             if isinstance(value, Exception):
                 return value.__class__.__name__
             if isinstance(value, HelpText):

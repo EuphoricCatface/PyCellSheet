@@ -89,9 +89,36 @@ def coord_to_spreadsheet_ref(coord: tuple[int, int]) -> str:
     return col_str + str(row + 1)
 
 
-class Range:
-    def __init__(self, topleft: typing.Union[str, tuple[int, int]], width: int, lst: typing.Optional[list] = None):
-        self.topleft = topleft
+def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
+    """Calculate a coordinate from spreadsheet-like address string"""
+    col_str = None
+    row_str = None
+    for i, ch in enumerate(addr):
+        if ch.isalpha():
+            continue
+        col_str = addr[:i]
+        row_str = addr[i:]
+        break
+
+    if not col_str or not row_str:
+        raise ValueError(f"Malformed spreadsheet-type address {addr=}")
+
+    try:
+        row_num = int(row_str) - 1
+    except ValueError:
+        raise ValueError(f"Malformed spreadsheet-type address {addr=}")
+
+    col_str = col_str.upper()
+    col_num = 0
+    for ch in col_str:
+        col_num *= 26
+        col_num += ord(ch) - ord('A')
+
+    return row_num, col_num
+
+
+class RangeBase:
+    def __init__(self, width: int, lst: typing.Optional[list] = None):
         self.lst = lst if lst else []
         self.width = width
 
@@ -114,13 +141,31 @@ class Range:
             dangling = True
         return len(self.lst) // self.width + int(dangling)
 
+    @property
+    def height(self):
+        return len(self)
+
     def append(self, item: typing.Any):
         self.lst.append(item)
 
-    def __str__(self):
-        topleft_str = coord_to_spreadsheet_ref(self.topleft)
-        contents_list = [self.__getitem__(i) for i in range(len(self))]
-        return topleft_str + str(contents_list)
+
+
+class Range(RangeBase):
+    def __init__(self, topleft: typing.Union[str, tuple[int, int]], width: int, lst: typing.Optional[list] = None):
+        super().__init__(width, lst)
+        self.topleft = topleft if isinstance(topleft, tuple) else spreadsheet_ref_to_coord(topleft)
+
+
+class RangeOutput(RangeBase):
+    def __init__(self, width: int, lst: typing.Optional[list] = None):
+        super().__init__(width, lst)
+
+    @classmethod
+    def from_range(cls, r: Range):
+        return cls(r.width, r.lst)
+
+    def offset(self, x, y):
+        return self[x][y]
 
 
 class ExpressionParser:
@@ -206,34 +251,6 @@ class ReferenceParser:
 
     # NYI: cache sheet, and invalidate the cache if the sheet gets modified
     class Sheet:
-        @staticmethod
-        def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
-            """Calculate a coordinate from spreadsheet-like address string"""
-            col_str = None
-            row_str = None
-            for i, ch in enumerate(addr):
-                if ch.isalpha():
-                    continue
-                col_str = addr[:i]
-                row_str = addr[i:]
-                break
-
-            if not col_str or not row_str:
-                raise ValueError(f"Malformed spreadsheet-type address {addr=}")
-
-            try:
-                row_num = int(row_str) - 1
-            except ValueError:
-                raise ValueError(f"Malformed spreadsheet-type address {addr=}")
-
-            col_str = col_str.upper()
-            col_num = 0
-            for ch in col_str:
-                col_num *= 26
-                col_num += ord(ch) - ord('A')
-
-            return row_num, col_num
-
         def __init__(self, sheet_name: str, code_array):
             self.code_array = code_array
 
@@ -242,11 +259,11 @@ class ReferenceParser:
             self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
 
         def cell_single_ref(self, addr: str):
-            return copy.deepcopy(self.code_array[*self.spreadsheet_ref_to_coord(addr), self.sheet_idx])
+            return copy.deepcopy(self.code_array[*spreadsheet_ref_to_coord(addr), self.sheet_idx])
 
         def cell_range_ref(self, addr1: str, addr2: str) -> Range:
-            coord1 = self.spreadsheet_ref_to_coord(addr1)
-            coord2 = self.spreadsheet_ref_to_coord(addr2)
+            coord1 = spreadsheet_ref_to_coord(addr1)
+            coord2 = spreadsheet_ref_to_coord(addr2)
             topleft = min(coord1[0], coord2[0]), min(coord1[1], coord2[1])
             botright = max(coord1[0], coord2[0]), max(coord1[1], coord2[1])
             width = botright[1] - topleft[1] + 1
@@ -461,3 +478,51 @@ class ReferenceParser:
         parsed_code_list.append(code[last_end:])
 
         return str.join("", parsed_code_list)
+
+class PythonEvaluator:
+    @staticmethod
+    def exec_then_eval(code: PythonCode,
+                       _globals: dict = None, _locals: dict = None):
+        """execs multiline code and returns eval of last code line
+
+        :param code: Code to be executed / evaled
+        :param _globals: Globals dict for code execution and eval
+        :param _locals: Locals dict for code execution and eval
+
+        """
+
+        if _globals is None:
+            _globals = {}
+
+        if _locals is None:
+            _locals = {}
+
+        block = ast.parse(code, mode='exec')
+
+        # assumes last node is an expression
+        last_body = block.body.pop()
+        last = ast.Expression(last_body.value)
+
+        exec(compile(block, '<string>', mode='exec'), _globals, _locals)
+        res = eval(compile(last, '<string>', mode='eval'), _globals, _locals)
+
+        return res
+
+    @staticmethod
+    def range_output_handler(code_array, range_output: RangeOutput, current_key):
+        x1, y1, current_table = current_key
+        for xo in range(range_output.height):
+            for yo in range(range_output.width):
+                if xo == 0 and yo == 0:
+                    continue
+                if code_array(current_key).startswith(f"C('{coord_to_spreadsheet_ref((x1, y1))}').offset"):
+                    code_array[x1 + xo, y1 + yo, current_table] = ""
+                if code_array[x1 + xo, y1 + yo, current_table] != EmptyCell:
+                    raise ValueError("Cannot expand RangeOutput")
+        for xo in range(range_output.height):
+            for yo in range(range_output.width):
+                if xo == 0 and yo == 0:
+                    continue
+                code_array[x1 + xo, y1 + yo, current_table] = \
+                    f"C('{coord_to_spreadsheet_ref((x1, y1))}').offset({xo}, {yo})"
+

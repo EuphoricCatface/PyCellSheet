@@ -109,7 +109,7 @@ try:
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
     from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser
+        ReferenceParser, RangeOutput, PythonEvaluator
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -119,7 +119,7 @@ except ImportError:
     from lib.selection import Selection
     from lib.string_helpers import ZEN
     from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser
+        ReferenceParser, RangeOutput, PythonEvaluator
 
 
 class_format_functions = {}
@@ -1464,33 +1464,6 @@ class CodeArray(DataArray):
 
         return env
 
-    def exec_then_eval(self, code: PythonCode,
-                       _globals: dict = None, _locals: dict = None):
-        """execs multiline code and returns eval of last code line
-
-        :param code: Code to be executed / evaled
-        :param _globals: Globals dict for code execution and eval
-        :param _locals: Locals dict for code execution and eval
-
-        """
-
-        if _globals is None:
-            _globals = {}
-
-        if _locals is None:
-            _locals = {}
-
-        block = ast.parse(code, mode='exec')
-
-        # assumes last node is an expression
-        last_body = block.body.pop()
-        last = ast.Expression(last_body.value)
-
-        exec(compile(block, '<string>', mode='exec'), _globals, _locals)
-        res = eval(compile(last, '<string>', mode='eval'), _globals, _locals)
-
-        return res
-
     def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
         """Evaluates one cell and returns its result
 
@@ -1513,11 +1486,13 @@ class CodeArray(DataArray):
             # Safe mode is active
             return cell_contents
 
+        #  --- ExpParser START ---  #
         if self.exp_parser.handle_empty(cell_contents):
             return EmptyCell
         exp_parsed = self.exp_parser.parse(cell_contents)
         if not isinstance(exp_parsed, PythonCode):
             return exp_parsed
+        #  --- ExpParser END ---  #
 
         try:
             signal.signal(signal.SIGALRM, self.handler)
@@ -1526,8 +1501,10 @@ class CodeArray(DataArray):
             # No Unix system
             pass
 
+        #  --- RefParser ---  #
         ref_parsed = self.ref_parser.parser(exp_parsed)
 
+        #  --- PythonEval START ---  #
         env = deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
         cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
@@ -1541,7 +1518,9 @@ class CodeArray(DataArray):
         }
         try:
             # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-            result = self.exec_then_eval(ref_parsed.lstrip(), env, local)
+            result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
+            if isinstance(result, RangeOutput):
+                PythonEvaluator.range_output_handler(self, result, key)
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
@@ -1552,6 +1531,7 @@ class CodeArray(DataArray):
 
         except Exception as err:
             result = err
+        #  --- PythonEval END ---  #
 
         finally:
             try:
