@@ -3,9 +3,9 @@ import typing
 import random
 
 try:
-    from pyspread.lib.pycellsheet import EmptyCell, Range, flatten_args
+    from pyspread.lib.pycellsheet import EmptyCell, Range, flatten_args, RangeOutput
 except ImportError:
-    from lib.pycellsheet import EmptyCell, Range, flatten_args
+    from lib.pycellsheet import EmptyCell, Range, flatten_args, RangeOutput
 
 _MATH_FUNCTIONS = [
     'ABS', 'ACOS', 'ACOSH', 'ACOT', 'ACOTH', 'ASIN', 'ASINH', 'ATAN', 'ATAN2', 'ATANH', 'BASE',
@@ -334,7 +334,12 @@ def RAND():
 
 
 def RANDARRAY(x, y):
-    raise NotImplemented("RANDARRAY() not implemented yet")
+    rangeoutput_lst = []
+    for i in range(x):
+        for j in range(y):
+            rangeoutput_lst.append(random.random())
+    rtn = RangeOutput(x, rangeoutput_lst)
+    return rtn
 
 
 def RANDBETWEEN(x, y):
