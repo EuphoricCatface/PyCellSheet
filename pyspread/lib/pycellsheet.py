@@ -164,10 +164,10 @@ class RangeOutput(RangeBase):
     def from_range(cls, r: Range):
         return cls(r.width, r.lst)
 
-    def offset(self, x, y):
-        # NYI: After implementing THIS_CELL global variable, make it like RangeOutput.offset(1, 2)
-        # rather than C('A1').offset(1, 2). Tying it to a specific cell makes copy&paste unusable.
-        return self[x][y]
+    class OFFSET:
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
 
 
 class ExpressionParser:
@@ -517,15 +517,22 @@ class PythonEvaluator:
             for yo in range(range_output.width):
                 if xo == 0 and yo == 0:
                     continue
-                if code_array((x1 + xo, y1 + yo, current_table))\
-                        .startswith(f"C('{coord_to_spreadsheet_ref((x1, y1))}').offset"):
+                if code_array((x1 + xo, y1 + yo, current_table)) == f"RangeOutput.OFFSET({xo}, {yo})":
                     code_array[x1 + xo, y1 + yo, current_table] = ""
                 if code_array[x1 + xo, y1 + yo, current_table] != EmptyCell:
+                    print(x1 + xo, y1 + yo, code_array[x1 + xo, y1 + yo, current_table], )
                     raise ValueError("Cannot expand RangeOutput")
         for xo in range(range_output.height):
             for yo in range(range_output.width):
                 if xo == 0 and yo == 0:
                     continue
                 code_array[x1 + xo, y1 + yo, current_table] = \
-                    f"C('{coord_to_spreadsheet_ref((x1, y1))}').offset({xo}, {yo})"
+                    f"RangeOutput.OFFSET({xo}, {yo})"
+
+    @staticmethod
+    def range_offset_handler(code_array, range_offset: RangeOutput.OFFSET, current_key):
+        x, y, table = current_key
+        xo = range_offset.x
+        yo = range_offset.y
+        return code_array[x-xo, y-yo, table][xo][yo]
 

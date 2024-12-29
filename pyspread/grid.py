@@ -1977,7 +1977,7 @@ class GridTableModel(QAbstractTableModel):
             if renderer == "image":
                 return ""
             if isinstance(value, RangeOutput):
-                value = value.offset(0, 0)
+                value = value.lst[0]
 
             if isinstance(value, Exception):
                 return value.__class__.__name__

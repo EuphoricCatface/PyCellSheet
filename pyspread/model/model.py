@@ -1514,13 +1514,16 @@ class CodeArray(DataArray):
             "cell_range_ref": cur_sheet.cell_range_ref,     "R": cur_sheet.R,
             "global_var": cur_sheet.global_var,             "G": cur_sheet.G,
             "sheet_ref": self.ref_parser.sheet_ref,         "Sh": self.ref_parser.Sh,
-            "cell_ref": self.ref_parser.cell_ref,           "CR": self.ref_parser.CR
+            "cell_ref": self.ref_parser.cell_ref,           "CR": self.ref_parser.CR,
+            "RangeOutput": RangeOutput  # Needed for RangeOutput.OFFSET evaluation
         }
         try:
             # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
             result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
             if isinstance(result, RangeOutput):
                 PythonEvaluator.range_output_handler(self, result, key)
+            if isinstance(result, RangeOutput.OFFSET):
+                result = PythonEvaluator.range_offset_handler(self, result, key)
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
