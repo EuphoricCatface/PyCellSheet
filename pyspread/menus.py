@@ -116,8 +116,6 @@ class FileMenu(QMenu):
         self.addSeparator()
         self.addAction(actions.approve)
         self.addSeparator()
-        self.addAction(actions.clear_globals)
-        self.addSeparator()
         self.addAction(actions.print_preview)
         self.addAction(actions.print)
         self.addSeparator()
@@ -334,7 +332,7 @@ class FileHistoryMenu(QMenu):
 
         self.main_window = parent.parent.main_window
 
-    def update(self):
+    def update_(self):
         """Updates file history menu"""
 
         self.clear()

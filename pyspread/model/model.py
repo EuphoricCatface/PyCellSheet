@@ -42,20 +42,16 @@ into the following layers.
 """
 
 from __future__ import absolute_import
+
+import typing, types
 from builtins import filter
 from builtins import str
 from builtins import zip
 from builtins import range
 
 import ast
-import base64
-import bz2
 from collections import defaultdict
-from copy import copy
-import datetime
-import decimal
-from decimal import Decimal  # Needed
-from importlib import reload
+from copy import copy, deepcopy
 from inspect import getmembers, isfunction, isgenerator
 import io
 from itertools import product
@@ -112,6 +108,8 @@ try:
     from pyspread.lib.typechecks import is_stringlike
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
+    from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
+        ReferenceParser, RangeOutput, PythonEvaluator
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -120,6 +118,27 @@ except ImportError:
     from lib.typechecks import is_stringlike
     from lib.selection import Selection
     from lib.string_helpers import ZEN
+    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
+        ReferenceParser, RangeOutput, PythonEvaluator
+
+
+INITSCRIPT_DEFAULT = """
+try:
+    from pyspread.lib.spreadsheet import *
+except ImportError:
+    from lib.spreadsheet import *
+# The above is equivalent to:
+# try:
+#     from pyspread.lib.spreadsheet.array import *
+#     from pyspread.lib.spreadsheet.database import *
+#     from pyspread.lib.spreadsheet.date import *
+#     ...
+# except ImportError:
+#     from lib.spreadsheet.array import *
+#     from lib.spreadsheet.database import *
+#     from lib.spreadsheet.date import *
+#     ...
+"""
 
 
 class_format_functions = {}
@@ -441,7 +460,7 @@ class KeyValueStore(dict):
 
 
 class DictGrid(KeyValueStore):
-    """Core data class with all information that is stored in a `.pys` file.
+    """Core data class with all information that is stored in a `.pycs` file.
 
     Besides grid code access via standard `dict` operations, it provides
     the following attributes:
@@ -466,8 +485,10 @@ class DictGrid(KeyValueStore):
         # Instance of :class:`CellAttributes`
         self.cell_attributes = CellAttributes()
 
-        # Macros as string
-        self.macros = u""
+        # PerSheetInitScripts as string list
+        self.macros: list[str] = [u"" for _ in range(shape[2])]
+        # later this will be dict. sheets will have string names
+        self.exp_parser_code = u""
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
         self.col_widths = defaultdict(float)  # Keys have format (col, table)
@@ -519,6 +540,13 @@ class DataArray:
         self.dict_grid = DictGrid(shape)
         self.settings = settings
 
+        self.macros_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
+        self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
+        self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
+
+        self.exp_parser = ExpressionParser()
+        self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Mixed"]  # Workaround until we make a UI
+
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
            not hasattr(other, "cell_attributes"):
@@ -536,7 +564,7 @@ class DataArray:
 
 
         - Data is the central content interface for loading / saving data.
-        - It shall be used for loading and saving from and to `.pys` and other
+        - It shall be used for loading and saving from and to `.pycs` and other
           files.
         - It shall be used for loading and saving macros.
         - However, it is not used for importing and exporting data because
@@ -555,7 +583,7 @@ class DataArray:
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
         :param macros: Macros
-        :type macros: str
+        :type macros: list[str]
 
         """
 
@@ -590,7 +618,7 @@ class DataArray:
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
         :param macros: Macros
-        :type macros: str
+        :type macros: list[str]
 
         """
 
@@ -612,6 +640,9 @@ class DataArray:
 
         if "macros" in kwargs:
             self.macros = kwargs["macros"]
+
+        if "exp_parser_code" in kwargs:
+            pass
 
     @property
     def row_heights(self) -> defaultdict:
@@ -652,16 +683,29 @@ class DataArray:
         self.cell_attributes.extend(value)
 
     @property
-    def macros(self) -> str:
+    def macros(self) -> list[str]:
         """macros interface to dict_grid"""
 
         return self.dict_grid.macros
 
     @macros.setter
-    def macros(self, macros: str):
+    def macros(self, macros: list[str]):
         """Sets  macros string"""
 
         self.dict_grid.macros = macros
+
+    @property
+    def exp_parser_code(self) -> str:
+        """macros interface to dict_grid"""
+
+        return self.dict_grid.exp_parser_code
+
+    @exp_parser_code.setter
+    def exp_parser_code(self, exp_parser_code: str):
+        """Sets ExpressionParser string"""
+
+        self.dict_grid.exp_parser_code = exp_parser_code
+        self.exp_parser.set_parser(exp_parser_code)
 
     @property
     def shape(self) -> Tuple[int, int, int]:
@@ -1200,6 +1244,13 @@ class DataArray:
         self._adjust_rowcol(insertion_point, no_to_insert, axis, tab=tab)
         self._adjust_cell_attributes(insertion_point, no_to_insert, axis, tab)
 
+        if axis == 2:
+            for _ in range(no_to_insert):
+                self.macros.insert(insertion_point, u"")
+                self.macros_draft.insert(insertion_point, None)
+                self.sheet_globals_copyable.insert(insertion_point, dict())
+                self.sheet_globals_uncopyable.insert(insertion_point, dict())
+
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
 
@@ -1242,6 +1293,13 @@ class DataArray:
 
         self._adjust_rowcol(deletion_point, -no_to_delete, axis, tab=tab)
         self._adjust_cell_attributes(deletion_point, -no_to_delete, axis, tab)
+
+        if axis == 2:
+            for _ in range(no_to_delete):
+                self.macros.insert(deletion_point, u"")
+                self.macros_draft.insert(deletion_point, None)
+                self.sheet_globals_copyable.insert(deletion_point, dict())
+                self.sheet_globals_uncopyable.insert(deletion_point, dict())
 
         # Now re-insert moved keys
 
@@ -1314,6 +1372,11 @@ class CodeArray(DataArray):
     # In safe_mode, cells are not evaluated but its code is returned instead.
     safe_mode = False
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.ref_parser = ReferenceParser(self)
+
     def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]], value: str):
         """Sets cell code and resets result cache
@@ -1355,7 +1418,7 @@ class CodeArray(DataArray):
         code = self(key)
 
         if code is None:
-            return
+            return EmptyCell
 
         # Cached cell handling
 
@@ -1420,85 +1483,35 @@ class CodeArray(DataArray):
 
         return env
 
-    def exec_then_eval(self, code: str,
-                       _globals: dict = None, _locals: dict = None):
-        """execs multiline code and returns eval of last code line
-
-        :param code: Code to be executed / evaled
-        :param _globals: Globals dict for code execution and eval
-        :param _locals: Locals dict for code execution and eval
-
-        """
-
-        if _globals is None:
-            _globals = {}
-
-        if _locals is None:
-            _locals = {}
-
-        block = ast.parse(code, mode='exec')
-
-        # assumes last node is an expression
-        last_body = block.body.pop()
-        last = ast.Expression(last_body.value)
-
-        exec(compile(block, '<string>', mode='exec'), _globals, _locals)
-        res = eval(compile(last, '<string>', mode='eval'), _globals, _locals)
-
-        if hasattr(last_body, "targets"):
-            for target in last_body.targets:
-                _globals[target.id] = res
-
-        globals().update(_globals)
-
-        return res
-
-    def _eval_cell(self, key: Tuple[int, int, int], code: str) -> Any:
+    def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
         """Evaluates one cell and returns its result
 
         :param key: Key of cell to be evaled
-        :param code: Code to be evaled
+        :param cell_contents: Whatever the user typed in
 
         """
 
         # Help helper function that fixes help being displayed in stdout
-        def help(*args) -> str:
+        def help(*args) -> HelpText:
             """Returns help string for object arguments"""
 
             if not args:
-                return ZEN
+                return HelpText(args, ZEN)
 
             from pydoc import render_doc, plaintext
-            return render_doc(*args, renderer=plaintext)
-
-        # Flatten helper function
-        def nn(val: numpy.array) -> numpy.array:
-            """Returns flat numpy array without None values"""
-            try:
-                return numpy.array([_f for _f in val.flat if _f is not None],
-                                   dtype="O")
-
-            except AttributeError:
-                # Probably no numpy array
-                return numpy.array([_f for _f in val if _f is not None],
-                                   dtype="O")
-
-        env_dict = {'X': key[0], 'Y': key[1], 'Z': key[2], 'bz2': bz2,
-                    'base64': base64, 'nn': nn, 'help': help, 'Figure': Figure,
-                    'R': key[0], 'C': key[1], 'T': key[2], 'S': self}
-        env = self._get_updated_environment(env_dict=env_dict)
+            return HelpText(args, render_doc(*args, renderer=plaintext))
 
         if self.safe_mode:
             # Safe mode is active
-            return code
+            return cell_contents
 
-        if code is None:
-            # Cell is not present
-            return
-
-        if isgenerator(code):
-            # We have a generator object
-            return numpy.array(self._make_nested_list(code), dtype="O")
+        #  --- ExpParser START ---  #
+        if self.exp_parser.handle_empty(cell_contents):
+            return EmptyCell
+        exp_parsed = self.exp_parser.parse(cell_contents)
+        if not isinstance(exp_parsed, PythonCode):
+            return exp_parsed
+        #  --- ExpParser END ---  #
 
         try:
             signal.signal(signal.SIGALRM, self.handler)
@@ -1507,8 +1520,30 @@ class CodeArray(DataArray):
             # No Unix system
             pass
 
+        #  --- RefParser ---  #
+        ref_parsed = self.ref_parser.parser(exp_parsed)
+
+        #  --- PythonEval START ---  #
+        env = deepcopy(self.sheet_globals_copyable[key[2]])
+        env.update(self.sheet_globals_uncopyable[key[2]])
+        cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
+        local = {
+            "help": help,
+            "cell_single_ref": cur_sheet.cell_single_ref,   "C": cur_sheet.C,
+            "cell_range_ref": cur_sheet.cell_range_ref,     "R": cur_sheet.R,
+            "global_var": cur_sheet.global_var,             "G": cur_sheet.G,
+            "sheet_ref": self.ref_parser.sheet_ref,         "Sh": self.ref_parser.Sh,
+            "cell_ref": lambda exp: self.ref_parser.cell_ref(exp, cur_sheet),
+                                                            "CR": lambda exp: self.ref_parser.CR(exp, cur_sheet),
+            "RangeOutput": RangeOutput  # Needed for RangeOutput.OFFSET evaluation
+        }
         try:
-            result = self.exec_then_eval(code, env, {})
+            # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
+            result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
+            if isinstance(result, RangeOutput):
+                PythonEvaluator.range_output_handler(self, result, key)
+            if isinstance(result, RangeOutput.OFFSET):
+                result = PythonEvaluator.range_offset_handler(self, result, key)
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
@@ -1518,7 +1553,8 @@ class CodeArray(DataArray):
             result = RuntimeError(err)
 
         except Exception as err:
-            result = Exception(err)
+            result = err
+        #  --- PythonEval END ---  #
 
         finally:
             try:
@@ -1547,78 +1583,12 @@ class CodeArray(DataArray):
 
         return super().pop(key)
 
-    def reload_modules(self):
-        """Reloads modules that are available in cells"""
-
-        modules = [bz2, base64, re, ast, sys, datetime, decimal]
-
-        for module in modules:
-            reload(module)
-
-    def clear_globals(self):
-        """Clears all newly assigned globals"""
-
-        base_keys = ['cStringIO', 'KeyValueStore', 'UnRedo', 'Figure',
-                     'reload', 'io', 'print_exception', 'get_user_codeframe',
-                     'isgenerator', 'is_stringlike', 'bz2', 'base64',
-                     '__package__', 're', '__doc__', 'QPixmap', 'charts',
-                     'product', 'AttrDict', 'CellAttribute', 'CellAttributes',
-                     'DefaultCellAttributeDict', 'ast', '__builtins__',
-                     '__file__', 'sys', '__name__', 'QImage', 'defaultdict',
-                     'copy', 'imap', 'ifilter', 'Selection', 'DictGrid',
-                     'numpy', 'CodeArray', 'DataArray', 'datetime', 'Decimal',
-                     'decimal', 'signal', 'Any', 'Dict', 'Iterable', 'List',
-                     'NamedTuple', 'Sequence', 'Tuple', 'Union', '_R_', '_C_',
-                     '_table_from_address', 'CellRange',
-                     'class_format_functions']
-
-        try:
-            from moneyed import Money
-            base_keys.append('Money')
-        except ImportError:
-            Money = None
-
-        if Money is not None:
-            base_keys.append('Money')
-
-        if dateutil is not None:
-            base_keys.append('dateutil')
-
-        try:
-            import pycel
-        except ImportError:
-            pycel = None
-
-        if pycel is not None:
-            try:
-                from inspect import getmembers
-                xl_members = getmembers(pycel.excellib)
-                xl_members += getmembers(pycel.lib.date_time)
-                xl_members += getmembers(pycel.lib.engineering)
-                xl_members += getmembers(pycel.lib.information)
-                xl_members += getmembers(pycel.lib.logical)
-                xl_members += getmembers(pycel.lib.lookup)
-                xl_members += getmembers(pycel.lib.stats)
-                xl_members += getmembers(pycel.lib.text)
-                XL_LIST = [n for n, _ in xl_members]
-
-                for name, fun in xl_members:
-                    globals()[name] = fun
-                    base_keys += XL_LIST
-
-            except UnboundLocalError:
-                pass  # openpyxl is not installed
-
-        for key in list(globals().keys()):
-            if key not in base_keys:
-                globals().pop(key)
-
     def get_globals(self) -> dict:
         """Returns globals dict"""
 
         return globals()
 
-    def execute_macros(self) -> Tuple[str, str]:
+    def execute_macros(self, current_table) -> Tuple[str, str]:
         """Executes all macros and returns result string and error string
 
         Executes macros only when not in safe_mode
@@ -1633,15 +1603,15 @@ class CodeArray(DataArray):
             self[key]
 
         # Windows exec does not like Windows newline
-        self.macros = self.macros.replace('\r\n', '\n')
+        self.macros[current_table] = self.macros[current_table].replace('\r\n', '\n')
 
-        # Set up environment for evaluation
-        globals().update(self._get_updated_environment())
-        for var in "XYZRCT":
-            try:
-                del globals()[var]
-            except KeyError:
-                pass
+        # # Set up environment for evaluation
+        # globals().update(self._get_updated_environment())
+        # for var in "XYZRCT":
+        #     try:
+        #         del globals()[var]
+        #     except KeyError:
+        #         pass
 
         # Create file-like string to capture output
         code_out = io.StringIO()
@@ -1659,8 +1629,9 @@ class CodeArray(DataArray):
             # No POSIX system
             pass
 
+        sheet_globals = {}
         try:
-            exec(self.macros, globals())
+            exec(self.macros[current_table], sheet_globals)
             try:
                 signal.alarm(0)
             except AttributeError:
@@ -1683,7 +1654,18 @@ class CodeArray(DataArray):
 
         # Reset result cache
         self.result_cache.clear()
+        self.sheet_globals_copyable[current_table] = dict()
+        self.sheet_globals_uncopyable[current_table] = dict()
 
+        for k, v in sheet_globals.items():
+            try:
+                self.sheet_globals_copyable[current_table][k] = deepcopy(v)
+            except TypeError:
+                if type(v) not in [types.ModuleType]:
+                    # TODO: proper warning
+                    errs += (f"WARNING: Per-sheet global variable {k}({type(v).__name__}) is not deepcopyable, "
+                             f"but is unknown if it can be safely used without doing so.\n")
+                self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],

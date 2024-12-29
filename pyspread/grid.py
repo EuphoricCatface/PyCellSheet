@@ -82,8 +82,8 @@ try:
                                       DefaultCellAttributeDict,
                                       class_format_functions)
     from pyspread.lib.attrdict import AttrDict
-    from pyspread.interfaces.pys import (qt52qt6_fontweights,
-                                         qt62qt5_fontweights)
+    from pyspread.interfaces.pycs import (qt52qt6_fontweights,
+                                          qt62qt5_fontweights)
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import quote, wrap_text
     from pyspread.lib.qimage2ndarray import array2qimage
@@ -92,6 +92,7 @@ try:
                                 HorizontalHeaderContextMenu,
                                 VerticalHeaderContextMenu)
     from pyspread.widgets import CellButton
+    from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput
 except ImportError:
     import commands
     from dialogs import DiscardDataDialog
@@ -102,7 +103,7 @@ except ImportError:
     from model.model import (CodeArray, CellAttribute, DefaultCellAttributeDict,
                             class_format_functions)
     from lib.attrdict import AttrDict
-    from interfaces.pys import qt52qt6_fontweights, qt62qt5_fontweights
+    from interfaces.pycs import qt52qt6_fontweights, qt62qt5_fontweights
     from lib.selection import Selection
     from lib.string_helpers import quote, wrap_text
     from lib.qimage2ndarray import array2qimage
@@ -110,6 +111,7 @@ except ImportError:
     from menus import (GridContextMenu, TableChoiceContextMenu,
                        HorizontalHeaderContextMenu, VerticalHeaderContextMenu)
     from widgets import CellButton
+    from lib.pycellsheet import EmptyCell, HelpText, RangeOutput
 
 FONTSTYLES = (QFont.Style.StyleNormal,
               QFont.Style.StyleItalic,
@@ -1957,6 +1959,8 @@ class GridTableModel(QAbstractTableModel):
         def safe_str(obj) -> str:
             """Returns str(obj), on RecursionError returns error message"""
             try:
+                if obj is EmptyCell:
+                    return ""
                 if obj.__class__ in class_format_functions:
                     format_function = class_format_functions[obj.__class__]
                     return format_function(obj)
@@ -1970,15 +1974,26 @@ class GridTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             value = self.code_array[key]
             renderer = self.code_array.cell_attributes[key].renderer
-            if renderer == "image" or value is None:
+            if renderer == "image":
                 return ""
+            if isinstance(value, RangeOutput):
+                value = value.lst[0]
+
+            if isinstance(value, Exception):
+                return value.__class__.__name__
+            if isinstance(value, HelpText):
+                return value.query
             return safe_str(value)
 
         if role == Qt.ItemDataRole.ToolTipRole:
             value = self.code_array[key]
-            if value is None:
-                return ""
-            return wrap_text(safe_str(value))
+            if isinstance(value, Exception):
+                output = str(value)
+            elif isinstance(value, HelpText):
+                output = value.contents
+            else:
+                output = value.__class__.__name__
+            return wrap_text(safe_str(output))
 
         if role == Qt.ItemDataRole.DecorationRole:
             renderer = self.code_array.cell_attributes[key].renderer
@@ -2092,16 +2107,24 @@ class GridTableModel(QAbstractTableModel):
         return QAbstractTableModel.flags(self,
                                          index) | Qt.ItemFlag.ItemIsEditable
 
-    def headerData(self, idx: QModelIndex, _, role: Qt.ItemDataRole) -> str:
+    def headerData(self, idx: int, orientation: Qt.Orientation, role: Qt.ItemDataRole) -> str:
         """Overloaded for displaying numbers in header
 
         :param idx: Index of header for which data is returned
+        :param orientation: The orientation the header is in
         :param role: Role of data to be returned
 
         """
 
         if role == Qt.ItemDataRole.DisplayRole:
-            return str(idx)
+            if orientation == Qt.Orientation.Vertical:
+                return str(idx + 1)
+            if orientation == Qt.Orientation.Horizontal:
+                i = idx
+                tens = i // 26
+                ones = i % 26
+                tens_chr = "" if tens == 0 else chr(ord("A") + tens - 1)
+                return tens_chr + chr(ord("A") + ones)
 
     def reset(self):
         """Deletes all grid data including undo data"""
@@ -2118,15 +2141,14 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.col_widths.clear()
 
             # Clear macros
-            self.code_array.macros = ""
+            self.code_array.dict_grid.macros = ["" for _ in range(self.shape[2])]
+            self.code_array.dict_grid.macros_draft = dict()
+            self.code_array.dict_grid.sheet_globals_uncopyable = {i: dict() for i in range(self.shape[2])}
+            self.code_array.dict_grid.sheet_globals_copyable = {i: dict() for i in range(self.shape[2])}
 
             # Clear caches
             # self.main_window.undo_stack.clear()
             self.code_array.result_cache.clear()
-
-            # Clear globals
-            self.code_array.clear_globals()
-            self.code_array.reload_modules()
 
 
 class GridCellDelegate(QStyledItemDelegate):
@@ -2588,30 +2610,6 @@ class GridCellDelegate(QStyledItemDelegate):
         self.editor.installEventFilter(self)
         return self.editor
 
-    def eventFilter(self, source: QObject, event: QEvent) -> bool:
-        """Overloads `eventFilter`. Overrides QLineEdit default shortcut.
-
-        Quotes cell editor content for <Ctrl>+<Enter> and <Ctrl>+<Return>.
-        Counts as undoable action.
-
-        :param source: Source widget of event
-        :param event: Any QEvent
-
-        """
-
-        if event.type() == QEvent.Type.ShortcutOverride \
-           and source is self.editor \
-           and event.modifiers() == Qt.KeyboardModifier.ControlModifier \
-           and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-
-            code = quote(source.text())
-            index = self.grid.currentIndex()
-            description = f"Quote code for cell {index}"
-            cmd = commands.SetCellCode(code, self.grid.model, index,
-                                       description)
-            self.main_window.undo_stack.push(cmd)
-        return super().eventFilter(source, event)
-
     def setEditorData(self, editor: QWidget, index: QModelIndex):
         """Overloads `setEditorData` to use code_array data
 
@@ -2750,7 +2748,6 @@ class TableChoice(QTabBar):
                     grid.update_zoom()
 
             grid.update_index_widgets()
-            grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
             grid.gui_update()
             try:
                 v_pos, h_pos = grid.table_scrolls[current]
@@ -2758,5 +2755,7 @@ class TableChoice(QTabBar):
                 v_pos = h_pos = 0
             grid.verticalScrollBar().setValue(v_pos)
             grid.horizontalScrollBar().setValue(h_pos)
+
+        self.main_window.macro_panel.update_current_table(current)
 
         self.last = current

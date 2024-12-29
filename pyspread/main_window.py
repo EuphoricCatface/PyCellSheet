@@ -65,7 +65,7 @@ try:
                                   ManualDialog, TutorialDialog,
                                   PrintAreaDialog, PrintPreviewDialog)
     from pyspread.installer import DependenciesDialog
-    from pyspread.interfaces.pys import qt62qt5_fontweights
+    from pyspread.interfaces.pycs import qt62qt5_fontweights
     from pyspread.panels import MacroPanel
     from pyspread.lib.hashing import genkey
     from pyspread.model.model import CellAttributes
@@ -84,7 +84,7 @@ except ImportError:
     from dialogs import (ApproveWarningDialog, PreferencesDialog, ManualDialog,
                          TutorialDialog, PrintAreaDialog, PrintPreviewDialog)
     from installer import DependenciesDialog
-    from interfaces.pys import qt62qt5_fontweights
+    from interfaces.pycs import qt62qt5_fontweights
     from panels import MacroPanel
     from lib.hashing import genkey
     from model.model import CellAttributes
@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
         self.print_area = None
 
         # Update recent files in the file menu
-        self.menuBar().file_menu.history_submenu.update()
+        self.menuBar().file_menu.history_submenu.update_()
 
         # Update toolbar toggle checkboxes
         self.update_action_toggles()
@@ -518,15 +518,6 @@ class MainWindow(QMainWindow):
         if ApproveWarningDialog(self).choice:
             self.safe_mode = False
 
-    def on_clear_globals(self):
-        """Clear globals event handler"""
-
-        self.grid.model.code_array.result_cache.clear()
-
-        # Clear globals
-        self.grid.model.code_array.clear_globals()
-        self.grid.model.code_array.reload_modules()
-
     def on_preferences(self):
         """Preferences event handler (:class:`dialogs.PreferencesDialog`) """
 
@@ -544,7 +535,7 @@ class MainWindow(QMainWindow):
 
             # Immediately adjust file history in menu
             if max_file_history_changed:
-                self.menuBar().file_menu.history_submenu.update()
+                self.menuBar().file_menu.history_submenu.update_()
 
     def on_dependencies(self):
         """Dependancies installer (:class:`installer.InstallerDialog`) """

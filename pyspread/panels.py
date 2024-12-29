@@ -31,10 +31,10 @@ from io import StringIO
 from sys import exc_info
 from traceback import print_exception
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtProperty, QModelIndex
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QSplitter
-from PyQt6.QtWidgets import QTextEdit
+from PyQt6.QtWidgets import QTextEdit, QLabel
 
 try:
     from pyspread.lib.spelltextedit import SpellTextEdit
@@ -47,27 +47,71 @@ except ImportError:
 class MacroPanel(QDialog):
     """The macro panel"""
 
+    class AppliedIndicator(QLabel):
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setText("Draft")
+            self.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            self._applied = True
+            self.stylesheet_update()
+
+        def stylesheet_update(self):
+            # Qt does not guarantee the applying of new style
+            #  when a property is updated, unless you re-apply the stylesheet.
+            self.setStyleSheet("")
+            self.setStyleSheet(
+                "QLabel {background-color: #1f000000; font-weight: bold; padding: 1px} \n"
+                "QLabel[applied=true] { color: blue } \n"
+                "QLabel[applied=false] { color: red } \n"
+            )
+
+        def paintEvent(self, a0):
+            super().paintEvent(a0)
+            if self.parent():
+                self.move(
+                    self.parent().width() - self.width(), 0
+                )
+
+        @pyqtProperty(bool)
+        def applied(self):
+            return self._applied
+
+        @applied.setter
+        def applied(self, applied):
+            if self._applied == applied:
+                return
+            self._applied = applied
+            self.setText("Applied" if applied else "--Draft--")
+            self.stylesheet_update()
+
     def __init__(self, parent, code_array):
         super().__init__()
 
         self.parent = parent
         self.code_array = code_array
+        self.current_table = 0
 
         self._init_widgets()
         self._layout()
 
-        self.update()
+        self.update_()
 
         self.default_text_color = self.result_viewer.textColor()
         self.error_text_color = QColor("red")
 
-        self.button_box.clicked.connect(self.on_apply)
+        self.button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.on_apply)
+        self.button_box.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(self.on_reset)
 
     def _init_widgets(self):
         """Inititialize widgets"""
 
         font_family = self.parent.settings.macro_editor_font_family
         self.macro_editor = SpellTextEdit(self, font_family=font_family)
+        self.applied_indicator = MacroPanel.AppliedIndicator(self.macro_editor)
+        self.macro_editor.textChanged.connect(
+            lambda: self.applied_indicator.setProperty("applied", False)
+        )
 
         self.result_viewer = QTextEdit(self)
         self.result_viewer.setReadOnly(True)
@@ -78,7 +122,9 @@ class MacroPanel(QDialog):
         self.splitter.addWidget(self.result_viewer)
 
         self.button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Apply)
+            QDialogButtonBox.StandardButton.Apply |
+            QDialogButtonBox.StandardButton.Reset
+        )
 
     def _layout(self):
         """Layout dialog widgets"""
@@ -89,7 +135,7 @@ class MacroPanel(QDialog):
 
         self.setLayout(layout)
 
-    def _is_invalid_code(self) -> str:
+    def _is_invalid_code(self, current_table) -> str:
         """Preliminary code check
 
         Returns a string with the error message if code is not valid Python.
@@ -98,7 +144,7 @@ class MacroPanel(QDialog):
         """
 
         try:
-            ast.parse(self.code_array.macros)
+            ast.parse(self.code_array.macros[current_table])
 
         except Exception:
             # Grab the traceback and return it
@@ -115,21 +161,35 @@ class MacroPanel(QDialog):
     def on_apply(self):
         """Event handler for Apply button"""
 
-        self.code_array.macros = self.macro_editor.toPlainText()
+        self.code_array.macros[self.current_table] = self.macro_editor.toPlainText()
 
-        err = self._is_invalid_code()
+        err = self._is_invalid_code(self.current_table)
         if err:
             self.update_result_viewer(err=err)
         else:
-            self.update_result_viewer(*self.code_array.execute_macros())
+            self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
+            self.code_array.macros_draft[self.current_table] = None
+            self.applied_indicator.setProperty("applied", True)
+            self.parent.grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
 
         self.parent.grid.gui_update()
 
-    def update(self):
+    def update_(self):
         """Update macro content"""
+        # NYI: store&load evaluation results
 
-        self.macro_editor.setPlainText(self.code_array.macros)
-        self.on_apply()
+        if self.code_array.macros_draft[self.current_table] is not None:
+            self.macro_editor.setPlainText(self.code_array.macros_draft[self.current_table])
+            self.applied_indicator.setProperty("applied", False)
+        else:
+            self.macro_editor.setPlainText(self.code_array.macros[self.current_table])
+            self.applied_indicator.setProperty("applied", True)
+
+    def update_current_table(self, current):
+        if not self.applied_indicator.property("applied"):
+            self.code_array.macros_draft[self.current_table] = self.macro_editor.toPlainText()
+        self.current_table = current
+        self.update_()
 
     def update_result_viewer(self, result: str = "", err: str = ""):
         """Update event result following execution by main window
@@ -147,3 +207,8 @@ class MacroPanel(QDialog):
             self.result_viewer.setTextColor(self.error_text_color)
             self.result_viewer.append(err)
             self.result_viewer.setTextColor(self.default_text_color)
+
+    def on_reset(self):
+        self.code_array.macros_draft[self.current_table] = None
+        self.macro_editor.setPlainText(self.code_array.macros[self.current_table])
+        self.applied_indicator.setProperty("applied", True)

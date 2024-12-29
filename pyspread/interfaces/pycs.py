@@ -21,9 +21,9 @@
 
 """
 
-This file contains interfaces to the native pys file format.
+This file contains interfaces to the native pycs file format.
 
-PysReader and PysWriter classed are structured into the following sections:
+PycsReader and PycsWriter classed are structured into the following sections:
  * shape
  * code
  * attributes
@@ -39,8 +39,8 @@ PysReader and PysWriter classed are structured into the following sections:
  * :func:`qt62qt5_fontweights`
  * :dict:`wx2qt_fontweights`
  * :dict:`wx2qt_fontstyles`
- * :class:`PysReader`
- * :class:`PysWriter`
+ * :class:`PycsReader`
+ * :class:`PycsWriter`
 
 """
 
@@ -102,42 +102,46 @@ wx2qt_fontstyles = {
     }
 
 
-class PysReader:
-    """Reads pys v2.0 file into a code_array"""
+class PycsReader:
+    """Reads pycs file into a code_array"""
 
-    def __init__(self, pys_file: BinaryIO, code_array: CodeArray):
+    def __init__(self, pycs_file: BinaryIO, code_array: CodeArray):
         """
-        :param pys_file: The pys or pysu file to be read
+        :param pycs_file: The pycs or pycsu file to be read
         :param code_array: Target code_array
 
         """
 
-        self.pys_file = pys_file
+        self.pycs_file = pycs_file
         self.code_array = code_array
 
         self._section2reader = {
-            "[Pyspread save file version]\n": self._pys_version,
-            "[shape]\n": self._pys2shape,
-            "[grid]\n": self._pys2code,
-            "[attributes]\n": self._pys2attributes,
-            "[row_heights]\n": self._pys2row_heights,
-            "[col_widths]\n": self._pys2col_widths,
-            "[macros]\n": self._pys2macros,
+            "[PyCellSheet save file version]\n": self._pycs_version,
+            "[shape]\n": self._pycs2shape,
+            "[macros]\n": self._pycs2macros,
+            "[grid]\n": self._pycs2code,
+            "[attributes]\n": self._pycs2attributes,
+            "[row_heights]\n": self._pycs2row_heights,
+            "[col_widths]\n": self._pycs2col_widths,
         }
 
         # When converting old versions, cell attributes are required that
         # take place after the cell attribute readout
         self.cell_attributes_postfixes = []
 
+        # Now there are many pages of macros
+        self.current_macro = -1
+        self.current_macro_remaining = 0
+
     def __iter__(self):
-        """Iterates over self.pys_file, replacing everything in code_array"""
+        """Iterates over self.pycs_file, replacing everything in code_array"""
 
         state = None
 
-        # Reset pys_file to start to enable multiple calls of this method
-        self.pys_file.seek(0)
+        # Reset pycs_file to start to enable multiple calls of this method
+        self.pycs_file.seek(0)
 
-        for line in self.pys_file:
+        for line in self.pycs_file:
             line = line.decode("utf8")
             if line in self._section2reader:
                 state = line
@@ -152,20 +156,13 @@ class PysReader:
     # Decorators
 
     def version_handler(method: Callable) -> Callable:
-        """Chooses method`_10` of method if version < 2.0
+        """When we need to handle changes for each version, then this will handle it.
 
-        :param method: Method to be replaced in case of old pys file version
+        :param method: Method to be replaced in case of old pycs file version
 
         """
 
-        def new_method(self, *args, **kwargs):
-            if self.version <= 1.0:
-                method10 = getattr(self, method.__name__+"_10")
-                method10(*args, **kwargs)
-            else:
-                method(self, *args, **kwargs)
-
-        return new_method
+        return method
 
     # Helpers
 
@@ -193,24 +190,24 @@ class PysReader:
 
     # Sections
 
-    def _pys_version(self, line: str):
-        """pys file version including assertion
+    def _pycs_version(self, line: str):
+        """pycs file version including assertion
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
         self.version = float(line.strip())
 
-        if self.version > 2.0:
+        if self.version > 0.0:
             # Abort if file version not supported
-            msg = "File version {version} unsupported (> 2.0)."
+            msg = "File version {version} unsupported (> 0.0)."
             raise ValueError(msg.format(version=line.strip()))
 
-    def _pys2shape(self, line: str):
+    def _pycs2shape(self, line: str):
         """Updates shape in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -221,69 +218,10 @@ class PysReader:
             raise ValueError(msg.format(shape=shape))
         self.code_array.shape = shape
 
-    def _code_convert_1_2(self, key: Tuple[int, int, int], code: str) -> str:
-        """Converts chart and image code from v1.0 to v2.0
+    def _pycs2code(self, line: str):
+        """Updates code in pycs code_array
 
-        :param key: Key of cell with code
-        :param code: Code in cell to be converted
-
-        """
-
-        def get_image_code(image_data: str, width: int, height: int) -> str:
-            """Returns code string for v2.0
-
-            :param image_data: b85encoded image data
-            :param width: Image width
-            :param height: Image height
-
-            """
-
-            image_buffer_tpl = 'bz2.decompress(base64.b85decode({data}))'
-            image_array_tpl = 'numpy.frombuffer({buffer}, dtype="uint8")'
-            image_matrix_tpl = '{array}.reshape({height}, {width}, 3)'
-
-            image_buffer = image_buffer_tpl.format(data=image_data)
-            image_array = image_array_tpl.format(buffer=image_buffer)
-            image_matrix = image_matrix_tpl.format(array=image_array,
-                                                   height=height, width=width)
-
-            return image_matrix
-
-        start_str = "bz2.decompress(base64.b64decode('"
-        size_start_str = "wx.ImageFromData("
-        if size_start_str in code and start_str in code:
-            size_start = code.index(size_start_str) + len(size_start_str)
-            size_str_list = code[size_start:].split(",")[:2]
-            width, height = tuple(map(int, size_str_list))
-
-            # We have a cell that displays a bitmap
-            data_start = code.index(start_str) + len(start_str)
-            data_stop = code.find("'", data_start)
-            enc_data = bytes(code[data_start:data_stop], encoding='utf-8')
-            compressed_image_data = b64decode(enc_data)
-            reenc_data = b85encode(compressed_image_data)
-            code = get_image_code(repr(reenc_data), width, height)
-
-            selection = Selection([], [], [], [], [(key[0], key[1])])
-            tab = key[2]
-            attr_dict = AttrDict([("renderer", "image")])
-            attr = CellAttribute(selection, tab, attr_dict)
-            self.cell_attributes_postfixes.append(attr)
-
-        elif "charts.ChartFigure(" in code:
-            # We have a matplotlib figure
-            selection = Selection([], [], [], [], [(key[0], key[1])])
-            tab = key[2]
-            attr_dict = AttrDict([("renderer", "matplotlib")])
-            attr = CellAttribute(selection, tab, attr_dict)
-            self.cell_attributes_postfixes.append(attr)
-
-        return code
-
-    def _pys2code_10(self, line: str):
-        """Updates code in pys code_array - for save file version 1.0
-
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -291,22 +229,7 @@ class PysReader:
         key = self._get_key(row, col, tab)
 
         if all(0 <= key[i] < self.code_array.shape[i] for i in range(3)):
-            self.code_array.dict_grid[key] = str(self._code_convert_1_2(key,
-                                                                        code))
-
-    @version_handler
-    def _pys2code(self, line: str):
-        """Updates code in pys code_array
-
-        :param line: Pys file line to be parsed
-
-        """
-
-        row, col, tab, code = self._split_tidy(line, maxsplit=3)
-        key = self._get_key(row, col, tab)
-
-        if all(0 <= key[i] < self.code_array.shape[i] for i in range(3)):
-            self.code_array.dict_grid[key] = ast.literal_eval(code)
+            self.code_array.dict_grid[key] = code
 
     def _attr_convert_1to2(self, key: str, value: Any) -> Tuple[str, Any]:
         """Converts key, value attribute pair from v1.0 to v2.0
@@ -352,60 +275,10 @@ class PysReader:
 
         return key, value
 
-    def _pys2attributes_10(self, line: str):
-        """Updates attributes in code_array - for save file version 1.0
-
-        :param line: Pys file line to be parsed
-
-        """
-
-        splitline = self._split_tidy(line)
-
-        selection_data = list(map(ast.literal_eval, splitline[:5]))
-        selection = Selection(*selection_data)
-
-        tab = int(splitline[5])
-
-        attr_dict = AttrDict()
-
-        old_merged_cells = {}
-
-        for col, ele in enumerate(splitline[6:]):
-            if not (col % 2):
-                # Odd entries are keys
-                key = ast.literal_eval(ele)
-
-            else:
-                # Even cols are values
-                value = ast.literal_eval(ele)
-
-                # Convert old wx color values and merged cells
-                key_, value_ = self._attr_convert_1to2(key, value)
-
-                if key_ is None and value_ is not None:
-                    # We have a merged cell
-                    old_merged_cells[value_[:2]] = value_
-                try:
-                    attr_dict.pop("merge_area")
-                except KeyError:
-                    pass
-                attr_dict[key_] = value_
-
-        attr = CellAttribute(selection, tab, attr_dict)
-        self.code_array.cell_attributes.append(attr)
-
-        for key in old_merged_cells:
-            selection = Selection([], [], [], [], [key])
-            attr_dict = AttrDict([("merge_area", old_merged_cells[key])])
-            attr = CellAttribute(selection, tab, attr_dict)
-            self.code_array.cell_attributes.append(attr)
-        old_merged_cells.clear()
-
-    @version_handler
-    def _pys2attributes(self, line: str):
+    def _pycs2attributes(self, line: str):
         """Updates attributes in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -432,10 +305,10 @@ class PysReader:
             attr = CellAttribute(selection, tab, attr_dict)
             self.code_array.cell_attributes.append(attr)
 
-    def _pys2row_heights(self, line: str):
+    def _pycs2row_heights(self, line: str):
         """Updates row_heights in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -453,10 +326,10 @@ class PysReader:
         except ValueError:
             pass
 
-    def _pys2col_widths(self, line: str):
+    def _pycs2col_widths(self, line: str):
         """Updates col_widths in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
 
@@ -474,20 +347,44 @@ class PysReader:
         except ValueError:
             pass
 
-    def _pys2macros(self, line: str):
+    def _pycs2macros(self, line: str):
         """Updates macros in code_array
 
-        :param line: Pys file line to be parsed
+        :param line: Pycs file line to be parsed
 
         """
+        # self.code_array.macros += line
 
-        self.code_array.macros += line
+        if self.current_macro_remaining:
+            if self.current_macro_remaining == 1:
+                # For the last line, we need to exclude the line break,
+                #  otherwise the scripts will gain a line break every save&load.
+                line = line.rstrip("\r\n")
+            self.code_array.macros[self.current_macro] += line
+            self.current_macro_remaining -= 1
+            return
 
+        sheet_number_str = ""  # later we will use string names
+        if not line.startswith("(macro:"):
+            raise ValueError("The save file does not follow the macro name conventions")
+        for i in iter(line[7:]):
+            if i == ")":
+                break
+            sheet_number_str += i
+        new_sheet_number = int(sheet_number_str)
+        if self.current_macro + 1 != new_sheet_number:
+            raise ValueError("The save file does not follow the macro name conventions")
+        self.current_macro = new_sheet_number
 
-class PysWriter(object):
-    """Interface between code_array and pys file data
+        line_count_str = ""
+        for i in iter(line[9 + len(sheet_number_str)]):
+            line_count_str += i
+        self.current_macro_remaining = int(line_count_str)
 
-    Iterating over it yields pys file lines
+class PycsWriter(object):
+    """Interface between code_array and pycs file data
+
+    Iterating over it yields pycs file lines
 
     """
 
@@ -499,20 +396,20 @@ class PysWriter(object):
 
         self.code_array = code_array
 
-        self.version = 2.0
+        self.version = 0.0  # NOT STABILIZED YET!
 
         self._section2writer = OrderedDict([
-            ("[Pyspread save file version]\n", self._version2pys),
-            ("[shape]\n", self._shape2pys),
-            ("[grid]\n", self._code2pys),
-            ("[attributes]\n", self._attributes2pys),
-            ("[row_heights]\n", self._row_heights2pys),
-            ("[col_widths]\n", self._col_widths2pys),
-            ("[macros]\n", self._macros2pys),
+            ("[PyCellSheet save file version]\n", self._version2pycs),
+            ("[shape]\n", self._shape2pycs),
+            ("[macros]\n", self._macros2pycs),
+            ("[grid]\n", self._code2pycs),
+            ("[attributes]\n", self._attributes2pycs),
+            ("[row_heights]\n", self._row_heights2pycs),
+            ("[col_widths]\n", self._col_widths2pycs),
         ])
 
     def __iter__(self) -> Iterable[str]:
-        """Yields a pys_file line wise from code_array"""
+        """Yields a pycs_file line wise from code_array"""
 
         for key in self._section2writer:
             yield key
@@ -531,8 +428,8 @@ class PysWriter(object):
 
         return lines
 
-    def _version2pys(self) -> Iterable[str]:
-        """Returns pys file version information in pys format
+    def _version2pycs(self) -> Iterable[str]:
+        """Returns pycs file version information in pycs format
 
         Format: <version>\n
 
@@ -540,8 +437,8 @@ class PysWriter(object):
 
         yield repr(self.version) + "\n"
 
-    def _shape2pys(self) -> Iterable[str]:
-        """Returns shape information in pys format
+    def _shape2pycs(self) -> Iterable[str]:
+        """Returns shape information in pycs format
 
         Format: <rows>\t<cols>\t<tabs>\n
 
@@ -549,8 +446,8 @@ class PysWriter(object):
 
         yield u"\t".join(map(str, self.code_array.shape)) + u"\n"
 
-    def _code2pys(self) -> Iterable[str]:
-        """Returns cell code information in pys format
+    def _code2pycs(self) -> Iterable[str]:
+        """Returns cell code information in pycs format
 
         Format: <row>\t<col>\t<tab>\t<code>\n
 
@@ -566,8 +463,8 @@ class PysWriter(object):
 
             yield out_str
 
-    def _attributes2pys(self) -> Iterable[str]:
-        """Returns cell attributes information in pys format
+    def _attributes2pycs(self) -> Iterable[str]:
+        """Returns cell attributes information in pycs format
 
         Format:
         <selection[0]>\t[...]\t<tab>\t<key>\t<value>\t[...]\n
@@ -604,8 +501,8 @@ class PysWriter(object):
 
             yield u"\t".join(line_list) + u"\n"
 
-    def _row_heights2pys(self) -> Iterable[str]:
-        """Returns row height information in pys format
+    def _row_heights2pycs(self) -> Iterable[str]:
+        """Returns row height information in pycs format
 
         Format: <row>\t<tab>\t<value>\n
 
@@ -618,8 +515,8 @@ class PysWriter(object):
                 height_strings = list(map(repr, [row, tab, height]))
                 yield u"\t".join(height_strings) + u"\n"
 
-    def _col_widths2pys(self) -> Iterable[str]:
-        """Returns column width information in pys format
+    def _col_widths2pycs(self) -> Iterable[str]:
+        """Returns column width information in pycs format
 
         Format: <col>\t<tab>\t<value>\n
 
@@ -632,12 +529,18 @@ class PysWriter(object):
                 width_strings = list(map(repr, [col, tab, width]))
                 yield u"\t".join(width_strings) + u"\n"
 
-    def _macros2pys(self) -> Iterable[str]:
-        """Returns macros information in pys format
+    def _macros2pycs(self) -> Iterable[str]:
+        """Returns macros information in pycs format
 
         Format: <macro code line>\n
 
         """
 
         macros = self.code_array.dict_grid.macros
-        yield macros
+        for i, macro in enumerate(macros):
+            macro_list = [
+                f"(macro:{i}) {macro.count('\n') + 1}",
+                macro,
+                ""  # To append a linebreak at the end
+            ]
+            yield str.join("\n", macro_list)
