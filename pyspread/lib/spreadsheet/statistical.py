@@ -1,3 +1,8 @@
+try:
+    from pyspread.lib.pycellsheet import EmptyCell, Range
+except ImportError:
+    from lib.pycellsheet import EmptyCell, Range
+
 __all__ = [
     'AVEDEV', 'AVERAGE', 'AVERAGEA', 'AVERAGEIF', 'AVERAGEIFS', 'BETA', 'BETADIST', 'BETAINV',
     'BINOM', 'BINOMDIST', 'CHIDIST', 'CHIINV', 'CHISQ', 'CHITEST', 'CONFIDENCE', 'CORREL', 'COUNT',
@@ -18,9 +23,17 @@ def AVEDEV(a, b):
 
 
 class AVERAGE:
-    @staticmethod
-    def __call__(a, b):
-        raise NotImplementedError("AVERAGE() not implemented yet")
+    def __new__(cls, *args):
+        lst = []
+        for arg in args:
+            if isinstance(arg, Range):
+                lst.extend(arg.flatten())
+                continue
+            if isinstance(arg, list):
+                lst.extend(arg)
+                continue
+            lst.append(arg)
+        return sum(filter(lambda a: a != EmptyCell, lst))
 
     @staticmethod
     def WEIGHTED(a, b):
