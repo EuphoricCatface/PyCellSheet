@@ -84,7 +84,7 @@ def BASE(value, base, minimum_length=0):
 class CEILING:
     def __new__(cls, value, factor=1):
         # Proper implementation is NYI
-        CEILING.PRECISE(value, factor)
+        return CEILING.PRECISE(value, factor)
 
     @staticmethod
     def MATH(value, significance=1, mode=0):
