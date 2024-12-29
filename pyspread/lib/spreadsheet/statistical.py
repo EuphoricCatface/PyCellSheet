@@ -94,8 +94,7 @@ def CHIINV(a, b):
 
 class CHISQ:
     class DIST:
-        @staticmethod
-        def __call__(a, b):
+        def __new__(cls, a, b):
             raise NotImplementedError("CHISQ.DIST() not implemented yet")
 
         @staticmethod
@@ -103,8 +102,7 @@ class CHISQ:
             raise NotImplementedError("CHISQ.DIST.RT() not implemented yet")
 
     class INV:
-        @staticmethod
-        def __call__(a, b):
+        def __new__(cls, a, b):
             raise NotImplementedError("CHISQ.INV() not implemented yet")
 
         @staticmethod
@@ -121,8 +119,7 @@ def CHITEST(a, b):
 
 
 class CONFIDENCE:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("CONFIDENCE() not implemented yet")
 
     @staticmethod
@@ -179,8 +176,7 @@ def EXPONDIST(a, b):
 
 class F:
     class DIST:
-        @staticmethod
-        def __call__(a, b):
+        def __new__(cls, a, b):
             raise NotImplementedError("F.DIST() not implemented yet")
 
         @staticmethod
@@ -188,8 +184,7 @@ class F:
             raise NotImplementedError("F.DIST.RT() not implemented yet")
 
     class INV:
-        @staticmethod
-        def __call__(a, b):
+        def __new__(cls, a, b):
             raise NotImplementedError("F.INV() not implemented yet")
 
         @staticmethod
@@ -218,8 +213,7 @@ def FISHERINV(a, b):
 
 
 class FORECAST:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("FORECAST() not implemented yet")
 
     @staticmethod
@@ -232,8 +226,7 @@ def FTEST(a, b):
 
 
 class GAMMA:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("GAMMA() not implemented yet")
 
     @staticmethod
@@ -339,7 +332,7 @@ def MINIFS(a, b):
 
 class MODE:
     @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("MODE() not implemented yet")
 
     @staticmethod
@@ -401,8 +394,7 @@ def PEARSON(a, b):
 
 
 class PERCENTILE:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("PERCENTILE() not implemented yet")
 
     @staticmethod
@@ -416,7 +408,7 @@ class PERCENTILE:
 
 class PERCENTRANK:
     @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("PERCENTRANK() not implemented yet")
 
     @staticmethod
@@ -442,7 +434,7 @@ def PHI(a, b):
 
 class POISSON:
     @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("POISSON() not implemented yet")
 
     @staticmethod
@@ -455,8 +447,7 @@ def PROB(a, b):
 
 
 class QUARTILE:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("QUARTILE() not implemented yet")
 
     @staticmethod
@@ -469,8 +460,7 @@ class QUARTILE:
 
 
 class RANK:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("RANK() not implemented yet")
 
     @staticmethod
@@ -487,8 +477,7 @@ def RSQ(a, b):
 
 
 class SKEW:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("SKEW() not implemented yet")
 
     @staticmethod
@@ -509,8 +498,7 @@ def STANDARDIZE(a, b):
 
 
 class STDEV:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("STDEV() not implemented yet")
 
     @staticmethod
@@ -540,8 +528,7 @@ def STEYX(a, b):
 
 class T:
     class DIST:
-        @staticmethod
-        def __call__(a, b):
+        def __new__(cls, a, b):
             raise NotImplementedError("T.DIST() not implemented yet")
 
         @staticmethod
@@ -553,8 +540,7 @@ class T:
             raise NotImplementedError("T.DIST.RT() not implemented yet")
 
     class INV:
-        @staticmethod
-        def __call__(a, b):
+        def __new__(cls, a, b):
             raise NotImplementedError("T.INV() not implemented yet")
 
         @staticmethod
@@ -583,8 +569,7 @@ def TTEST(a, b):
 
 
 class VAR:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("VAR() not implemented yet")
 
     @staticmethod
@@ -609,8 +594,7 @@ def VARPA(a, b):
 
 
 class WEIBULL:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("WEIBULL() not implemented yet")
 
     @staticmethod

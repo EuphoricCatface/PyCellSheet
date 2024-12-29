@@ -61,8 +61,7 @@ def DELTA(a, b):
 
 
 class ERF:
-    @staticmethod
-    def __call__(a, b):
+    def __new__(cls, a, b):
         raise NotImplementedError("ERF() not implemented yet")
 
     @staticmethod
