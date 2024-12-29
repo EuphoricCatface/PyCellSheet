@@ -122,6 +122,25 @@ except ImportError:
         ReferenceParser, RangeOutput, PythonEvaluator
 
 
+INITSCRIPT_DEFAULT = """
+try:
+    from pyspread.lib.spreadsheet import *
+except ImportError:
+    from lib.spreadsheet import *
+# The above is equivalent to:
+# try:
+#     from pyspread.lib.spreadsheet.array import *
+#     from pyspread.lib.spreadsheet.database import *
+#     from pyspread.lib.spreadsheet.date import *
+#     ...
+# except ImportError:
+#     from lib.spreadsheet.array import *
+#     from lib.spreadsheet.database import *
+#     from lib.spreadsheet.date import *
+#     ...
+"""
+
+
 class_format_functions = {}
 
 
@@ -521,7 +540,7 @@ class DataArray:
         self.dict_grid = DictGrid(shape)
         self.settings = settings
 
-        self.macros_draft: list[typing.Optional[str]] = [None for _ in range(shape[2])]
+        self.macros_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
         self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
 

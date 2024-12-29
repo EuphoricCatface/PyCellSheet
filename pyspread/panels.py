@@ -82,7 +82,7 @@ class MacroPanel(QDialog):
             if self._applied == applied:
                 return
             self._applied = applied
-            self.setText("Applied" if applied else "Draft")
+            self.setText("Applied" if applied else "--Draft--")
             self.stylesheet_update()
 
     def __init__(self, parent, code_array):
