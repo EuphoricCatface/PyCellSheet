@@ -165,6 +165,8 @@ class RangeOutput(RangeBase):
         return cls(r.width, r.lst)
 
     def offset(self, x, y):
+        # NYI: After implementing THIS_CELL global variable, make it like RangeOutput.offset(1, 2)
+        # rather than C('A1').offset(1, 2). Tying it to a specific cell makes copy&paste unusable.
         return self[x][y]
 
 
