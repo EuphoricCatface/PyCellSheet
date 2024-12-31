@@ -1,3 +1,8 @@
+try:
+    from pyspread.lib.pycellsheet import EmptyCell, Range, flatten_args, RangeOutput
+except ImportError:
+    from lib.pycellsheet import EmptyCell, Range, flatten_args, RangeOutput
+
 _ARRAY_FUNCTIONS = [
     'ARRAY_CONSTRAIN', 'BYCOL', 'BYROW', 'CHOOSECOLS', 'CHOOSEROWS', 'FLATTEN', 'FREQUENCY',
     'GROWTH', 'HSTACK', 'LINEST', 'LOGEST', 'MAKEARRAY', 'MAP', 'MDETERM', 'MINVERSE', 'MMULT',
@@ -31,8 +36,34 @@ def FLATTEN(a, b):
     raise NotImplementedError("FLATTEN() not implemented yet")
 
 
-def FREQUENCY(a, b):
-    raise NotImplementedError("FREQUENCY() not implemented yet")
+def FREQUENCY(data, bins):
+    """
+    FREQUENCY(data, bins):
+      data: numeric values
+      bins: sorted 'breakpoints' for binning
+    Returns a list of counts for each bin, plus one extra for values above the last bin.
+    E.g., FREQUENCY([1,2,3,4,5], [2,4]) => [2, 2, 1]
+      - 2 items <=2,
+      - 2 items >2 and <=4,
+      - 1 item >4
+    """
+    data_vals = flatten_args(data)
+    bin_vals = flatten_args(bins)
+    # If bins is empty, you might decide how to handle. Let's just do normal logic.
+    bin_vals.sort()
+
+    # Initialize counts with len(bins)+1
+    result = [0] * (len(bin_vals) + 1)
+    for d in data_vals:
+        placed = False
+        for i, b in enumerate(bin_vals):
+            if d <= b:
+                result[i] += 1
+                placed = True
+                break
+        if not placed:
+            result[-1] += 1
+    return result
 
 
 def GROWTH(a, b):
