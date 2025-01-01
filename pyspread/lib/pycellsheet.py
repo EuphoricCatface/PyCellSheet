@@ -537,3 +537,24 @@ class PythonEvaluator:
         yo = range_offset.y
         return code_array[x-xo, y-yo, table][xo][yo]
 
+class Formatter:
+    @staticmethod
+    def display_formatter(value):
+        if isinstance(value, RangeOutput):
+            value = value.lst[0]
+
+        if isinstance(value, Exception):
+            return value.__class__.__name__
+        if isinstance(value, HelpText):
+            return value.query
+        return value
+
+    @staticmethod
+    def tooltip_formatter(value):
+        if isinstance(value, Exception):
+            output = str(value)
+        elif isinstance(value, HelpText):
+            output = value.contents
+        else:
+            output = value.__class__.__name__
+        return output

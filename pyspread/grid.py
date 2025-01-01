@@ -92,7 +92,7 @@ try:
                                 HorizontalHeaderContextMenu,
                                 VerticalHeaderContextMenu)
     from pyspread.widgets import CellButton
-    from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput
+    from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput, Formatter
 except ImportError:
     import commands
     from dialogs import DiscardDataDialog
@@ -111,7 +111,7 @@ except ImportError:
     from menus import (GridContextMenu, TableChoiceContextMenu,
                        HorizontalHeaderContextMenu, VerticalHeaderContextMenu)
     from widgets import CellButton
-    from lib.pycellsheet import EmptyCell, HelpText, RangeOutput
+    from lib.pycellsheet import EmptyCell, HelpText, RangeOutput, Formatter
 
 FONTSTYLES = (QFont.Style.StyleNormal,
               QFont.Style.StyleItalic,
@@ -1976,23 +1976,12 @@ class GridTableModel(QAbstractTableModel):
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
                 return ""
-            if isinstance(value, RangeOutput):
-                value = value.lst[0]
-
-            if isinstance(value, Exception):
-                return value.__class__.__name__
-            if isinstance(value, HelpText):
-                return value.query
+            value = Formatter.display_formatter(value)
             return safe_str(value)
 
         if role == Qt.ItemDataRole.ToolTipRole:
             value = self.code_array[key]
-            if isinstance(value, Exception):
-                output = str(value)
-            elif isinstance(value, HelpText):
-                output = value.contents
-            else:
-                output = value.__class__.__name__
+            output = Formatter.tooltip_formatter(value)
             return wrap_text(safe_str(output))
 
         if role == Qt.ItemDataRole.DecorationRole:
