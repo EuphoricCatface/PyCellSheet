@@ -65,7 +65,10 @@ class HelpText:
         if len(query) == 0:
             self.query = "help()"
         elif len(query) == 1:
-            self.query = f"help({query[0]})"
+            try:
+                self.query = f"help({query[0].__name__})"
+            except Exception:
+                self.query = f"help({str(query[0])})"
         else:
             self.query = f"help{query}"
         self.contents = contents
