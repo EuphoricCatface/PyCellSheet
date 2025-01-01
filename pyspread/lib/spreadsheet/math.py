@@ -362,12 +362,12 @@ def RAND():
     return random.random()
 
 
-def RANDARRAY(x, y):
+def RANDARRAY(row, column):
     rangeoutput_lst = []
-    for i in range(x):
-        for j in range(y):
+    for i in range(row):
+        for j in range(column):
             rangeoutput_lst.append(random.random())
-    rtn = RangeOutput(x, rangeoutput_lst)
+    rtn = RangeOutput(column, rangeoutput_lst)
     return rtn
 
 
