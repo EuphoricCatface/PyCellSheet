@@ -535,6 +535,10 @@ class PythonEvaluator:
         roff = range_offset.ro
         coff = range_offset.co
         ro = code_array[r-roff, c-coff, table]
+        if not isinstance(ro, RangeOutput) or \
+                (ro.width <= coff or ro.height <= roff):
+            code_array[r, c, table] = None
+            return EmptyCell
         return ro[roff][coff]
 
 
