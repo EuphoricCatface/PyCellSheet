@@ -165,9 +165,9 @@ class RangeOutput(RangeBase):
         return cls(r.width, r.lst)
 
     class OFFSET:
-        def __init__(self, x, y):
-            self.x = x
-            self.y = y
+        def __init__(self, row_offset, column_offset):
+            self.ro = row_offset
+            self.co = column_offset
 
 
 class ExpressionParser:
@@ -513,28 +513,30 @@ class PythonEvaluator:
 
     @staticmethod
     def range_output_handler(code_array, range_output: RangeOutput, current_key):
-        x1, y1, current_table = current_key
-        for xo in range(range_output.height):
-            for yo in range(range_output.width):
-                if xo == 0 and yo == 0:
+        r1, c1, current_table = current_key
+        for ro in range(range_output.height):
+            for co in range(range_output.width):
+                if ro == 0 and co == 0:
                     continue
-                if code_array((x1 + xo, y1 + yo, current_table)) == f"RangeOutput.OFFSET({xo}, {yo})":
-                    code_array[x1 + xo, y1 + yo, current_table] = ""
-                if code_array[x1 + xo, y1 + yo, current_table] != EmptyCell:
+                if code_array((r1 + ro, c1 + co, current_table)) == f"RangeOutput.OFFSET({ro}, {co})":
+                    code_array[r1 + ro, c1 + co, current_table] = ""
+                if code_array[r1 + ro, c1 + co, current_table] != EmptyCell:
                     raise ValueError("Cannot expand RangeOutput")
-        for xo in range(range_output.height):
-            for yo in range(range_output.width):
-                if xo == 0 and yo == 0:
+        for ro in range(range_output.height):
+            for co in range(range_output.width):
+                if ro == 0 and co == 0:
                     continue
-                code_array[x1 + xo, y1 + yo, current_table] = \
-                    f"RangeOutput.OFFSET({xo}, {yo})"
+                code_array[r1 + ro, c1 + co, current_table] = \
+                    f"RangeOutput.OFFSET({ro}, {co})"
 
     @staticmethod
     def range_offset_handler(code_array, range_offset: RangeOutput.OFFSET, current_key):
-        x, y, table = current_key
-        xo = range_offset.x
-        yo = range_offset.y
-        return code_array[x-xo, y-yo, table][xo][yo]
+        r, c, table = current_key
+        roff = range_offset.ro
+        coff = range_offset.co
+        ro = code_array[r-roff, c-coff, table]
+        return ro[roff][coff]
+
 
 class Formatter:
     @staticmethod
