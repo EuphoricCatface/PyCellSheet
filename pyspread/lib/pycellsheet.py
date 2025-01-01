@@ -53,6 +53,12 @@ class Empty:
     def __rmul__(self, other):
         return self.__mul__(other)
 
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, _):
+        return self
+
 EmptyCell = Empty()
 
 
