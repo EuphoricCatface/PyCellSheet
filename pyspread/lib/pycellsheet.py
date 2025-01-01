@@ -521,7 +521,6 @@ class PythonEvaluator:
                 if code_array((x1 + xo, y1 + yo, current_table)) == f"RangeOutput.OFFSET({xo}, {yo})":
                     code_array[x1 + xo, y1 + yo, current_table] = ""
                 if code_array[x1 + xo, y1 + yo, current_table] != EmptyCell:
-                    print(x1 + xo, y1 + yo, code_array[x1 + xo, y1 + yo, current_table], )
                     raise ValueError("Cannot expand RangeOutput")
         for xo in range(range_output.height):
             for yo in range(range_output.width):
