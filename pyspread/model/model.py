@@ -212,8 +212,8 @@ class DefaultCellAttributeDict(AttrDict):
 
         self.borderwidth_bottom = 1
         self.borderwidth_right = 1
-        self.bordercolor_bottom = None
-        self.bordercolor_right = None
+        self.bordercolor_bottom = 220, 220, 220
+        self.bordercolor_right = 220, 220, 220
         self.bgcolor = 255, 255, 255  # Do not use theme
         self.textfont = None
         self.pointsize = 10
