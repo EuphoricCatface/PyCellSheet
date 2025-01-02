@@ -555,7 +555,7 @@ class Formatter:
     @staticmethod
     def display_formatter(value):
         if isinstance(value, RangeOutput):
-            value = value.lst[0]
+            value = value.lst[0] if value.lst else "EMPTY_RANGEOUTPUT"
 
         if isinstance(value, Exception):
             return value.__class__.__name__
