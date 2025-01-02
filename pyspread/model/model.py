@@ -109,7 +109,7 @@ try:
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
     from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -119,7 +119,7 @@ except ImportError:
     from lib.selection import Selection
     from lib.string_helpers import ZEN
     from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR
 
 
 INITSCRIPT_DEFAULT = """
@@ -1376,6 +1376,7 @@ class CodeArray(DataArray):
         super().__init__(*args, **kwargs)
 
         self.ref_parser = ReferenceParser(self)
+        self.cell_meta_gen = CELL_META_GENERATOR(self)
 
     def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]], value: str):
@@ -1527,6 +1528,7 @@ class CodeArray(DataArray):
         env = deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
         cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
+        self.cell_meta_gen.set_context(key)
         local = {
             "help": help,
             "cell_single_ref": cur_sheet.cell_single_ref,   "C": cur_sheet.C,
@@ -1535,6 +1537,7 @@ class CodeArray(DataArray):
             "sheet_ref": self.ref_parser.sheet_ref,         "Sh": self.ref_parser.Sh,
             "cell_ref": lambda exp: self.ref_parser.cell_ref(exp, cur_sheet),
                                                             "CR": lambda exp: self.ref_parser.CR(exp, cur_sheet),
+            "cell_meta": self.cell_meta_gen.cell_meta,      "CM":  self.cell_meta_gen.CM,
             "RangeOutput": RangeOutput  # Needed for RangeOutput.OFFSET evaluation
         }
         try:

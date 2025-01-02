@@ -572,3 +572,62 @@ class Formatter:
         else:
             output = value.__class__.__name__
         return output
+
+
+class CELL_META_GENERATOR:
+    # NYI: use partial
+    __INSTANCE = None
+
+    def __init__(self, code_array):
+        assert self.__class__.__INSTANCE is None, "CELL_META should not be instantiated directly!"
+
+        self.key = None
+        self.code_array = code_array
+
+        self.__class__.__INSTANCE = self
+
+    class CELL_META:
+        def __init__(self, key, code_array):
+            self.key = key
+            self.__code_array = code_array
+
+        @property
+        def code(self):
+            return self.__code_array(self.key)
+
+        @property
+        def attributes(self):
+            return self.__code_array.cell_attributes(self.key)
+
+    @classmethod
+    def get_instance(cls, code_array=None):
+        if cls.__INSTANCE is None:
+            assert code_array is not None, "CELL_META_GENERATOR initialization, code_array is not supplied"
+            cls(code_array)
+        else:
+            assert code_array is None, "CELL_META_GENERATOR non-initialization, code_array is supplied"
+        return cls.__INSTANCE
+
+    def set_context(self, key):
+        self.key = key
+
+    def cell_meta(self, cell_ref: str = None):
+        if cell_ref is None:
+            return self.get_cell_meta_key()
+
+        sheet_index = self.key[2]
+        non_sheet = cell_ref
+        exc_index = cell_ref.find("!")
+        if exc_index != -1:
+            sheet_index = ReferenceParser.sheet_name_to_idx(cell_ref[:exc_index])
+            non_sheet = cell_ref[exc_index + 1:]
+        cell_coord = spreadsheet_ref_to_coord(non_sheet)
+
+        return self.get_cell_meta_key((*cell_coord, sheet_index))
+
+    def get_cell_meta_key(self, key=None):
+        if key is None:
+            key = self.key
+        return CELL_META_GENERATOR.CELL_META(key, self.code_array)
+
+    CM=cell_meta
