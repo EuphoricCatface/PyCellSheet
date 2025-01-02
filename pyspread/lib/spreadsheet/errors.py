@@ -7,10 +7,16 @@ class SpreadsheetErrorBase(Exception):
         return f"#{self.__string}"
 
 
-class SpreadsheetErrorNa(SpreadsheetErrorBase):
+class SpreadsheetErrorNull(SpreadsheetErrorBase):
     def __init__(self, *args):
         super().__init__(*args)
-        self.__string = "N/A"
+        self.__string = "NULL!"
+
+
+class SpreadsheetErrorDivZero(SpreadsheetErrorBase):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.__string = "DIV/0!"
 
 
 class SpreadsheetErrorValue(SpreadsheetErrorBase):
@@ -31,13 +37,13 @@ class SpreadsheetErrorName(SpreadsheetErrorBase):
         self.__string = "NAME?"
 
 
-class SpreadsheetErrorDivZero(SpreadsheetErrorBase):
-    def __init__(self, *args):
-        super().__init__(*args)
-        self.__string = "DIV/0!"
-
-
 class SpreadsheetErrorNum(SpreadsheetErrorBase):
     def __init__(self, *args):
         super().__init__(*args)
         self.__string = "NUM!"
+
+
+class SpreadsheetErrorNa(SpreadsheetErrorBase):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.__string = "N/A"
