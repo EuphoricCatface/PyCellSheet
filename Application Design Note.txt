@@ -13,7 +13,6 @@ Application Design Note
   - Introduction: A slightly more Pythonic spreadsheet, and a slightly more spreadsheet-like pyspread. A (hopefully) comfortable middle ground between the two.
   - It's made out of pyspread.
   - Its twist is that it's a bit closer to the conventional spreadsheet programs, rather than being purely pythonic.
-  - It also tries to eliminate some of the implicit/invisible/nondeterministic/everything-in-global/spaghetti-ness from pyspread.
   - LATER_GOAL: pyspread uses a 3d matrix as its data model. Replace it with an array of 2d matrices.
   * This design suggests lots of per-sheet customizations, while pyspread doesn't at all.
   * pyspread's data model supports 3d slicing. This design only requires/supports 2d ranges.
