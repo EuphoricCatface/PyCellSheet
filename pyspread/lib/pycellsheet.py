@@ -34,7 +34,7 @@ class Empty:
         return NotImplemented
 
     def __radd__(self, other):
-        self.__add__(other)
+        return self.__add__(other)
 
     def __sub__(self, other):
         if isinstance(other, (int, float)):
@@ -307,7 +307,7 @@ class ReferenceParser:
         elif self.COMPILED_CELL_RE.fullmatch(non_sheet):
             return target_sheet.cell_single_ref(non_sheet)
         else:
-            target_sheet.global_var(non_sheet)
+            return target_sheet.global_var(non_sheet)
     CR = cell_ref
 
     def parser(self, code: PythonCode):
@@ -371,7 +371,7 @@ class ReferenceParser:
         replacements_col = collections.deque()
         iters = re.finditer(self.COMPILED_RANGE_RE, code)
         for match in iters:
-            if len(code) < match.end(0) and code[match.end(0) + 1] == ':':
+            if len(code) > match.end(0) and code[match.end(0)] == ':':
                 continue
             colon_pos = code.find(':', match.start(0), match.end(0))
             replacements_col.append(colon_pos)
