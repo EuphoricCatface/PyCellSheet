@@ -38,22 +38,22 @@ Cell Contents -> Expression Parser -> Reference Parser -> Python Evaluator -> (F
 
 3. **Python Evaluator** (`PythonEvaluator` in `pycellsheet.py`): Uses `exec()`/`eval()` with:
    - Globals: deepcopy of the current sheet's init script globals
-   - Locals: helper functions (`C`, `R`, `Sh`, `CR`, `G`, `help`, `RangeOutput`)
+   - Locals: helper functions (`C`, `R`, `Sh`, `CR`, `G`, `help`, `RangeOutput`, `CM`/`cell_meta`)
    - Last expression in the cell becomes the result (REPL-style)
 
-4. **Formatter**: Not yet implemented as a separate component. Currently handled in `grid.py`'s `DisplayRole`/`ToolTipRole` with type-based dispatch (exceptions show class name in cell + details in tooltip; HelpText shows query in cell + contents in tooltip).
+4. **Formatter** (`Formatter` in `pycellsheet.py`): Static methods `display_formatter` and `tooltip_formatter` with type-based dispatch. Exceptions show class name in cell + details in tooltip; HelpText shows query in cell + contents in tooltip; RangeOutput shows first element. Used by `grid.py`'s `DisplayRole`/`ToolTipRole`.
 
 ## Key Source Files
 
 ### PyCellSheet additions (where most development happens)
-- `pyspread/lib/pycellsheet.py` - Core types and parsers: `Empty`/`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`, `ExpressionParser`, `ReferenceParser`, `PythonEvaluator`, `HelpText`, `flatten_args()`
-- `pyspread/lib/spreadsheet/` - Spreadsheet function library (UPPERCASE functions). Most are stubs raising `NotImplementedError`. `math.py` has the most implementations (~60 functions). `statistical.py` has only `AVERAGE()`.
+- `pyspread/lib/pycellsheet.py` - Core types and parsers: `Empty`/`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`, `ExpressionParser`, `ReferenceParser`, `PythonEvaluator`, `Formatter`, `HelpText`, `CELL_META_GENERATOR`, `flatten_args()`
+- `pyspread/lib/spreadsheet/` - Spreadsheet function library (UPPERCASE functions). `math.py` (~60 functions), `engineering.py`, `filter.py`, `info.py`, `logical.py` are largely implemented. `statistical.py` has basic functions (AVERAGE, COUNT, MAX, MIN, MEDIAN, etc.) but ~60 stubs remain. Other modules (financial, text, etc.) are mostly stubs.
 - `pyspread/lib/spreadsheet/__init__.py` - Re-exports all function modules via `__all__`
 
 ### Modified pyspread files
 - `pyspread/model/model.py` - Data model layers (DictGrid -> DataArray -> CodeArray). `_eval_cell()` runs the full pipeline. `execute_macros()` runs init scripts and separates globals into copyable/uncopyable dicts.
 - `pyspread/panels.py` - Init script editor UI with draft/applied buffer and AST validation
-- `pyspread/grid.py` - Cell display: `DisplayRole` handles `RangeOutput`, `HelpText`, exceptions; `ToolTipRole` shows type info or help contents
+- `pyspread/grid.py` - Cell display: `DisplayRole` and `ToolTipRole` delegate to `Formatter` class
 - `pyspread/interfaces/pycs.py` - File format: `[macros]` section stores per-sheet init scripts as `(macro:X) linecount`
 - `pyspread/lib/string_helpers.py` - Modified `wrap_text()` to preserve newlines (for tooltips)
 
@@ -76,11 +76,12 @@ The grid is currently a 3D dict keyed by `(row, col, table)`. A later goal is to
 
 ## Types
 
-- `EmptyCell` - Singleton `Empty()` instance. Returned for empty cells. Has `__int__() -> 0`, `__float__() -> 0.0`, `__str__() -> ""`, `__bool__() -> False`, and arithmetic dunders so it behaves as zero/empty in calculations.
+- `EmptyCell` - Singleton `Empty()` instance with `__copy__`/`__deepcopy__` preserving identity. Returned for empty cells. Has `__int__() -> 0`, `__float__() -> 0.0`, `__str__() -> ""`, `__bool__() -> False`, and arithmetic dunders so it behaves as zero/empty in calculations.
 - `PythonCode(str)` - Marker subclass indicating the string should proceed through Reference Parser and Python Evaluator.
 - `Range(RangeBase)` - 1D list with `width` and `topleft` coordinate. `__getitem__` returns rows (deepcopied). `flatten()` strips EmptyCells.
-- `RangeOutput(RangeBase)` - Spill-over output. When a cell evaluates to `RangeOutput`, neighboring cells get filled with `RangeOutput.OFFSET(x, y)` expressions.
-- `HelpText` - Wraps `help()` output for display in tooltips.
+- `RangeOutput(RangeBase)` - Spill-over output. When a cell evaluates to `RangeOutput`, neighboring cells get filled with `RangeOutput.OFFSET(row, col)` expressions. Invalid offsets self-erase.
+- `HelpText` - Wraps `help()` output for display in tooltips. Tries `__name__` for the query display.
+- `CELL_META_GENERATOR` - Singleton that provides `CM()`/`cell_meta()` in cells. Returns a `CELL_META` object with `.code` and `.attributes` properties for the current or referenced cell.
 
 ## Known Issues and Quirks
 
@@ -113,7 +114,7 @@ Inherited pyspread tests exist in `pyspread/test/` and `pyspread/lib/test/` but 
 - `compile()` caching for cell code
 - Named sheets (currently numeric)
 - Custom function scripts per workbook
-- Configurable Formatter (per-workspace and per-cell scope, `isinstance` chains)
+- Configurable Formatter (per-workspace and per-cell scope; basic static version now exists)
 - `FILTER`/`COUNTIF`-style lambda-based range operations
 - Asyncio/generator cells
 - Cell handle dragging
