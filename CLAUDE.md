@@ -84,10 +84,7 @@ The grid is currently a 3D dict keyed by `(row, col, table)`. A later goal is to
 
 ## Known Issues and Quirks
 
-- `Empty.__radd__` is missing a `return` statement (returns `None` instead of delegating)
 - `coord_to_spreadsheet_ref` has a bug with column 0: it hardcodes "A" but the general algorithm would also produce "A" for col=0 via the else branch if it handled it
-- `ReferenceParser.cell_ref` doesn't `return` the result of `target_sheet.global_var(non_sheet)` in the else branch
-- The `ReferenceParser.parser()` step 2 has a bounds check `if len(code) < match.end(0)` that looks inverted (should be `>`)
 - Expression parser currently hardcoded to "Mixed" mode as a workaround until UI is built (see `DataArray.__init__`)
 - No dependency graph or recalculation ordering yet
 - No circular reference detection
