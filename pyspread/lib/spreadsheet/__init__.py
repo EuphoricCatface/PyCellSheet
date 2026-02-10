@@ -31,6 +31,13 @@ except ImportError:
     from lib.spreadsheet.text import *
     from lib.spreadsheet.web import *
 
+def T(*args, **kwargs):
+    raise NotImplementedError(
+        "T() is ambiguous: use T_TEXT() for the text function "
+        "or T_STAT.DIST() / T_STAT.INV() / T_STAT.TEST() for statistical functions"
+    )
+
+
 __all__ = (
     _ARRAY_FUNCTIONS +
     _DATABASE_FUNCTIONS +
@@ -46,5 +53,6 @@ __all__ = (
     _PARSER_FUNCTIONS +
     _STATISTICAL_FUNCTIONS +
     _TEXT_FUNCTIONS +
-    _WEB_FUNCTIONS
+    _WEB_FUNCTIONS +
+    ['T']
 )
