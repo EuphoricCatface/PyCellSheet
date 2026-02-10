@@ -13,7 +13,7 @@ _STATISTICAL_FUNCTIONS = [
     'MINIFS', 'MODE', 'NEGBINOM', 'NEGBINOMDIST', 'NORM', 'NORMDIST', 'NORMINV', 'NORMSDIST',
     'NORMSINV', 'PEARSON', 'PERCENTILE', 'PERCENTRANK', 'PERMUT', 'PERMUTATIONA', 'PHI', 'POISSON',
     'PROB', 'QUARTILE', 'RANK', 'RSQ', 'SKEW', 'SLOPE', 'SMALL', 'STANDARDIZE', 'STDEV', 'STDEVA',
-    'STDEVP', 'STDEVPA', 'STEYX', 'T', 'TDIST', 'TINV', 'TRIMMEAN', 'TTEST', 'VAR', 'VARA', 'VARP',
+    'STDEVP', 'STDEVPA', 'STEYX', 'T_STAT', 'TDIST', 'TINV', 'TRIMMEAN', 'TTEST', 'VAR', 'VARA', 'VARP',
     'VARPA', 'WEIBULL', 'Z', 'ZTEST'
 ]
 __all__ = _STATISTICAL_FUNCTIONS + ["_STATISTICAL_FUNCTIONS"]
@@ -519,7 +519,7 @@ def STEYX(a, b):
     raise NotImplementedError("STEYX() not implemented yet")
 
 
-class T:
+class T_STAT:
     class DIST:
         def __new__(cls, a, b):
             raise NotImplementedError("T.DIST() not implemented yet")

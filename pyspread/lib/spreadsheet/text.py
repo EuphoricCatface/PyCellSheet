@@ -2,7 +2,7 @@ _TEXT_FUNCTIONS = [
     'ARABIC', 'ASC', 'CHAR', 'CLEAN', 'CODE', 'CONCATENATE', 'DOLLAR', 'EXACT', 'FIND', 'FINDB',
     'FIXED', 'JOIN', 'LEFT', 'LEFTB', 'LEN', 'LENB', 'LOWER', 'MID', 'MIDB', 'PROPER',
     'REGEXEXTRACT', 'REGEXMATCH', 'REGEXREPLACE', 'REPLACE', 'REPLACEB', 'REPT', 'RIGHT',
-    'RIGHTB', 'ROMAN', 'SEARCH', 'SEARCHB', 'SPLIT', 'SUBSTITUTE', 'T', 'TEXT', 'TEXTJOIN',
+    'RIGHTB', 'ROMAN', 'SEARCH', 'SEARCHB', 'SPLIT', 'SUBSTITUTE', 'T_TEXT', 'TEXT', 'TEXTJOIN',
     'TRIM', 'UNICHAR', 'UNICODE', 'UPPER', 'VALUE'
 ]
 __all__ = _TEXT_FUNCTIONS + ["_TEXT_FUNCTIONS"]
@@ -140,8 +140,8 @@ def SUBSTITUTE(a, b):
     raise NotImplementedError("SUBSTITUTE() not implemented yet")
 
 
-def T(a, b):
-    raise NotImplementedError("T() not implemented yet")
+def T_TEXT(a, b):
+    raise NotImplementedError("T_TEXT() not implemented yet")
 
 
 def TEXT(a, b):
