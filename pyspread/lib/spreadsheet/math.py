@@ -84,7 +84,7 @@ def BASE(value, base, minimum_length=0):
 class CEILING:
     def __new__(cls, value, factor=1):
         # Proper implementation is NYI
-        CEILING.PRECISE(value, factor)
+        return CEILING.PRECISE(value, factor)
 
     @staticmethod
     def MATH(value, significance=1, mode=0):
@@ -134,7 +134,7 @@ def COUNTBLANK(r: Range):
 
 
 def COUNTIF(r: Range, criterion: typing.Callable[[typing.Any], bool]):
-    len(list(filter(criterion, r.flatten())))
+    return len(list(filter(criterion, r.flatten())))
 
 
 def COUNTIFS(*args):
@@ -172,19 +172,19 @@ def DEGREES(x):
 
 class ERFC:
     def __new__(cls, x):
-        math.erfc(x)
+        return math.erfc(x)
 
     @staticmethod
     def PRECISE(x):
-        return ERFC(x)
+        return math.erfc(x)
 
 
 def EVEN(x):
-    raise NotImplemented("EVEN() not implemented yet")
+    raise NotImplementedError("EVEN() not implemented yet")
 
 
-def EXP(x, y):
-    return x ** y
+def EXP(x):
+    return math.exp(x)
 
 
 def FACT(x):
@@ -204,7 +204,7 @@ def FACTDOUBLE(x):
 class FLOOR:
     def __new__(cls, value, factor=1):
         # Proper implementation is NYI
-        FLOOR.PRECISE(value, factor)
+        return FLOOR.PRECISE(value, factor)
 
     @staticmethod
     def MATH(value, significance=1, mode=0):
@@ -226,13 +226,12 @@ class FLOOR:
 
 
 class GAMMALN:
-    @staticmethod
     def __new__(cls, value):
-        raise NotImplemented("GAMMALN() not implemented yet")
+        raise NotImplementedError("GAMMALN() not implemented yet")
 
     @staticmethod
     def PRECISE(value):
-        raise NotImplemented("GAMMALN.PRECISE() not implemented yet")
+        raise NotImplementedError("GAMMALN.PRECISE() not implemented yet")
 
 
 def GCD(*integers):
@@ -240,15 +239,15 @@ def GCD(*integers):
 
 
 def IMLN(value):
-    raise NotImplemented("IMLN() not implemented yet")
+    raise NotImplementedError("IMLN() not implemented yet")
 
 
 def IMPOWER(complex_base, exponent):
-    raise NotImplemented("IMPOWER() not implemented yet")
+    raise NotImplementedError("IMPOWER() not implemented yet")
 
 
 def IMSQRT(complex_number):
-    raise NotImplemented("IMSQRT() not implemented yet")
+    raise NotImplementedError("IMSQRT() not implemented yet")
 
 
 def INT(x):
@@ -290,19 +289,19 @@ def MOD(x, y):
 
 
 def MROUND(x, y):
-    raise NotImplemented("MROUND() not implemented yet")
+    raise NotImplementedError("MROUND() not implemented yet")
 
 
 def MULTINOMIAL(x, y):
-    raise NotImplemented("MULTINOMIAL() not implemented yet")
+    raise NotImplementedError("MULTINOMIAL() not implemented yet")
 
 
 def MUNIT(x, y):
-    raise NotImplemented("MUNIT() not implemented yet")
+    raise NotImplementedError("MUNIT() not implemented yet")
 
 
 def ODD(x, y):
-    raise NotImplemented("ODD() not implemented yet")
+    raise NotImplementedError("ODD() not implemented yet")
 
 
 def PI():
@@ -322,7 +321,7 @@ def PRODUCT(*args):
 
 
 def QUOTIENT(x, y):
-    raise NotImplemented("QUOTIENT() not implemented yet")
+    raise NotImplementedError("QUOTIENT() not implemented yet")
 
 
 def RADIANS(x):
@@ -347,15 +346,15 @@ def RANDBETWEEN(x, y):
 
 
 def ROUND(x, y):
-    raise NotImplemented("ROUND() not implemented yet")
+    raise NotImplementedError("ROUND() not implemented yet")
 
 
 def ROUNDDOWN(x, y):
-    raise NotImplemented("ROUNDDOWN() not implemented yet")
+    raise NotImplementedError("ROUNDDOWN() not implemented yet")
 
 
 def ROUNDUP(x, y):
-    raise NotImplemented("ROUNDUP() not implemented yet")
+    raise NotImplementedError("ROUNDUP() not implemented yet")
 
 
 def SEC(x):
@@ -367,11 +366,11 @@ def SECH(x):
 
 
 def SEQUENCE(x, y):
-    raise NotImplemented("SEQUENCE() not implemented yet")
+    raise NotImplementedError("SEQUENCE() not implemented yet")
 
 
 def SERIESSUM(x, y):
-    raise NotImplemented("SERIESSUM() not implemented yet")
+    raise NotImplementedError("SERIESSUM() not implemented yet")
 
 
 def SIGN(x):
@@ -397,7 +396,7 @@ def SQRTPI(x):
 
 
 def SUBTOTAL(x, y):
-    raise NotImplemented("SUBTOTAL() not implemented yet")
+    raise NotImplementedError("SUBTOTAL() not implemented yet")
 
 
 def SUM(*args):
@@ -422,7 +421,7 @@ def SUMIF(r: Range, criterion, sum_range: Range | None = None):
 
 
 def SUMIFS(x, y):
-    raise NotImplemented("SUMIFS() not implemented yet")
+    raise NotImplementedError("SUMIFS() not implemented yet")
 
 
 def SUMSQ(*args):
@@ -438,7 +437,7 @@ def TAN(x):
     return math.tan(x)
 
 
-def TANH(x, y):
+def TANH(x):
     return math.tanh(x)
 
 
