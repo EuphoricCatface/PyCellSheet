@@ -81,25 +81,30 @@ class HelpText:
 
 
 def coord_to_spreadsheet_ref(coord: tuple[int, int]) -> str:
-    """Calculate a coordinate from spreadsheet-like address string"""
+    """Calculate a spreadsheet reference from coordinate tuple
+
+    Uses bijective base-26 numeral system for column letters.
+    Examples: 0 -> A, 25 -> Z, 26 -> AA, 701 -> ZZ
+    """
     row, col = coord
 
-    if col == 0:
-        col_str = "A"
-    else:
-        col_inter = []
-        while col:
-            col_inter.append(col % 26)
-            col = col // 26
-        col_inter = list(map(lambda a: chr(a + ord("A")), col_inter))
-        col_inter.reverse()
-        col_str = str.join("", col_inter)
+    # Convert column number to bijective base-26 (A-Z, AA-ZZ, etc.)
+    col += 1  # Convert from 0-based to 1-based
+    col_str = ""
+    while col > 0:
+        col -= 1
+        col_str = chr(ord('A') + col % 26) + col_str
+        col //= 26
 
     return col_str + str(row + 1)
 
 
 def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
-    """Calculate a coordinate from spreadsheet-like address string"""
+    """Calculate coordinate tuple from spreadsheet reference string
+
+    Uses bijective base-26 numeral system for column letters.
+    Examples: A -> 0, Z -> 25, AA -> 26, ZZ -> 701
+    """
     col_str = None
     row_str = None
     for i, ch in enumerate(addr):
@@ -117,13 +122,14 @@ def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
     except ValueError:
         raise ValueError(f"Malformed spreadsheet-type address {addr=}")
 
+    # Convert column letters from bijective base-26 to 0-based index
     col_str = col_str.upper()
     col_num = 0
     for ch in col_str:
         col_num *= 26
-        col_num += ord(ch) - ord('A')
+        col_num += ord(ch) - ord('A') + 1  # +1 for bijective base-26
 
-    return row_num, col_num
+    return row_num, col_num - 1  # Convert from 1-based to 0-based
 
 
 class RangeBase:
