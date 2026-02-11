@@ -22,19 +22,80 @@ def ARRAY_CONSTRAIN(input_range, num_rows, num_cols):
 
 
 def BYCOL(array, func):
-    raise NotImplementedError("BYCOL() not implemented yet")
+    """Apply a Python function to each column of an array."""
+    if not callable(func):
+        raise ValueError("Second argument must be a callable function")
+
+    if isinstance(array, Range):
+        rows = len(array)
+        cols = array.width
+        result = []
+        for c in range(cols):
+            col = [array[r][c] for r in range(rows)]
+            result.append(func(col))
+        return result
+    else:
+        # 1D array - treat as single column
+        lst = flatten_args(array)
+        return func(lst)
 
 
 def BYROW(array, func):
-    raise NotImplementedError("BYROW() not implemented yet")
+    """Apply a Python function to each row of an array."""
+    if not callable(func):
+        raise ValueError("Second argument must be a callable function")
+
+    if isinstance(array, Range):
+        rows = len(array)
+        cols = array.width
+        result = []
+        for r in range(rows):
+            row = [array[r][c] for c in range(cols)]
+            result.append(func(row))
+        return result
+    else:
+        # 1D array - treat as single row
+        lst = flatten_args(array)
+        return func(lst)
 
 
 def CHOOSECOLS(array: Range, *col_nums):
-    raise NotImplementedError("CHOOSECOLS() not implemented yet")
+    """Select specific columns from an array by index (1-based)."""
+    if not isinstance(array, Range):
+        raise ValueError("First argument must be a Range")
+
+    rows = len(array)
+    cols = array.width
+    result = []
+
+    for r in range(rows):
+        for col_num in col_nums:
+            col_idx = int(col_num) - 1  # Convert to 0-based
+            if 0 <= col_idx < cols:
+                result.append(array[r][col_idx])
+            else:
+                raise ValueError(f"Column index {col_num} out of range")
+
+    return RangeOutput(rows, result)
 
 
 def CHOOSEROWS(array: Range, *row_nums):
-    raise NotImplementedError("CHOOSEROWS() not implemented yet")
+    """Select specific rows from an array by index (1-based)."""
+    if not isinstance(array, Range):
+        raise ValueError("First argument must be a Range")
+
+    cols = array.width
+    result = []
+
+    for row_num in row_nums:
+        row_idx = int(row_num) - 1  # Convert to 0-based
+        if 0 <= row_idx < len(array):
+            for c in range(cols):
+                result.append(array[row_idx][c])
+        else:
+            raise ValueError(f"Row index {row_num} out of range")
+
+    return RangeOutput(len(row_nums), result)
 
 
 def FLATTEN(*args):
@@ -95,7 +156,43 @@ def GROWTH(known_ys, known_xs=None, new_xs=None, const=True):
 
 
 def HSTACK(*arrays):
-    raise NotImplementedError("HSTACK() not implemented yet")
+    """Stack arrays horizontally (side by side)."""
+    if not arrays:
+        raise ValueError("At least one array is required")
+
+    # Convert all arrays to 2D structure
+    processed = []
+    max_rows = 0
+
+    for arr in arrays:
+        if isinstance(arr, Range):
+            rows = len(arr)
+            cols = arr.width
+            max_rows = max(max_rows, rows)
+            processed.append((rows, cols, arr))
+        else:
+            # Flatten to 1D and treat as single column
+            lst = flatten_args(arr) if hasattr(arr, '__iter__') else [arr]
+            max_rows = max(max_rows, len(lst))
+            processed.append((len(lst), 1, lst))
+
+    # Build result by concatenating rows
+    result = []
+    for r in range(max_rows):
+        for rows, cols, arr in processed:
+            if isinstance(arr, Range):
+                for c in range(cols):
+                    if r < rows:
+                        result.append(arr[r][c])
+                    else:
+                        result.append(0)  # Pad with zeros if needed
+            else:
+                if r < len(arr):
+                    result.append(arr[r])
+                else:
+                    result.append(0)
+
+    return RangeOutput(max_rows, result)
 
 
 def LINEST(known_ys, known_xs=None, const=True, stats=False):
@@ -179,11 +276,38 @@ def LOGEST(known_ys, known_xs=None, const=True, stats=False):
 
 
 def MAKEARRAY(rows, cols, func):
-    raise NotImplementedError("MAKEARRAY() not implemented yet")
+    """Create an array by calling a Python function for each position."""
+    if not callable(func):
+        raise ValueError("Third argument must be a callable function")
+
+    rows = int(rows)
+    cols = int(cols)
+    result = []
+
+    for r in range(rows):
+        for c in range(cols):
+            # Call func with 0-based row, col indices
+            result.append(func(r, c))
+
+    return RangeOutput(rows, result)
 
 
 def MAP(array, func):
-    raise NotImplementedError("MAP() not implemented yet")
+    """Apply a Python function to each element of an array."""
+    if not callable(func):
+        raise ValueError("Second argument must be a callable function")
+
+    if isinstance(array, Range):
+        rows = len(array)
+        cols = array.width
+        result = []
+        for r in range(rows):
+            for c in range(cols):
+                result.append(func(array[r][c]))
+        return RangeOutput(rows, result)
+    else:
+        lst = flatten_args(array)
+        return [func(x) for x in lst]
 
 
 def MDETERM(matrix: Range):
@@ -246,11 +370,33 @@ def MMULT(matrix1: Range, matrix2: Range):
 
 
 def REDUCE(initial_value, array, func):
-    raise NotImplementedError("REDUCE() not implemented yet")
+    """Reduce an array to a single value using a Python function."""
+    if not callable(func):
+        raise ValueError("Third argument must be a callable function")
+
+    lst = flatten_args(array)
+    accumulator = initial_value
+
+    for value in lst:
+        accumulator = func(accumulator, value)
+
+    return accumulator
 
 
 def SCAN(initial_value, array, func):
-    raise NotImplementedError("SCAN() not implemented yet")
+    """Running accumulation of an array using a Python function."""
+    if not callable(func):
+        raise ValueError("Third argument must be a callable function")
+
+    lst = flatten_args(array)
+    result = [initial_value]
+    accumulator = initial_value
+
+    for value in lst:
+        accumulator = func(accumulator, value)
+        result.append(accumulator)
+
+    return result
 
 
 def SUMPRODUCT(*arrays):
@@ -287,11 +433,39 @@ def SUMXMY2(array_x, array_y):
 
 
 def TOCOL(array, ignore=0, scan_by_column=False):
-    raise NotImplementedError("TOCOL() not implemented yet")
+    """Convert array to a single column."""
+    if isinstance(array, Range):
+        rows = len(array)
+        cols = array.width
+        result = []
+
+        if scan_by_column:
+            # Scan column by column
+            for c in range(cols):
+                for r in range(rows):
+                    val = array[r][c]
+                    if ignore == 0 or (ignore == 1 and val != 0) or (ignore == 2 and val != "" and val is not None):
+                        result.append(val)
+        else:
+            # Scan row by row (default)
+            for r in range(rows):
+                for c in range(cols):
+                    val = array[r][c]
+                    if ignore == 0 or (ignore == 1 and val != 0) or (ignore == 2 and val != "" and val is not None):
+                        result.append(val)
+
+        return RangeOutput(len(result), result)
+    else:
+        lst = flatten_args(array)
+        return RangeOutput(len(lst), lst)
 
 
 def TOROW(array, ignore=0, scan_by_column=False):
-    raise NotImplementedError("TOROW() not implemented yet")
+    """Convert array to a single row."""
+    # Same as TOCOL but returns as single-row range
+    col_result = TOCOL(array, ignore, scan_by_column)
+    # Return as a single row (height=1)
+    return col_result.lst if hasattr(col_result, 'lst') else col_result
 
 
 def TRANSPOSE(array: Range):
@@ -340,12 +514,91 @@ def TREND(known_ys, known_xs=None, new_xs=None, const=True):
 
 
 def VSTACK(*arrays):
-    raise NotImplementedError("VSTACK() not implemented yet")
+    """Stack arrays vertically (one on top of another)."""
+    if not arrays:
+        raise ValueError("At least one array is required")
+
+    # Convert all arrays and track max width
+    processed = []
+    max_cols = 0
+
+    for arr in arrays:
+        if isinstance(arr, Range):
+            rows = len(arr)
+            cols = arr.width
+            max_cols = max(max_cols, cols)
+            processed.append((rows, cols, arr))
+        else:
+            # Flatten to 1D and treat as single row
+            lst = flatten_args(arr) if hasattr(arr, '__iter__') else [arr]
+            max_cols = max(max_cols, len(lst))
+            processed.append((1, len(lst), lst))
+
+    # Build result by stacking rows
+    result = []
+    total_rows = 0
+
+    for rows, cols, arr in processed:
+        if isinstance(arr, Range):
+            for r in range(rows):
+                for c in range(max_cols):
+                    if c < cols:
+                        result.append(arr[r][c])
+                    else:
+                        result.append(0)  # Pad with zeros
+            total_rows += rows
+        else:
+            for c in range(max_cols):
+                if c < len(arr):
+                    result.append(arr[c])
+                else:
+                    result.append(0)
+            total_rows += 1
+
+    return RangeOutput(total_rows, result)
 
 
 def WRAPCOLS(vector, wrap_count, pad_with=None):
-    raise NotImplementedError("WRAPCOLS() not implemented yet")
+    """Wrap a 1D array into columns."""
+    lst = flatten_args(vector)
+    wrap_count = int(wrap_count)
+
+    if wrap_count <= 0:
+        raise ValueError("wrap_count must be positive")
+
+    # Calculate number of rows needed
+    num_rows = (len(lst) + wrap_count - 1) // wrap_count
+    result = []
+
+    for r in range(num_rows):
+        for c in range(wrap_count):
+            idx = r + c * num_rows
+            if idx < len(lst):
+                result.append(lst[idx])
+            else:
+                result.append(pad_with if pad_with is not None else 0)
+
+    return RangeOutput(num_rows, result)
 
 
 def WRAPROWS(vector, wrap_count, pad_with=None):
-    raise NotImplementedError("WRAPROWS() not implemented yet")
+    """Wrap a 1D array into rows."""
+    lst = flatten_args(vector)
+    wrap_count = int(wrap_count)
+
+    if wrap_count <= 0:
+        raise ValueError("wrap_count must be positive")
+
+    # Calculate number of rows needed
+    num_rows = (len(lst) + wrap_count - 1) // wrap_count
+    result = []
+
+    for r in range(num_rows):
+        for c in range(wrap_count):
+            idx = r * wrap_count + c
+            if idx < len(lst):
+                result.append(lst[idx])
+            else:
+                result.append(pad_with if pad_with is not None else 0)
+
+    return RangeOutput(num_rows, result)
