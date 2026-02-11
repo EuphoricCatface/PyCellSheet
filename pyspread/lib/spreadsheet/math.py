@@ -180,7 +180,10 @@ class ERFC:
 
 
 def EVEN(x):
-    raise NotImplementedError("EVEN() not implemented yet")
+    value = math.ceil(abs(x))
+    if value % 2 == 1:
+        value += 1
+    return value if x >= 0 else -value
 
 
 def EXP(x):
@@ -227,11 +230,11 @@ class FLOOR:
 
 class GAMMALN:
     def __new__(cls, value):
-        raise NotImplementedError("GAMMALN() not implemented yet")
+        return math.lgamma(value)
 
     @staticmethod
     def PRECISE(value):
-        raise NotImplementedError("GAMMALN.PRECISE() not implemented yet")
+        return math.lgamma(value)
 
 
 def GCD(*integers):
@@ -239,15 +242,17 @@ def GCD(*integers):
 
 
 def IMLN(value):
-    raise NotImplementedError("IMLN() not implemented yet")
+    import cmath
+    return complex(cmath.log(complex(value)))
 
 
 def IMPOWER(complex_base, exponent):
-    raise NotImplementedError("IMPOWER() not implemented yet")
+    return complex(complex(complex_base) ** exponent)
 
 
 def IMSQRT(complex_number):
-    raise NotImplementedError("IMSQRT() not implemented yet")
+    import cmath
+    return complex(cmath.sqrt(complex(complex_number)))
 
 
 def INT(x):
@@ -288,20 +293,33 @@ def MOD(x, y):
     return x % y
 
 
-def MROUND(x, y):
-    raise NotImplementedError("MROUND() not implemented yet")
+def MROUND(value, multiple):
+    if multiple == 0:
+        return 0
+    return round(value / multiple) * multiple
 
 
-def MULTINOMIAL(x, y):
-    raise NotImplementedError("MULTINOMIAL() not implemented yet")
+def MULTINOMIAL(*args):
+    total = sum(args)
+    result = math.factorial(total)
+    for a in args:
+        result //= math.factorial(a)
+    return result
 
 
-def MUNIT(x, y):
-    raise NotImplementedError("MUNIT() not implemented yet")
+def MUNIT(dimension):
+    result = []
+    for i in range(dimension):
+        for j in range(dimension):
+            result.append(1 if i == j else 0)
+    return RangeOutput(dimension, result)
 
 
-def ODD(x, y):
-    raise NotImplementedError("ODD() not implemented yet")
+def ODD(x):
+    value = math.ceil(abs(x))
+    if value % 2 == 0:
+        value += 1
+    return value if x >= 0 else -value
 
 
 def PI():
@@ -320,8 +338,8 @@ def PRODUCT(*args):
     return rtn
 
 
-def QUOTIENT(x, y):
-    raise NotImplementedError("QUOTIENT() not implemented yet")
+def QUOTIENT(dividend, divisor):
+    return int(dividend / divisor)
 
 
 def RADIANS(x):
@@ -345,16 +363,21 @@ def RANDBETWEEN(x, y):
     return x + (y-x) * random.random()
 
 
-def ROUND(x, y):
-    raise NotImplementedError("ROUND() not implemented yet")
+def ROUND(value, places=0):
+    return round(value, places)
 
 
-def ROUNDDOWN(x, y):
-    raise NotImplementedError("ROUNDDOWN() not implemented yet")
+def ROUNDDOWN(value, places=0):
+    factor = 10 ** places
+    return math.trunc(value * factor) / factor
 
 
-def ROUNDUP(x, y):
-    raise NotImplementedError("ROUNDUP() not implemented yet")
+def ROUNDUP(value, places=0):
+    factor = 10 ** places
+    if value >= 0:
+        return math.ceil(value * factor) / factor
+    else:
+        return math.floor(value * factor) / factor
 
 
 def SEC(x):
@@ -365,12 +388,22 @@ def SECH(x):
     return 1/math.cosh(x)
 
 
-def SEQUENCE(x, y):
-    raise NotImplementedError("SEQUENCE() not implemented yet")
+def SEQUENCE(rows, columns=1, start=1, step=1):
+    result = []
+    val = start
+    for i in range(rows):
+        for j in range(columns):
+            result.append(val)
+            val += step
+    return RangeOutput(columns, result)
 
 
-def SERIESSUM(x, y):
-    raise NotImplementedError("SERIESSUM() not implemented yet")
+def SERIESSUM(x, n, m, coefficients):
+    lst = flatten_args(coefficients) if isinstance(coefficients, Range) else coefficients
+    result = 0
+    for i, a in enumerate(lst):
+        result += a * (x ** (n + i * m))
+    return result
 
 
 def SIGN(x):
@@ -395,8 +428,40 @@ def SQRTPI(x):
     return math.sqrt(x * math.pi)
 
 
-def SUBTOTAL(x, y):
-    raise NotImplementedError("SUBTOTAL() not implemented yet")
+def SUBTOTAL(function_num, *ranges):
+    lst = flatten_args(*ranges)
+    match function_num:
+        case 1 | 101:
+            return sum(lst) / len(lst)
+        case 2 | 102:
+            return len([v for v in lst if isinstance(v, (int, float))])
+        case 3 | 103:
+            return len([v for v in lst if v != EmptyCell])
+        case 4 | 104:
+            return max(lst)
+        case 5 | 105:
+            return min(lst)
+        case 6 | 106:
+            result = 1
+            for v in lst:
+                result *= v
+            return result
+        case 7 | 107:
+            import statistics
+            return statistics.stdev(lst)
+        case 8 | 108:
+            import statistics
+            return statistics.pstdev(lst)
+        case 9 | 109:
+            return sum(lst)
+        case 10 | 110:
+            import statistics
+            return statistics.variance(lst)
+        case 11 | 111:
+            import statistics
+            return statistics.pvariance(lst)
+        case _:
+            raise ValueError(f"Invalid function_num: {function_num}")
 
 
 def SUM(*args):
@@ -420,8 +485,22 @@ def SUMIF(r: Range, criterion, sum_range: Range | None = None):
     return sum_
 
 
-def SUMIFS(x, y):
-    raise NotImplementedError("SUMIFS() not implemented yet")
+def SUMIFS(sum_range: Range, *criteria_pairs):
+    if len(criteria_pairs) % 2:
+        raise ValueError("Number of criteria arguments has to be even")
+    sum_ = 0
+    flat_sum = sum_range.lst
+    for idx in range(len(flat_sum)):
+        include = True
+        for i in range(0, len(criteria_pairs), 2):
+            criteria_range = criteria_pairs[i]
+            criterion = criteria_pairs[i + 1]
+            if not criterion(criteria_range.lst[idx]):
+                include = False
+                break
+        if include and flat_sum[idx] != EmptyCell:
+            sum_ += flat_sum[idx]
+    return sum_
 
 
 def SUMSQ(*args):

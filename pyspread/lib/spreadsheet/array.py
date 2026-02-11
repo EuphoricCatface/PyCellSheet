@@ -1,3 +1,8 @@
+try:
+    from pyspread.lib.pycellsheet import Range, RangeOutput, flatten_args
+except ImportError:
+    from lib.pycellsheet import Range, RangeOutput, flatten_args
+
 _ARRAY_FUNCTIONS = [
     'ARRAY_CONSTRAIN', 'BYCOL', 'BYROW', 'CHOOSECOLS', 'CHOOSEROWS', 'FLATTEN', 'FREQUENCY',
     'GROWTH', 'HSTACK', 'LINEST', 'LOGEST', 'MAKEARRAY', 'MAP', 'MDETERM', 'MINVERSE', 'MMULT',
@@ -7,117 +12,152 @@ _ARRAY_FUNCTIONS = [
 __all__ = _ARRAY_FUNCTIONS + ["_ARRAY_FUNCTIONS"]
 
 
-def ARRAY_CONSTRAIN(a, b):
+def ARRAY_CONSTRAIN(input_range, num_rows, num_cols):
     raise NotImplementedError("ARRAY_CONSTRAIN() not implemented yet")
 
 
-def BYCOL(a, b):
+def BYCOL(array, func):
     raise NotImplementedError("BYCOL() not implemented yet")
 
 
-def BYROW(a, b):
+def BYROW(array, func):
     raise NotImplementedError("BYROW() not implemented yet")
 
 
-def CHOOSECOLS(a, b):
+def CHOOSECOLS(array: Range, *col_nums):
     raise NotImplementedError("CHOOSECOLS() not implemented yet")
 
 
-def CHOOSEROWS(a, b):
+def CHOOSEROWS(array: Range, *row_nums):
     raise NotImplementedError("CHOOSEROWS() not implemented yet")
 
 
-def FLATTEN(a, b):
-    raise NotImplementedError("FLATTEN() not implemented yet")
+def FLATTEN(*args):
+    return flatten_args(*args)
 
 
-def FREQUENCY(a, b):
-    raise NotImplementedError("FREQUENCY() not implemented yet")
+def FREQUENCY(data, bins):
+    data_list = sorted(flatten_args(data))
+    bin_list = sorted(flatten_args(bins))
+    counts = [0] * (len(bin_list) + 1)
+    for val in data_list:
+        placed = False
+        for i, b in enumerate(bin_list):
+            if val <= b:
+                counts[i] += 1
+                placed = True
+                break
+        if not placed:
+            counts[-1] += 1
+    return counts
 
 
-def GROWTH(a, b):
+def GROWTH(known_ys, known_xs=None, new_xs=None, const=True):
     raise NotImplementedError("GROWTH() not implemented yet")
 
 
-def HSTACK(a, b):
+def HSTACK(*arrays):
     raise NotImplementedError("HSTACK() not implemented yet")
 
 
-def LINEST(a, b):
+def LINEST(known_ys, known_xs=None, const=True, stats=False):
     raise NotImplementedError("LINEST() not implemented yet")
 
 
-def LOGEST(a, b):
+def LOGEST(known_ys, known_xs=None, const=True, stats=False):
     raise NotImplementedError("LOGEST() not implemented yet")
 
 
-def MAKEARRAY(a, b):
+def MAKEARRAY(rows, cols, func):
     raise NotImplementedError("MAKEARRAY() not implemented yet")
 
 
-def MAP(a, b):
+def MAP(array, func):
     raise NotImplementedError("MAP() not implemented yet")
 
 
-def MDETERM(a, b):
+def MDETERM(matrix: Range):
     raise NotImplementedError("MDETERM() not implemented yet")
 
 
-def MINVERSE(a, b):
+def MINVERSE(matrix: Range):
     raise NotImplementedError("MINVERSE() not implemented yet")
 
 
-def MMULT(a, b):
+def MMULT(matrix1: Range, matrix2: Range):
     raise NotImplementedError("MMULT() not implemented yet")
 
 
-def REDUCE(a, b):
+def REDUCE(initial_value, array, func):
     raise NotImplementedError("REDUCE() not implemented yet")
 
 
-def SCAN(a, b):
+def SCAN(initial_value, array, func):
     raise NotImplementedError("SCAN() not implemented yet")
 
 
-def SUMPRODUCT(a, b):
-    raise NotImplementedError("SUMPRODUCT() not implemented yet")
+def SUMPRODUCT(*arrays):
+    lists = [flatten_args(a) for a in arrays]
+    length = len(lists[0])
+    for lst in lists[1:]:
+        if len(lst) != length:
+            raise ValueError("All arrays must have the same dimensions")
+    total = 0
+    for i in range(length):
+        product = 1
+        for lst in lists:
+            product *= lst[i]
+        total += product
+    return total
 
 
-def SUMX2MY2(a, b):
-    raise NotImplementedError("SUMX2MY2() not implemented yet")
+def SUMX2MY2(array_x, array_y):
+    xs = flatten_args(array_x)
+    ys = flatten_args(array_y)
+    return sum(x**2 - y**2 for x, y in zip(xs, ys))
 
 
-def SUMX2PY2(a, b):
-    raise NotImplementedError("SUMX2PY2() not implemented yet")
+def SUMX2PY2(array_x, array_y):
+    xs = flatten_args(array_x)
+    ys = flatten_args(array_y)
+    return sum(x**2 + y**2 for x, y in zip(xs, ys))
 
 
-def SUMXMY2(a, b):
-    raise NotImplementedError("SUMXMY2() not implemented yet")
+def SUMXMY2(array_x, array_y):
+    xs = flatten_args(array_x)
+    ys = flatten_args(array_y)
+    return sum((x - y)**2 for x, y in zip(xs, ys))
 
 
-def TOCOL(a, b):
+def TOCOL(array, ignore=0, scan_by_column=False):
     raise NotImplementedError("TOCOL() not implemented yet")
 
 
-def TOROW(a, b):
+def TOROW(array, ignore=0, scan_by_column=False):
     raise NotImplementedError("TOROW() not implemented yet")
 
 
-def TRANSPOSE(a, b):
-    raise NotImplementedError("TRANSPOSE() not implemented yet")
+def TRANSPOSE(array: Range):
+    rows = len(array)
+    cols = array.width
+    result = []
+    for c in range(cols):
+        for r in range(rows):
+            result.append(array[r][c])
+    return RangeOutput(rows, result)
 
 
-def TREND(a, b):
+def TREND(known_ys, known_xs=None, new_xs=None, const=True):
     raise NotImplementedError("TREND() not implemented yet")
 
 
-def VSTACK(a, b):
+def VSTACK(*arrays):
     raise NotImplementedError("VSTACK() not implemented yet")
 
 
-def WRAPCOLS(a, b):
+def WRAPCOLS(vector, wrap_count, pad_with=None):
     raise NotImplementedError("WRAPCOLS() not implemented yet")
 
 
-def WRAPROWS(a, b):
+def WRAPROWS(vector, wrap_count, pad_with=None):
     raise NotImplementedError("WRAPROWS() not implemented yet")

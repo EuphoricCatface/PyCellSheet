@@ -1,3 +1,6 @@
+import math
+import statistics
+
 try:
     from pyspread.lib.pycellsheet import EmptyCell, Range, flatten_args
 except ImportError:
@@ -19,8 +22,14 @@ _STATISTICAL_FUNCTIONS = [
 __all__ = _STATISTICAL_FUNCTIONS + ["_STATISTICAL_FUNCTIONS"]
 
 
-def AVEDEV(a, b):
-    raise NotImplementedError("AVEDEV() not implemented yet")
+def _numeric_filter(lst):
+    return [v for v in lst if isinstance(v, (int, float)) and v != EmptyCell]
+
+
+def AVEDEV(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    mean = sum(lst) / len(lst)
+    return sum(abs(x - mean) for x in lst) / len(lst)
 
 
 class AVERAGE:
@@ -29,577 +38,858 @@ class AVERAGE:
         return sum(lst) / len(lst)
 
     @staticmethod
-    def WEIGHTED(a, b):
-        raise NotImplementedError("AVERAGE.WEIGHTED() not implemented yet")
+    def WEIGHTED(values, weights):
+        vals = flatten_args(values)
+        wts = flatten_args(weights)
+        if len(vals) != len(wts):
+            raise ValueError("Values and weights must have the same length")
+        return sum(v * w for v, w in zip(vals, wts)) / sum(wts)
 
 
-def AVERAGEA(a, b):
-    raise NotImplementedError("AVERAGEA() not implemented yet")
+def AVERAGEA(*args):
+    lst = flatten_args(*args)
+    converted = []
+    for v in lst:
+        if v == EmptyCell:
+            continue
+        if isinstance(v, bool):
+            converted.append(int(v))
+        elif isinstance(v, (int, float)):
+            converted.append(v)
+        elif isinstance(v, str):
+            converted.append(0)
+        else:
+            converted.append(0)
+    if not converted:
+        raise ValueError("No values")
+    return sum(converted) / len(converted)
 
 
-def AVERAGEIF(a, b):
-    raise NotImplementedError("AVERAGEIF() not implemented yet")
+def AVERAGEIF(criteria_range: Range, criterion, average_range: Range = None):
+    if average_range is None:
+        average_range = criteria_range
+    values = []
+    for i, v in enumerate(criteria_range.lst):
+        if criterion(v):
+            av = average_range.lst[i]
+            if isinstance(av, (int, float)) and av != EmptyCell:
+                values.append(av)
+    if not values:
+        raise ValueError("No matching values")
+    return sum(values) / len(values)
 
 
-def AVERAGEIFS(a, b):
-    raise NotImplementedError("AVERAGEIFS() not implemented yet")
+def AVERAGEIFS(average_range: Range, *criteria_pairs):
+    if len(criteria_pairs) % 2:
+        raise ValueError("Number of criteria arguments has to be even")
+    values = []
+    for idx in range(len(average_range.lst)):
+        include = True
+        for i in range(0, len(criteria_pairs), 2):
+            cr = criteria_pairs[i]
+            criterion = criteria_pairs[i + 1]
+            if not criterion(cr.lst[idx]):
+                include = False
+                break
+        if include:
+            av = average_range.lst[idx]
+            if isinstance(av, (int, float)) and av != EmptyCell:
+                values.append(av)
+    if not values:
+        raise ValueError("No matching values")
+    return sum(values) / len(values)
 
 
 class BETA:
     @staticmethod
-    def DIST(a, b):
+    def DIST(x, alpha, beta, cumulative=True):
         raise NotImplementedError("BETA.DIST() not implemented yet")
 
     @staticmethod
-    def INV(a, b):
+    def INV(probability, alpha, beta):
         raise NotImplementedError("BETA.INV() not implemented yet")
 
 
-def BETADIST(a, b):
+def BETADIST(x, alpha, beta):
     raise NotImplementedError("BETADIST() not implemented yet")
 
 
-def BETAINV(a, b):
+def BETAINV(probability, alpha, beta):
     raise NotImplementedError("BETAINV() not implemented yet")
 
 
 class BINOM:
     @staticmethod
-    def DIST(a, b):
+    def DIST(number_s, trials, probability_s, cumulative):
         raise NotImplementedError("BINOM.DIST() not implemented yet")
 
     @staticmethod
-    def INV(a, b):
+    def INV(trials, probability_s, alpha):
         raise NotImplementedError("BINOM.INV() not implemented yet")
 
 
-def BINOMDIST(a, b):
+def BINOMDIST(number_s, trials, probability_s, cumulative):
     raise NotImplementedError("BINOMDIST() not implemented yet")
 
 
-def CHIDIST(a, b):
+def CHIDIST(x, degrees_freedom):
     raise NotImplementedError("CHIDIST() not implemented yet")
 
 
-def CHIINV(a, b):
+def CHIINV(probability, degrees_freedom):
     raise NotImplementedError("CHIINV() not implemented yet")
 
 
 class CHISQ:
     class DIST:
-        def __new__(cls, a, b):
+        def __new__(cls, x, degrees_freedom, cumulative):
             raise NotImplementedError("CHISQ.DIST() not implemented yet")
 
         @staticmethod
-        def RT(a, b):
+        def RT(x, degrees_freedom):
             raise NotImplementedError("CHISQ.DIST.RT() not implemented yet")
 
     class INV:
-        def __new__(cls, a, b):
+        def __new__(cls, probability, degrees_freedom):
             raise NotImplementedError("CHISQ.INV() not implemented yet")
 
         @staticmethod
-        def RT(a, b):
+        def RT(probability, degrees_freedom):
             raise NotImplementedError("CHISQ.INV.RT() not implemented yet")
 
     @staticmethod
-    def TEST(a, b):
+    def TEST(actual_range, expected_range):
         raise NotImplementedError("CHISQ.TEST() not implemented yet")
 
 
-def CHITEST(a, b):
+def CHITEST(actual_range, expected_range):
     raise NotImplementedError("CHITEST() not implemented yet")
 
 
 class CONFIDENCE:
-    def __new__(cls, a, b):
+    def __new__(cls, alpha, standard_dev, size):
         raise NotImplementedError("CONFIDENCE() not implemented yet")
 
     @staticmethod
-    def NORM(a, b):
+    def NORM(alpha, standard_dev, size):
         raise NotImplementedError("CONFIDENCE.NORM() not implemented yet")
 
     @staticmethod
-    def T(a, b):
+    def T(alpha, standard_dev, size):
         raise NotImplementedError("CONFIDENCE.T() not implemented yet")
 
 
-def CORREL(a, b):
-    raise NotImplementedError("CORREL() not implemented yet")
+def CORREL(data_y, data_x):
+    y = _numeric_filter(flatten_args(data_y))
+    x = _numeric_filter(flatten_args(data_x))
+    return statistics.correlation(x, y)
 
 
-def COUNT(a, b):
-    raise NotImplementedError("COUNT() not implemented yet")
+def COUNT(*args):
+    lst = flatten_args(*args)
+    return len([v for v in lst if isinstance(v, (int, float)) and v != EmptyCell])
 
 
-def COUNTA(a, b):
-    raise NotImplementedError("COUNTA() not implemented yet")
+def COUNTA(*args):
+    lst = flatten_args(*args)
+    return len([v for v in lst if v != EmptyCell])
 
 
-def COVAR(a, b):
-    raise NotImplementedError("COVAR() not implemented yet")
+def COVAR(data_y, data_x):
+    y = _numeric_filter(flatten_args(data_y))
+    x = _numeric_filter(flatten_args(data_x))
+    return statistics.covariance(x, y)
+
 
 class COVARIANCE:
     @staticmethod
-    def P(a, b):
-        raise NotImplementedError("COVARIANCE.P() not implemented yet")
+    def P(data_y, data_x):
+        y = _numeric_filter(flatten_args(data_y))
+        x = _numeric_filter(flatten_args(data_x))
+        n = len(x)
+        mean_x = sum(x) / n
+        mean_y = sum(y) / n
+        return sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y)) / n
 
     @staticmethod
-    def S(a, b):
-        raise NotImplementedError("COVARIANCE.S() not implemented yet")
+    def S(data_y, data_x):
+        y = _numeric_filter(flatten_args(data_y))
+        x = _numeric_filter(flatten_args(data_x))
+        return statistics.covariance(x, y)
 
 
-def CRITBINOM(a, b):
+def CRITBINOM(trials, probability_s, alpha):
     raise NotImplementedError("CRITBINOM() not implemented yet")
 
 
-def DEVSQ(a, b):
-    raise NotImplementedError("DEVSQ() not implemented yet")
+def DEVSQ(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    mean = sum(lst) / len(lst)
+    return sum((x - mean) ** 2 for x in lst)
 
 
 class EXPON:
     @staticmethod
-    def DIST(a, b):
+    def DIST(x, _lambda, cumulative):
         raise NotImplementedError("EXPON.DIST() not implemented yet")
 
 
-def EXPONDIST(a, b):
+def EXPONDIST(x, _lambda, cumulative):
     raise NotImplementedError("EXPONDIST() not implemented yet")
 
 
 class F:
     class DIST:
-        def __new__(cls, a, b):
+        def __new__(cls, x, deg_freedom1, deg_freedom2, cumulative):
             raise NotImplementedError("F.DIST() not implemented yet")
 
         @staticmethod
-        def RT(a, b):
+        def RT(x, deg_freedom1, deg_freedom2):
             raise NotImplementedError("F.DIST.RT() not implemented yet")
 
     class INV:
-        def __new__(cls, a, b):
+        def __new__(cls, probability, deg_freedom1, deg_freedom2):
             raise NotImplementedError("F.INV() not implemented yet")
 
         @staticmethod
-        def RT(a, b):
+        def RT(probability, deg_freedom1, deg_freedom2):
             raise NotImplementedError("F.INV.RT() not implemented yet")
 
     @staticmethod
-    def TEST(a, b):
+    def TEST(array1, array2):
         raise NotImplementedError("F.TEST() not implemented yet")
 
 
-def FDIST(a, b):
+def FDIST(x, deg_freedom1, deg_freedom2):
     raise NotImplementedError("FDIST() not implemented yet")
 
 
-def FINV(a, b):
+def FINV(probability, deg_freedom1, deg_freedom2):
     raise NotImplementedError("FINV() not implemented yet")
 
 
-def FISHER(a, b):
-    raise NotImplementedError("FISHER() not implemented yet")
+def FISHER(x):
+    return 0.5 * math.log((1 + x) / (1 - x))
 
 
-def FISHERINV(a, b):
-    raise NotImplementedError("FISHERINV() not implemented yet")
+def FISHERINV(y):
+    e2y = math.exp(2 * y)
+    return (e2y - 1) / (e2y + 1)
 
 
 class FORECAST:
-    def __new__(cls, a, b):
-        raise NotImplementedError("FORECAST() not implemented yet")
+    def __new__(cls, x, known_ys, known_xs):
+        y_vals = _numeric_filter(flatten_args(known_ys))
+        x_vals = _numeric_filter(flatten_args(known_xs))
+        n = len(x_vals)
+        mean_x = sum(x_vals) / n
+        mean_y = sum(y_vals) / n
+        num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x_vals, y_vals))
+        den = sum((xi - mean_x) ** 2 for xi in x_vals)
+        slope = num / den
+        intercept = mean_y - slope * mean_x
+        return intercept + slope * x
 
     @staticmethod
-    def LINEAR(a, b):
-        raise NotImplementedError("FORECAST.LINEAR() not implemented yet")
+    def LINEAR(x, known_ys, known_xs):
+        return FORECAST.__new__(FORECAST, x, known_ys, known_xs)
 
 
-def FTEST(a, b):
+def FTEST(array1, array2):
     raise NotImplementedError("FTEST() not implemented yet")
 
 
 class GAMMA:
-    def __new__(cls, a, b):
-        raise NotImplementedError("GAMMA() not implemented yet")
+    def __new__(cls, value):
+        return math.gamma(value)
 
     @staticmethod
-    def DIST(a, b):
+    def DIST(x, alpha, beta, cumulative):
         raise NotImplementedError("GAMMA.DIST() not implemented yet")
 
     @staticmethod
-    def INV(a, b):
+    def INV(probability, alpha, beta):
         raise NotImplementedError("GAMMA.INV() not implemented yet")
 
 
-def GAMMADIST(a, b):
+def GAMMADIST(x, alpha, beta, cumulative):
     raise NotImplementedError("GAMMADIST() not implemented yet")
 
 
-def GAMMAINV(a, b):
+def GAMMAINV(probability, alpha, beta):
     raise NotImplementedError("GAMMAINV() not implemented yet")
 
 
-def GAUSS(a, b):
-    raise NotImplementedError("GAUSS() not implemented yet")
+def GAUSS(z):
+    return statistics.NormalDist().cdf(z) - 0.5
 
 
-def GEOMEAN(a, b):
-    raise NotImplementedError("GEOMEAN() not implemented yet")
+def GEOMEAN(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    return statistics.geometric_mean(lst)
 
 
-def HARMEAN(a, b):
-    raise NotImplementedError("HARMEAN() not implemented yet")
+def HARMEAN(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    return statistics.harmonic_mean(lst)
 
 
 class HYPGEOM:
     @staticmethod
-    def DIST(a, b):
+    def DIST(sample_s, number_sample, population_s, number_pop, cumulative):
         raise NotImplementedError("HYPGEOM.DIST() not implemented yet")
 
 
-def HYPGEOMDIST(a, b):
+def HYPGEOMDIST(sample_s, number_sample, population_s, number_pop):
     raise NotImplementedError("HYPGEOMDIST() not implemented yet")
 
 
-def INTERCEPT(a, b):
-    raise NotImplementedError("INTERCEPT() not implemented yet")
+def INTERCEPT(known_ys, known_xs):
+    y_vals = _numeric_filter(flatten_args(known_ys))
+    x_vals = _numeric_filter(flatten_args(known_xs))
+    n = len(x_vals)
+    mean_x = sum(x_vals) / n
+    mean_y = sum(y_vals) / n
+    num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x_vals, y_vals))
+    den = sum((xi - mean_x) ** 2 for xi in x_vals)
+    slope = num / den
+    return mean_y - slope * mean_x
 
 
-def KURT(a, b):
-    raise NotImplementedError("KURT() not implemented yet")
+def KURT(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    n = len(lst)
+    if n < 4:
+        raise ValueError("Need at least 4 data points")
+    mean = sum(lst) / n
+    s = (sum((x - mean) ** 2 for x in lst) / (n - 1)) ** 0.5
+    m4 = sum(((x - mean) / s) ** 4 for x in lst)
+    return (n * (n + 1) * m4 / ((n - 1) * (n - 2) * (n - 3))) - (3 * (n - 1) ** 2 / ((n - 2) * (n - 3)))
 
 
-def LARGE(a, b):
-    raise NotImplementedError("LARGE() not implemented yet")
+def LARGE(data, k):
+    lst = sorted(_numeric_filter(flatten_args(data)), reverse=True)
+    return lst[int(k) - 1]
 
 
-def LOGINV(a, b):
+def LOGINV(probability, mean, standard_dev):
     raise NotImplementedError("LOGINV() not implemented yet")
 
 
 class LOGNORM:
     @staticmethod
-    def DIST(a, b):
+    def DIST(x, mean, standard_dev, cumulative):
         raise NotImplementedError("LOGNORM.DIST() not implemented yet")
 
     @staticmethod
-    def INV(a, b):
+    def INV(probability, mean, standard_dev):
         raise NotImplementedError("LOGNORM.INV() not implemented yet")
 
 
-def LOGNORMDIST(a, b):
+def LOGNORMDIST(x, mean, standard_dev):
     raise NotImplementedError("LOGNORMDIST() not implemented yet")
 
 
-def MARGINOFERROR(a, b):
+def MARGINOFERROR(confidence_level, standard_dev, size):
     raise NotImplementedError("MARGINOFERROR() not implemented yet")
 
 
-def MAX(a, b):
-    raise NotImplementedError("MAX() not implemented yet")
+def MAX(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    return max(lst)
 
 
-def MAXA(a, b):
-    raise NotImplementedError("MAXA() not implemented yet")
+def MAXA(*args):
+    lst = flatten_args(*args)
+    converted = []
+    for v in lst:
+        if v == EmptyCell:
+            continue
+        if isinstance(v, bool):
+            converted.append(int(v))
+        elif isinstance(v, (int, float)):
+            converted.append(v)
+        elif isinstance(v, str):
+            converted.append(0)
+    return max(converted)
 
 
-def MAXIFS(a, b):
-    raise NotImplementedError("MAXIFS() not implemented yet")
+def MAXIFS(max_range: Range, *criteria_pairs):
+    if len(criteria_pairs) % 2:
+        raise ValueError("Number of criteria arguments has to be even")
+    values = []
+    for idx in range(len(max_range.lst)):
+        include = True
+        for i in range(0, len(criteria_pairs), 2):
+            cr = criteria_pairs[i]
+            criterion = criteria_pairs[i + 1]
+            if not criterion(cr.lst[idx]):
+                include = False
+                break
+        if include and isinstance(max_range.lst[idx], (int, float)):
+            values.append(max_range.lst[idx])
+    if not values:
+        return 0
+    return max(values)
 
 
-def MEDIAN(a, b):
-    raise NotImplementedError("MEDIAN() not implemented yet")
+def MEDIAN(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    return statistics.median(lst)
 
 
-def MIN(a, b):
-    raise NotImplementedError("MIN() not implemented yet")
+def MIN(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    return min(lst)
 
 
-def MINA(a, b):
-    raise NotImplementedError("MINA() not implemented yet")
+def MINA(*args):
+    lst = flatten_args(*args)
+    converted = []
+    for v in lst:
+        if v == EmptyCell:
+            continue
+        if isinstance(v, bool):
+            converted.append(int(v))
+        elif isinstance(v, (int, float)):
+            converted.append(v)
+        elif isinstance(v, str):
+            converted.append(0)
+    return min(converted)
 
 
-def MINIFS(a, b):
-    raise NotImplementedError("MINIFS() not implemented yet")
+def MINIFS(min_range: Range, *criteria_pairs):
+    if len(criteria_pairs) % 2:
+        raise ValueError("Number of criteria arguments has to be even")
+    values = []
+    for idx in range(len(min_range.lst)):
+        include = True
+        for i in range(0, len(criteria_pairs), 2):
+            cr = criteria_pairs[i]
+            criterion = criteria_pairs[i + 1]
+            if not criterion(cr.lst[idx]):
+                include = False
+                break
+        if include and isinstance(min_range.lst[idx], (int, float)):
+            values.append(min_range.lst[idx])
+    if not values:
+        return 0
+    return min(values)
 
 
 class MODE:
-    @staticmethod
-    def __new__(cls, a, b):
-        raise NotImplementedError("MODE() not implemented yet")
+    def __new__(cls, *args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.mode(lst)
 
     @staticmethod
-    def MULT(a, b):
-        raise NotImplementedError("MODE.MULT() not implemented yet")
+    def MULT(*args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.multimode(lst)
 
     @staticmethod
-    def SNGL(a, b):
-        raise NotImplementedError("MODE.SNGL() not implemented yet")
+    def SNGL(*args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.mode(lst)
 
 
 class NEGBINOM:
     @staticmethod
-    def DIST(a, b):
+    def DIST(number_f, number_s, probability_s, cumulative):
         raise NotImplementedError("NEGBINOM.DIST() not implemented yet")
 
 
-def NEGBINOMDIST(a, b):
+def NEGBINOMDIST(number_f, number_s, probability_s):
     raise NotImplementedError("NEGBINOMDIST() not implemented yet")
 
 
 class NORM:
     @staticmethod
-    def DIST(a, b):
-        raise NotImplementedError("NORM.DIST() not implemented yet")
+    def DIST(x, mean, standard_dev, cumulative):
+        nd = statistics.NormalDist(mean, standard_dev)
+        if cumulative:
+            return nd.cdf(x)
+        return nd.pdf(x)
 
     @staticmethod
-    def INV(a, b):
-        raise NotImplementedError("NORM.INV() not implemented yet")
+    def INV(probability, mean, standard_dev):
+        nd = statistics.NormalDist(mean, standard_dev)
+        return nd.inv_cdf(probability)
 
     class S:
         @staticmethod
-        def DIST(a, b):
-            raise NotImplementedError("NORM.S.DIST() not implemented yet")
+        def DIST(z, cumulative=True):
+            nd = statistics.NormalDist()
+            if cumulative:
+                return nd.cdf(z)
+            return nd.pdf(z)
 
         @staticmethod
-        def INV(a, b):
-            raise NotImplementedError("NORM.S.INV() not implemented yet")
+        def INV(probability):
+            return statistics.NormalDist().inv_cdf(probability)
 
 
-def NORMDIST(a, b):
-    raise NotImplementedError("NORMDIST() not implemented yet")
+def NORMDIST(x, mean, standard_dev, cumulative):
+    return NORM.DIST(x, mean, standard_dev, cumulative)
 
 
-def NORMINV(a, b):
-    raise NotImplementedError("NORMINV() not implemented yet")
+def NORMINV(probability, mean, standard_dev):
+    return NORM.INV(probability, mean, standard_dev)
 
 
-def NORMSDIST(a, b):
-    raise NotImplementedError("NORMSDIST() not implemented yet")
+def NORMSDIST(z):
+    return NORM.S.DIST(z, True)
 
 
-def NORMSINV(a, b):
-    raise NotImplementedError("NORMSINV() not implemented yet")
+def NORMSINV(probability):
+    return NORM.S.INV(probability)
 
 
-def PEARSON(a, b):
-    raise NotImplementedError("PEARSON() not implemented yet")
+def PEARSON(data_y, data_x):
+    y = _numeric_filter(flatten_args(data_y))
+    x = _numeric_filter(flatten_args(data_x))
+    return statistics.correlation(x, y)
 
 
 class PERCENTILE:
-    def __new__(cls, a, b):
-        raise NotImplementedError("PERCENTILE() not implemented yet")
+    def __new__(cls, data, k):
+        lst = sorted(_numeric_filter(flatten_args(data)))
+        n = len(lst)
+        idx = k * (n - 1)
+        lo = int(idx)
+        hi = lo + 1
+        if hi >= n:
+            return lst[lo]
+        frac = idx - lo
+        return lst[lo] * (1 - frac) + lst[hi] * frac
 
     @staticmethod
-    def EXC(a, b):
-        raise NotImplementedError("PERCENTILE.EXC() not implemented yet")
+    def EXC(data, k):
+        lst = sorted(_numeric_filter(flatten_args(data)))
+        n = len(lst)
+        idx = k * (n + 1) - 1
+        lo = int(idx)
+        hi = lo + 1
+        if lo < 0 or hi >= n:
+            raise ValueError("k is out of range for PERCENTILE.EXC")
+        frac = idx - lo
+        return lst[lo] * (1 - frac) + lst[hi] * frac
 
     @staticmethod
-    def INC(a, b):
-        raise NotImplementedError("PERCENTILE.INC() not implemented yet")
+    def INC(data, k):
+        return PERCENTILE.__new__(PERCENTILE, data, k)
 
 
 class PERCENTRANK:
-    @staticmethod
-    def __new__(cls, a, b):
-        raise NotImplementedError("PERCENTRANK() not implemented yet")
+    def __new__(cls, data, x, significance=3):
+        lst = sorted(_numeric_filter(flatten_args(data)))
+        n = len(lst)
+        if x < lst[0] or x > lst[-1]:
+            raise ValueError("x is outside the data range")
+        for i in range(n - 1):
+            if lst[i] <= x <= lst[i + 1]:
+                if lst[i] == lst[i + 1]:
+                    frac_rank = i / (n - 1)
+                else:
+                    frac_rank = (i + (x - lst[i]) / (lst[i + 1] - lst[i])) / (n - 1)
+                factor = 10 ** significance
+                return int(frac_rank * factor) / factor
+        return 1.0
 
     @staticmethod
-    def EXC(a, b):
+    def EXC(data, x, significance=3):
         raise NotImplementedError("PERCENTRANK.EXC() not implemented yet")
 
     @staticmethod
-    def INC(a, b):
-        raise NotImplementedError("PERCENTRANK.INC() not implemented yet")
+    def INC(data, x, significance=3):
+        return PERCENTRANK.__new__(PERCENTRANK, data, x, significance)
 
 
-def PERMUTATIONA(a, b):
-    raise NotImplementedError("PERMUTATIONA() not implemented yet")
+def PERMUT(n, k):
+    return math.perm(int(n), int(k))
 
 
-def PERMUT(a, b):
-    raise NotImplementedError("PERMUT() not implemented yet")
+def PERMUTATIONA(n, k):
+    return int(n) ** int(k)
 
 
-def PHI(a, b):
-    raise NotImplementedError("PHI() not implemented yet")
+def PHI(x):
+    return statistics.NormalDist().pdf(x)
 
 
 class POISSON:
-    @staticmethod
-    def __new__(cls, a, b):
+    def __new__(cls, x, mean, cumulative):
         raise NotImplementedError("POISSON() not implemented yet")
 
     @staticmethod
-    def DIST(a, b):
+    def DIST(x, mean, cumulative):
         raise NotImplementedError("POISSON.DIST() not implemented yet")
 
 
-def PROB(a, b):
-    raise NotImplementedError("PROB() not implemented yet")
+def PROB(x_range, prob_range, lower_limit, upper_limit=None):
+    xs = flatten_args(x_range)
+    ps = flatten_args(prob_range)
+    if upper_limit is None:
+        upper_limit = lower_limit
+    total = 0
+    for x, p in zip(xs, ps):
+        if lower_limit <= x <= upper_limit:
+            total += p
+    return total
 
 
 class QUARTILE:
-    def __new__(cls, a, b):
-        raise NotImplementedError("QUARTILE() not implemented yet")
+    def __new__(cls, data, quart):
+        return PERCENTILE.__new__(PERCENTILE, data, quart * 0.25)
 
     @staticmethod
-    def EXC(a, b):
-        raise NotImplementedError("QUARTILE.EXC() not implemented yet")
+    def EXC(data, quart):
+        return PERCENTILE.EXC(data, quart * 0.25)
 
     @staticmethod
-    def INC(a, b):
-        raise NotImplementedError("QUARTILE.INC() not implemented yet")
+    def INC(data, quart):
+        return PERCENTILE.__new__(PERCENTILE, data, quart * 0.25)
 
 
 class RANK:
-    def __new__(cls, a, b):
-        raise NotImplementedError("RANK() not implemented yet")
+    def __new__(cls, number, ref, order=0):
+        lst = sorted(_numeric_filter(flatten_args(ref)), reverse=(order == 0))
+        return lst.index(number) + 1
 
     @staticmethod
-    def AVG(a, b):
-        raise NotImplementedError("RANK.AVG() not implemented yet")
+    def AVG(number, ref, order=0):
+        lst = sorted(_numeric_filter(flatten_args(ref)), reverse=(order == 0))
+        positions = [i + 1 for i, v in enumerate(lst) if v == number]
+        return sum(positions) / len(positions)
 
     @staticmethod
-    def EQ(a, b):
-        raise NotImplementedError("RANK.EQ() not implemented yet")
+    def EQ(number, ref, order=0):
+        return RANK.__new__(RANK, number, ref, order)
 
 
-def RSQ(a, b):
-    raise NotImplementedError("RSQ() not implemented yet")
+def RSQ(known_ys, known_xs):
+    r = PEARSON(known_ys, known_xs)
+    return r ** 2
 
 
 class SKEW:
-    def __new__(cls, a, b):
-        raise NotImplementedError("SKEW() not implemented yet")
+    def __new__(cls, *args):
+        lst = _numeric_filter(flatten_args(*args))
+        n = len(lst)
+        if n < 3:
+            raise ValueError("Need at least 3 data points")
+        mean = sum(lst) / n
+        s = (sum((x - mean) ** 2 for x in lst) / (n - 1)) ** 0.5
+        return (n / ((n - 1) * (n - 2))) * sum(((x - mean) / s) ** 3 for x in lst)
 
     @staticmethod
-    def P(a, b):
-        raise NotImplementedError("SKEW.P() not implemented yet")
+    def P(*args):
+        lst = _numeric_filter(flatten_args(*args))
+        n = len(lst)
+        if n < 3:
+            raise ValueError("Need at least 3 data points")
+        mean = sum(lst) / n
+        m2 = sum((x - mean) ** 2 for x in lst) / n
+        m3 = sum((x - mean) ** 3 for x in lst) / n
+        return m3 / (m2 ** 1.5)
 
 
-def SLOPE(a, b):
-    raise NotImplementedError("SLOPE() not implemented yet")
+def SLOPE(known_ys, known_xs):
+    y_vals = _numeric_filter(flatten_args(known_ys))
+    x_vals = _numeric_filter(flatten_args(known_xs))
+    n = len(x_vals)
+    mean_x = sum(x_vals) / n
+    mean_y = sum(y_vals) / n
+    num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x_vals, y_vals))
+    den = sum((xi - mean_x) ** 2 for xi in x_vals)
+    return num / den
 
 
-def SMALL(a, b):
-    raise NotImplementedError("SMALL() not implemented yet")
+def SMALL(data, k):
+    lst = sorted(_numeric_filter(flatten_args(data)))
+    return lst[int(k) - 1]
 
 
-def STANDARDIZE(a, b):
-    raise NotImplementedError("STANDARDIZE() not implemented yet")
+def STANDARDIZE(x, mean, standard_dev):
+    return (x - mean) / standard_dev
 
 
 class STDEV:
-    def __new__(cls, a, b):
-        raise NotImplementedError("STDEV() not implemented yet")
+    def __new__(cls, *args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.stdev(lst)
 
     @staticmethod
-    def P(a, b):
-        raise NotImplementedError("STDEV.P() not implemented yet")
+    def P(*args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.pstdev(lst)
 
     @staticmethod
-    def S(a, b):
-        raise NotImplementedError("STDEV.S() not implemented yet")
+    def S(*args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.stdev(lst)
 
 
-def STDEVA(a, b):
-    raise NotImplementedError("STDEVA() not implemented yet")
+def STDEVA(*args):
+    lst = flatten_args(*args)
+    converted = []
+    for v in lst:
+        if v == EmptyCell:
+            continue
+        if isinstance(v, bool):
+            converted.append(int(v))
+        elif isinstance(v, (int, float)):
+            converted.append(v)
+        elif isinstance(v, str):
+            converted.append(0)
+    return statistics.stdev(converted)
 
 
-def STDEVP(a, b):
-    raise NotImplementedError("STDEVP() not implemented yet")
+def STDEVP(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    return statistics.pstdev(lst)
 
 
-def STDEVPA(a, b):
-    raise NotImplementedError("STDEVPA() not implemented yet")
+def STDEVPA(*args):
+    lst = flatten_args(*args)
+    converted = []
+    for v in lst:
+        if v == EmptyCell:
+            continue
+        if isinstance(v, bool):
+            converted.append(int(v))
+        elif isinstance(v, (int, float)):
+            converted.append(v)
+        elif isinstance(v, str):
+            converted.append(0)
+    return statistics.pstdev(converted)
 
 
-def STEYX(a, b):
-    raise NotImplementedError("STEYX() not implemented yet")
+def STEYX(known_ys, known_xs):
+    y_vals = _numeric_filter(flatten_args(known_ys))
+    x_vals = _numeric_filter(flatten_args(known_xs))
+    n = len(x_vals)
+    if n < 3:
+        raise ValueError("Need at least 3 data points")
+    mean_x = sum(x_vals) / n
+    mean_y = sum(y_vals) / n
+    ss_xy = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x_vals, y_vals))
+    ss_xx = sum((xi - mean_x) ** 2 for xi in x_vals)
+    ss_yy = sum((yi - mean_y) ** 2 for yi in y_vals)
+    return math.sqrt((ss_yy - ss_xy ** 2 / ss_xx) / (n - 2))
 
 
 class T_STAT:
     class DIST:
-        def __new__(cls, a, b):
-            raise NotImplementedError("T.DIST() not implemented yet")
+        def __new__(cls, x, degrees_freedom, cumulative):
+            raise NotImplementedError("T_STAT.DIST() not implemented yet")
 
         @staticmethod
-        def _2T(a, b):
-            raise NotImplementedError("T.DIST.2T() not implemented yet")
+        def _2T(x, degrees_freedom):
+            raise NotImplementedError("T_STAT.DIST.2T() not implemented yet")
 
         @staticmethod
-        def RT(a, b):
-            raise NotImplementedError("T.DIST.RT() not implemented yet")
+        def RT(x, degrees_freedom):
+            raise NotImplementedError("T_STAT.DIST.RT() not implemented yet")
 
     class INV:
-        def __new__(cls, a, b):
-            raise NotImplementedError("T.INV() not implemented yet")
+        def __new__(cls, probability, degrees_freedom):
+            raise NotImplementedError("T_STAT.INV() not implemented yet")
 
         @staticmethod
-        def _2T(a, b):
-            raise NotImplementedError("T.INV.2T() not implemented yet")
+        def _2T(probability, degrees_freedom):
+            raise NotImplementedError("T_STAT.INV.2T() not implemented yet")
 
     @staticmethod
-    def TEST(a, b):
-        raise NotImplementedError("T.TEST() not implemented yet")
+    def TEST(range1, range2, tails, type_):
+        raise NotImplementedError("T_STAT.TEST() not implemented yet")
 
 
-def TDIST(a, b):
+def TDIST(x, degrees_freedom, tails):
     raise NotImplementedError("TDIST() not implemented yet")
 
 
-def TINV(a, b):
+def TINV(probability, degrees_freedom):
     raise NotImplementedError("TINV() not implemented yet")
 
 
-def TRIMMEAN(a, b):
-    raise NotImplementedError("TRIMMEAN() not implemented yet")
+def TRIMMEAN(data, percent):
+    lst = sorted(_numeric_filter(flatten_args(data)))
+    n = len(lst)
+    trim_count = int(n * percent / 2)
+    trimmed = lst[trim_count:n - trim_count]
+    return sum(trimmed) / len(trimmed)
 
 
-def TTEST(a, b):
+def TTEST(range1, range2, tails, type_):
     raise NotImplementedError("TTEST() not implemented yet")
 
 
 class VAR:
-    def __new__(cls, a, b):
-        raise NotImplementedError("VAR() not implemented yet")
+    def __new__(cls, *args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.variance(lst)
 
     @staticmethod
-    def P(a, b):
-        raise NotImplementedError("VAR.P() not implemented yet")
+    def P(*args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.pvariance(lst)
 
     @staticmethod
-    def S(a, b):
-        raise NotImplementedError("VAR.S() not implemented yet")
+    def S(*args):
+        lst = _numeric_filter(flatten_args(*args))
+        return statistics.variance(lst)
 
 
-def VARA(a, b):
-    raise NotImplementedError("VARA() not implemented yet")
+def VARA(*args):
+    lst = flatten_args(*args)
+    converted = []
+    for v in lst:
+        if v == EmptyCell:
+            continue
+        if isinstance(v, bool):
+            converted.append(int(v))
+        elif isinstance(v, (int, float)):
+            converted.append(v)
+        elif isinstance(v, str):
+            converted.append(0)
+    return statistics.variance(converted)
 
 
-def VARP(a, b):
-    raise NotImplementedError("VARP() not implemented yet")
+def VARP(*args):
+    lst = _numeric_filter(flatten_args(*args))
+    return statistics.pvariance(lst)
 
 
-def VARPA(a, b):
-    raise NotImplementedError("VARPA() not implemented yet")
+def VARPA(*args):
+    lst = flatten_args(*args)
+    converted = []
+    for v in lst:
+        if v == EmptyCell:
+            continue
+        if isinstance(v, bool):
+            converted.append(int(v))
+        elif isinstance(v, (int, float)):
+            converted.append(v)
+        elif isinstance(v, str):
+            converted.append(0)
+    return statistics.pvariance(converted)
 
 
 class WEIBULL:
-    def __new__(cls, a, b):
+    def __new__(cls, x, alpha, beta, cumulative):
         raise NotImplementedError("WEIBULL() not implemented yet")
 
     @staticmethod
-    def DIST(a, b):
+    def DIST(x, alpha, beta, cumulative):
         raise NotImplementedError("WEIBULL.DIST() not implemented yet")
 
 
 class Z:
     @staticmethod
-    def TEST(a, b):
+    def TEST(array, x, sigma=None):
         raise NotImplementedError("Z.TEST() not implemented yet")
 
 
-def ZTEST(a, b):
+def ZTEST(array, x, sigma=None):
     raise NotImplementedError("ZTEST() not implemented yet")

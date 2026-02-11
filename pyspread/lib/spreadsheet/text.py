@@ -1,3 +1,10 @@
+import re
+
+try:
+    from pyspread.lib.pycellsheet import EmptyCell
+except ImportError:
+    from lib.pycellsheet import EmptyCell
+
 _TEXT_FUNCTIONS = [
     'ARABIC', 'ASC', 'CHAR', 'CLEAN', 'CODE', 'CONCATENATE', 'DOLLAR', 'EXACT', 'FIND', 'FINDB',
     'FIXED', 'JOIN', 'LEFT', 'LEFTB', 'LEN', 'LENB', 'LOWER', 'MID', 'MIDB', 'PROPER',
@@ -8,165 +15,328 @@ _TEXT_FUNCTIONS = [
 __all__ = _TEXT_FUNCTIONS + ["_TEXT_FUNCTIONS"]
 
 
-def ARABIC(a, b):
-    raise NotImplementedError("ARABIC() not implemented yet")
+_ROMAN_VALUES = {
+    'I': 1, 'V': 5, 'X': 10, 'L': 50,
+    'C': 100, 'D': 500, 'M': 1000
+}
+
+
+def ARABIC(roman_numeral):
+    text = str(roman_numeral).upper().strip()
+    if not text:
+        return 0
+    result = 0
+    prev = 0
+    for ch in reversed(text):
+        val = _ROMAN_VALUES.get(ch)
+        if val is None:
+            raise ValueError(f"Invalid Roman numeral character: {ch}")
+        if val < prev:
+            result -= val
+        else:
+            result += val
+        prev = val
+    return result
 
 
-def ASC(a, b):
-    raise NotImplementedError("ASC() not implemented yet")
+def ASC(text):
+    result = []
+    for ch in str(text):
+        code = ord(ch)
+        if 0xFF01 <= code <= 0xFF5E:
+            result.append(chr(code - 0xFEE0))
+        elif code == 0x3000:
+            result.append(' ')
+        else:
+            result.append(ch)
+    return ''.join(result)
 
 
-def CHAR(a, b):
-    raise NotImplementedError("CHAR() not implemented yet")
+def CHAR(number):
+    return chr(int(number))
 
 
-def CLEAN(a, b):
-    raise NotImplementedError("CLEAN() not implemented yet")
+def CLEAN(text):
+    return ''.join(ch for ch in str(text) if ch.isprintable())
 
 
-def CODE(a, b):
-    raise NotImplementedError("CODE() not implemented yet")
+def CODE(text):
+    s = str(text)
+    if not s:
+        raise ValueError("Empty string")
+    return ord(s[0])
 
 
-def CONCATENATE(a, b):
-    raise NotImplementedError("CONCATENATE() not implemented yet")
+def CONCATENATE(*args):
+    return ''.join(str(a) for a in args)
 
 
-def DOLLAR(a, b):
-    raise NotImplementedError("DOLLAR() not implemented yet")
+def DOLLAR(number, decimals=2):
+    if decimals >= 0:
+        formatted = f"{number:,.{decimals}f}"
+    else:
+        rounded = round(number, decimals)
+        formatted = f"{rounded:,.0f}"
+    return f"${formatted}"
 
 
-def EXACT(a, b):
-    raise NotImplementedError("EXACT() not implemented yet")
+def EXACT(string1, string2):
+    return str(string1) == str(string2)
 
 
-def FIND(a, b):
-    raise NotImplementedError("FIND() not implemented yet")
+def FIND(find_text, within_text, start_position=1):
+    s = str(within_text)
+    f = str(find_text)
+    pos = s.find(f, start_position - 1)
+    if pos == -1:
+        raise ValueError(f"'{find_text}' not found in '{within_text}'")
+    return pos + 1
 
 
-def FINDB(a, b):
-    raise NotImplementedError("FINDB() not implemented yet")
+def FINDB(find_text, within_text, start_position=1):
+    return FIND(find_text, within_text, start_position)
 
 
-def FIXED(a, b):
-    raise NotImplementedError("FIXED() not implemented yet")
+def FIXED(number, decimals=2, no_commas=False):
+    if decimals >= 0:
+        formatted = f"{number:.{decimals}f}"
+    else:
+        rounded = round(number, decimals)
+        formatted = f"{rounded:.0f}"
+    if not no_commas:
+        parts = formatted.split('.')
+        int_part = parts[0]
+        sign = ''
+        if int_part.startswith('-'):
+            sign = '-'
+            int_part = int_part[1:]
+        int_part = f"{int(int_part):,}"
+        parts[0] = sign + int_part
+        formatted = '.'.join(parts)
+    return formatted
 
 
-def JOIN(a, b):
-    raise NotImplementedError("JOIN() not implemented yet")
+def JOIN(delimiter, *args):
+    parts = []
+    for arg in args:
+        if isinstance(arg, (list, tuple)):
+            parts.extend(str(a) for a in arg)
+        else:
+            parts.append(str(arg))
+    return str(delimiter).join(parts)
 
 
-def LEFT(a, b):
-    raise NotImplementedError("LEFT() not implemented yet")
+def LEFT(text, num_chars=1):
+    return str(text)[:int(num_chars)]
 
 
-def LEFTB(a, b):
-    raise NotImplementedError("LEFTB() not implemented yet")
+def LEFTB(text, num_bytes=1):
+    return LEFT(text, num_bytes)
 
 
-def LEN(a, b):
-    raise NotImplementedError("LEN() not implemented yet")
+def LEN(text):
+    return len(str(text))
 
 
-def LENB(a, b):
-    raise NotImplementedError("LENB() not implemented yet")
+def LENB(text):
+    return len(str(text).encode('utf-8'))
 
 
-def LOWER(a, b):
-    raise NotImplementedError("LOWER() not implemented yet")
+def LOWER(text):
+    return str(text).lower()
 
 
-def MID(a, b):
-    raise NotImplementedError("MID() not implemented yet")
+def MID(text, start_position, num_chars):
+    s = str(text)
+    start = int(start_position) - 1
+    length = int(num_chars)
+    return s[start:start + length]
 
 
-def MIDB(a, b):
-    raise NotImplementedError("MIDB() not implemented yet")
+def MIDB(text, start_position, num_bytes):
+    return MID(text, start_position, num_bytes)
 
 
-def PROPER(a, b):
-    raise NotImplementedError("PROPER() not implemented yet")
+def PROPER(text):
+    return str(text).title()
 
 
-def REGEXEXTRACT(a, b):
-    raise NotImplementedError("REGEXEXTRACT() not implemented yet")
+def REGEXEXTRACT(text, regular_expression):
+    match = re.search(regular_expression, str(text))
+    if match is None:
+        raise ValueError(f"No match found for pattern '{regular_expression}'")
+    if match.groups():
+        return match.group(1)
+    return match.group(0)
 
 
-def REGEXMATCH(a, b):
-    raise NotImplementedError("REGEXMATCH() not implemented yet")
+def REGEXMATCH(text, regular_expression):
+    return bool(re.search(regular_expression, str(text)))
 
 
-def REGEXREPLACE(a, b):
-    raise NotImplementedError("REGEXREPLACE() not implemented yet")
+def REGEXREPLACE(text, regular_expression, replacement):
+    return re.sub(regular_expression, replacement, str(text))
 
 
-def REPLACE(a, b):
-    raise NotImplementedError("REPLACE() not implemented yet")
+def REPLACE(text, position, length, new_text):
+    s = str(text)
+    pos = int(position) - 1
+    ln = int(length)
+    return s[:pos] + str(new_text) + s[pos + ln:]
 
 
-def REPLACEB(a, b):
-    raise NotImplementedError("REPLACEB() not implemented yet")
+def REPLACEB(text, position, num_bytes, new_text):
+    return REPLACE(text, position, num_bytes, new_text)
 
 
-def REPT(a, b):
-    raise NotImplementedError("REPT() not implemented yet")
+def REPT(text, number_times):
+    return str(text) * int(number_times)
 
 
-def RIGHT(a, b):
-    raise NotImplementedError("RIGHT() not implemented yet")
+def RIGHT(text, num_chars=1):
+    s = str(text)
+    n = int(num_chars)
+    if n == 0:
+        return ''
+    return s[-n:]
 
 
-def RIGHTB(a, b):
-    raise NotImplementedError("RIGHTB() not implemented yet")
+def RIGHTB(text, num_bytes=1):
+    return RIGHT(text, num_bytes)
 
 
-def ROMAN(a, b):
-    raise NotImplementedError("ROMAN() not implemented yet")
+def ROMAN(number):
+    number = int(number)
+    if number <= 0 or number >= 4000:
+        raise ValueError("Number must be between 1 and 3999")
+    values = [
+        (1000, 'M'), (900, 'CM'), (500, 'D'), (400, 'CD'),
+        (100, 'C'), (90, 'XC'), (50, 'L'), (40, 'XL'),
+        (10, 'X'), (9, 'IX'), (5, 'V'), (4, 'IV'), (1, 'I')
+    ]
+    result = []
+    for val, numeral in values:
+        while number >= val:
+            result.append(numeral)
+            number -= val
+    return ''.join(result)
 
 
-def SEARCH(a, b):
-    raise NotImplementedError("SEARCH() not implemented yet")
+def SEARCH(find_text, within_text, start_position=1):
+    s = str(within_text).lower()
+    f = str(find_text).lower()
+    pos = s.find(f, start_position - 1)
+    if pos == -1:
+        raise ValueError(f"'{find_text}' not found in '{within_text}'")
+    return pos + 1
 
 
-def SEARCHB(a, b):
-    raise NotImplementedError("SEARCHB() not implemented yet")
+def SEARCHB(find_text, within_text, start_position=1):
+    return SEARCH(find_text, within_text, start_position)
 
 
-def SPLIT(a, b):
-    raise NotImplementedError("SPLIT() not implemented yet")
+def SPLIT(text, delimiter, split_by_each=True, remove_empty=True):
+    s = str(text)
+    if split_by_each:
+        pattern = '[' + re.escape(str(delimiter)) + ']'
+        parts = re.split(pattern, s)
+    else:
+        parts = s.split(str(delimiter))
+    if remove_empty:
+        parts = [p for p in parts if p]
+    return parts
 
 
-def SUBSTITUTE(a, b):
-    raise NotImplementedError("SUBSTITUTE() not implemented yet")
+def SUBSTITUTE(text, old_text, new_text, instance_num=None):
+    s = str(text)
+    old = str(old_text)
+    new = str(new_text)
+    if instance_num is None:
+        return s.replace(old, new)
+    count = 0
+    start = 0
+    while True:
+        pos = s.find(old, start)
+        if pos == -1:
+            break
+        count += 1
+        if count == instance_num:
+            return s[:pos] + new + s[pos + len(old):]
+        start = pos + 1
+    return s
 
 
-def T_TEXT(a, b):
-    raise NotImplementedError("T_TEXT() not implemented yet")
+def T_TEXT(value):
+    if isinstance(value, str):
+        return value
+    return ""
 
 
-def TEXT(a, b):
-    raise NotImplementedError("TEXT() not implemented yet")
+def TEXT(number, format_string):
+    fmt = str(format_string)
+    if fmt == '0':
+        return f"{number:.0f}"
+    if fmt == '0.00':
+        return f"{number:.2f}"
+    if fmt == '#,##0':
+        return f"{number:,.0f}"
+    if fmt == '#,##0.00':
+        return f"{number:,.2f}"
+    if fmt == '0%':
+        return f"{number * 100:.0f}%"
+    if fmt == '0.00%':
+        return f"{number * 100:.2f}%"
+    try:
+        return format(number, fmt)
+    except (ValueError, TypeError):
+        return str(number)
 
 
-def TEXTJOIN(a, b):
-    raise NotImplementedError("TEXTJOIN() not implemented yet")
+def TEXTJOIN(delimiter, ignore_empty, *args):
+    parts = []
+    for arg in args:
+        if isinstance(arg, (list, tuple)):
+            for item in arg:
+                if ignore_empty and (item == EmptyCell or item == '' or item is None):
+                    continue
+                parts.append(str(item))
+        else:
+            if ignore_empty and (arg == EmptyCell or arg == '' or arg is None):
+                continue
+            parts.append(str(arg))
+    return str(delimiter).join(parts)
 
 
-def TRIM(a, b):
-    raise NotImplementedError("TRIM() not implemented yet")
+def TRIM(text):
+    return ' '.join(str(text).split())
 
 
-def UNICHAR(a, b):
-    raise NotImplementedError("UNICHAR() not implemented yet")
+def UNICHAR(number):
+    return chr(int(number))
 
 
-def UNICODE(a, b):
-    raise NotImplementedError("UNICODE() not implemented yet")
+def UNICODE(text):
+    s = str(text)
+    if not s:
+        raise ValueError("Empty string")
+    return ord(s[0])
 
 
-def UPPER(a, b):
-    raise NotImplementedError("UPPER() not implemented yet")
+def UPPER(text):
+    return str(text).upper()
 
 
-def VALUE(a, b):
-    raise NotImplementedError("VALUE() not implemented yet")
+def VALUE(text):
+    s = str(text).strip()
+    has_percent = '%' in s
+    s = s.replace('$', '').replace(',', '').replace('%', '')
+    try:
+        if '.' in s:
+            result = float(s)
+        else:
+            result = int(s)
+    except ValueError:
+        raise ValueError(f"Cannot convert '{text}' to a number")
+    if has_percent:
+        result = result / 100
+    return result

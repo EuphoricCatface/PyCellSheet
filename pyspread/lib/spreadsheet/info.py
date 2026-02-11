@@ -1,3 +1,13 @@
+import re
+from datetime import date, datetime, time
+
+try:
+    from pyspread.lib.pycellsheet import EmptyCell
+    from pyspread.lib.spreadsheet.errors import SpreadsheetErrorNa
+except ImportError:
+    from lib.pycellsheet import EmptyCell
+    from lib.spreadsheet.errors import SpreadsheetErrorNa
+
 _INFO_FUNCTIONS = [
     'ERROR', 'ISBLANK', 'ISDATE', 'ISEMAIL', 'ISERR', 'ISERROR', 'ISFORMULA', 'ISLOGICAL',
     'ISNA', 'ISNONTEXT', 'ISNUMBER', 'ISREF', 'ISTEXT', 'N', 'NA', 'TYPE', 'CELL'
@@ -7,69 +17,87 @@ __all__ = _INFO_FUNCTIONS + ["_INFO_FUNCTIONS"]
 
 class ERROR:
     @staticmethod
-    def TYPE(a, b):
+    def TYPE(error_val):
         raise NotImplementedError("ERROR.TYPE() not implemented yet")
 
 
-def ISBLANK(a, b):
-    raise NotImplementedError("ISBLANK() not implemented yet")
+def ISBLANK(value):
+    return value == EmptyCell or value is None
 
 
-def ISDATE(a, b):
-    raise NotImplementedError("ISDATE() not implemented yet")
+def ISDATE(value):
+    return isinstance(value, (date, datetime, time))
 
 
-def ISEMAIL(a, b):
-    raise NotImplementedError("ISEMAIL() not implemented yet")
+def ISEMAIL(value):
+    if not isinstance(value, str):
+        return False
+    return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', value))
 
 
-def ISERR(a, b):
-    raise NotImplementedError("ISERR() not implemented yet")
+def ISERR(value):
+    return isinstance(value, Exception) and not isinstance(value, SpreadsheetErrorNa)
 
 
-def ISERROR(a, b):
-    raise NotImplementedError("ISERROR() not implemented yet")
+def ISERROR(value):
+    return isinstance(value, Exception)
 
 
-def ISFORMULA(a, b):
-    raise NotImplementedError("ISFORMULA() not implemented yet")
+def ISFORMULA(cell_reference):
+    # Requires evaluation engine context
+    raise NotImplementedError("ISFORMULA() requires evaluation engine support")
 
 
-def ISLOGICAL(a, b):
-    raise NotImplementedError("ISLOGICAL() not implemented yet")
+def ISLOGICAL(value):
+    return isinstance(value, bool)
 
 
-def ISNA(a, b):
-    raise NotImplementedError("ISNA() not implemented yet")
+def ISNA(value):
+    return isinstance(value, SpreadsheetErrorNa)
 
 
-def ISNONTEXT(a, b):
-    raise NotImplementedError("ISNONTEXT() not implemented yet")
+def ISNONTEXT(value):
+    return not isinstance(value, str)
 
 
-def ISNUMBER(a, b):
-    raise NotImplementedError("ISNUMBER() not implemented yet")
+def ISNUMBER(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value != EmptyCell
 
 
-def ISREF(a, b):
-    raise NotImplementedError("ISREF() not implemented yet")
+def ISREF(value):
+    raise NotImplementedError("ISREF() requires evaluation engine support")
 
 
-def ISTEXT(a, b):
-    raise NotImplementedError("ISTEXT() not implemented yet")
+def ISTEXT(value):
+    return isinstance(value, str)
 
 
-def N(a, b):
-    raise NotImplementedError("N() not implemented yet")
+def N(value):
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return value
+    return 0
 
 
-def NA(a, b):
-    raise NotImplementedError("NA() not implemented yet")
+def NA():
+    raise SpreadsheetErrorNa()
 
 
-def TYPE(a, b):
-    raise NotImplementedError("TYPE() not implemented yet")
+def TYPE(value):
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return 1
+    if isinstance(value, str):
+        return 2
+    if isinstance(value, bool):
+        return 4
+    if isinstance(value, Exception):
+        return 16
+    if isinstance(value, (list, tuple)):
+        return 64
+    return 1
 
 
-def CELL(a, b):
-    raise NotImplementedError("CELL() not implemented yet")
+def CELL(info_type, reference):
+    # Requires evaluation engine context
+    raise NotImplementedError("CELL() requires evaluation engine support")
