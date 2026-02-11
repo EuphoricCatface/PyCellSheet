@@ -1,4 +1,9 @@
 try:
+    import numpy as np
+except ImportError:
+    np = None
+
+try:
     from pyspread.lib.pycellsheet import Range, RangeOutput, flatten_args
 except ImportError:
     from lib.pycellsheet import Range, RangeOutput, flatten_args
@@ -53,7 +58,40 @@ def FREQUENCY(data, bins):
 
 
 def GROWTH(known_ys, known_xs=None, new_xs=None, const=True):
-    raise NotImplementedError("GROWTH() not implemented yet")
+    """Calculate values along an exponential trend."""
+    if np is None:
+        raise NotImplementedError("Install `numpy` python package to use GROWTH")
+
+    y = np.array(flatten_args(known_ys))
+    log_y = np.log(y)
+
+    if known_xs is None:
+        x = np.arange(1, len(y) + 1)
+    else:
+        x = np.array(flatten_args(known_xs))
+
+    if const:
+        X = np.column_stack([x, np.ones(len(x))])
+    else:
+        X = x.reshape(-1, 1)
+
+    # Calculate regression coefficients on log scale
+    coeffs, residuals, rank, s = np.linalg.lstsq(X, log_y, rcond=None)
+
+    # Predict for new_xs or original xs
+    if new_xs is None:
+        new_x = x
+    else:
+        new_x = np.array(flatten_args(new_xs))
+
+    if const:
+        X_new = np.column_stack([new_x, np.ones(len(new_x))])
+    else:
+        X_new = new_x.reshape(-1, 1)
+
+    log_predictions = X_new @ coeffs
+    predictions = np.exp(log_predictions)
+    return list(predictions)
 
 
 def HSTACK(*arrays):
@@ -61,11 +99,83 @@ def HSTACK(*arrays):
 
 
 def LINEST(known_ys, known_xs=None, const=True, stats=False):
-    raise NotImplementedError("LINEST() not implemented yet")
+    """Calculate linear regression parameters."""
+    if np is None:
+        raise NotImplementedError("Install `numpy` python package to use LINEST")
+
+    y = np.array(flatten_args(known_ys))
+
+    if known_xs is None:
+        x = np.arange(1, len(y) + 1)
+    else:
+        x = np.array(flatten_args(known_xs))
+
+    if const:
+        # Add intercept term
+        X = np.column_stack([x, np.ones(len(x))])
+    else:
+        X = x.reshape(-1, 1)
+
+    # Solve using least squares
+    coeffs, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
+
+    if stats:
+        # Return extended statistics (simplified)
+        n = len(y)
+        k = len(coeffs)
+        y_pred = X @ coeffs
+        sse = np.sum((y - y_pred) ** 2)
+        sst = np.sum((y - np.mean(y)) ** 2)
+        r_squared = 1 - sse / sst if sst != 0 else 0
+        se = np.sqrt(sse / (n - k)) if n > k else 0
+
+        # Return as flat list: [coeffs..., intercept, se, r_squared, ...]
+        result = list(coeffs) + [se, r_squared]
+        return result
+    else:
+        return list(coeffs)
 
 
 def LOGEST(known_ys, known_xs=None, const=True, stats=False):
-    raise NotImplementedError("LOGEST() not implemented yet")
+    """Calculate exponential regression parameters."""
+    if np is None:
+        raise NotImplementedError("Install `numpy` python package to use LOGEST")
+
+    y = np.array(flatten_args(known_ys))
+
+    # Take log of y values for exponential fit
+    log_y = np.log(y)
+
+    if known_xs is None:
+        x = np.arange(1, len(y) + 1)
+    else:
+        x = np.array(flatten_args(known_xs))
+
+    if const:
+        X = np.column_stack([x, np.ones(len(x))])
+    else:
+        X = x.reshape(-1, 1)
+
+    # Solve using least squares
+    coeffs, residuals, rank, s = np.linalg.lstsq(X, log_y, rcond=None)
+
+    # Convert coefficients back to exponential form
+    exp_coeffs = [np.exp(c) for c in coeffs]
+
+    if stats:
+        # Return extended statistics (simplified)
+        n = len(y)
+        k = len(coeffs)
+        log_y_pred = X @ coeffs
+        sse = np.sum((log_y - log_y_pred) ** 2)
+        sst = np.sum((log_y - np.mean(log_y)) ** 2)
+        r_squared = 1 - sse / sst if sst != 0 else 0
+        se = np.sqrt(sse / (n - k)) if n > k else 0
+
+        result = exp_coeffs + [se, r_squared]
+        return result
+    else:
+        return exp_coeffs
 
 
 def MAKEARRAY(rows, cols, func):
@@ -77,15 +187,62 @@ def MAP(array, func):
 
 
 def MDETERM(matrix: Range):
-    raise NotImplementedError("MDETERM() not implemented yet")
+    """Calculate the determinant of a matrix."""
+    if np is None:
+        raise NotImplementedError("Install `numpy` python package to use MDETERM")
+
+    # Convert Range to numpy array
+    rows = len(matrix)
+    cols = matrix.width
+    arr = np.array([[matrix[r][c] for c in range(cols)] for r in range(rows)])
+
+    return float(np.linalg.det(arr))
 
 
 def MINVERSE(matrix: Range):
-    raise NotImplementedError("MINVERSE() not implemented yet")
+    """Calculate the inverse of a matrix."""
+    if np is None:
+        raise NotImplementedError("Install `numpy` python package to use MINVERSE")
+
+    # Convert Range to numpy array
+    rows = len(matrix)
+    cols = matrix.width
+    arr = np.array([[matrix[r][c] for c in range(cols)] for r in range(rows)])
+
+    inv = np.linalg.inv(arr)
+
+    # Convert back to flat list for RangeOutput
+    result = []
+    for r in range(inv.shape[0]):
+        for c in range(inv.shape[1]):
+            result.append(float(inv[r, c]))
+
+    return RangeOutput(inv.shape[0], result)
 
 
 def MMULT(matrix1: Range, matrix2: Range):
-    raise NotImplementedError("MMULT() not implemented yet")
+    """Multiply two matrices."""
+    if np is None:
+        raise NotImplementedError("Install `numpy` python package to use MMULT")
+
+    # Convert ranges to numpy arrays
+    rows1 = len(matrix1)
+    cols1 = matrix1.width
+    arr1 = np.array([[matrix1[r][c] for c in range(cols1)] for r in range(rows1)])
+
+    rows2 = len(matrix2)
+    cols2 = matrix2.width
+    arr2 = np.array([[matrix2[r][c] for c in range(cols2)] for r in range(rows2)])
+
+    result_arr = np.matmul(arr1, arr2)
+
+    # Convert back to flat list for RangeOutput
+    result = []
+    for r in range(result_arr.shape[0]):
+        for c in range(result_arr.shape[1]):
+            result.append(float(result_arr[r, c]))
+
+    return RangeOutput(result_arr.shape[0], result)
 
 
 def REDUCE(initial_value, array, func):
@@ -148,7 +305,38 @@ def TRANSPOSE(array: Range):
 
 
 def TREND(known_ys, known_xs=None, new_xs=None, const=True):
-    raise NotImplementedError("TREND() not implemented yet")
+    """Calculate values along a linear trend."""
+    if np is None:
+        raise NotImplementedError("Install `numpy` python package to use TREND")
+
+    y = np.array(flatten_args(known_ys))
+
+    if known_xs is None:
+        x = np.arange(1, len(y) + 1)
+    else:
+        x = np.array(flatten_args(known_xs))
+
+    if const:
+        X = np.column_stack([x, np.ones(len(x))])
+    else:
+        X = x.reshape(-1, 1)
+
+    # Calculate regression coefficients
+    coeffs, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
+
+    # Predict for new_xs or original xs
+    if new_xs is None:
+        new_x = x
+    else:
+        new_x = np.array(flatten_args(new_xs))
+
+    if const:
+        X_new = np.column_stack([new_x, np.ones(len(new_x))])
+    else:
+        X_new = new_x.reshape(-1, 1)
+
+    predictions = X_new @ coeffs
+    return list(predictions)
 
 
 def VSTACK(*arrays):

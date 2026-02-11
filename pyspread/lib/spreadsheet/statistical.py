@@ -2,6 +2,11 @@ import math
 import statistics
 
 try:
+    from scipy import stats as scipy_stats
+except ImportError:
+    scipy_stats = None
+
+try:
     from pyspread.lib.pycellsheet import EmptyCell, Range, flatten_args
 except ImportError:
     from lib.pycellsheet import EmptyCell, Range, flatten_args
@@ -103,80 +108,123 @@ def AVERAGEIFS(average_range: Range, *criteria_pairs):
 class BETA:
     @staticmethod
     def DIST(x, alpha, beta, cumulative=True):
-        raise NotImplementedError("BETA.DIST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use BETA.DIST")
+        if cumulative:
+            return scipy_stats.beta.cdf(x, alpha, beta)
+        return scipy_stats.beta.pdf(x, alpha, beta)
 
     @staticmethod
     def INV(probability, alpha, beta):
-        raise NotImplementedError("BETA.INV() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use BETA.INV")
+        return scipy_stats.beta.ppf(probability, alpha, beta)
 
 
 def BETADIST(x, alpha, beta):
-    raise NotImplementedError("BETADIST() not implemented yet")
+    return BETA.DIST(x, alpha, beta, cumulative=True)
 
 
 def BETAINV(probability, alpha, beta):
-    raise NotImplementedError("BETAINV() not implemented yet")
+    return BETA.INV(probability, alpha, beta)
 
 
 class BINOM:
     @staticmethod
     def DIST(number_s, trials, probability_s, cumulative):
-        raise NotImplementedError("BINOM.DIST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use BINOM.DIST")
+        k = int(number_s)
+        n = int(trials)
+        p = float(probability_s)
+        if cumulative:
+            return scipy_stats.binom.cdf(k, n, p)
+        return scipy_stats.binom.pmf(k, n, p)
 
     @staticmethod
     def INV(trials, probability_s, alpha):
-        raise NotImplementedError("BINOM.INV() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use BINOM.INV")
+        n = int(trials)
+        p = float(probability_s)
+        return scipy_stats.binom.ppf(alpha, n, p)
 
 
 def BINOMDIST(number_s, trials, probability_s, cumulative):
-    raise NotImplementedError("BINOMDIST() not implemented yet")
+    return BINOM.DIST(number_s, trials, probability_s, cumulative)
 
 
 def CHIDIST(x, degrees_freedom):
-    raise NotImplementedError("CHIDIST() not implemented yet")
+    if scipy_stats is None:
+        raise NotImplementedError("Install `scipy` python package to use CHIDIST")
+    return scipy_stats.chi2.sf(x, degrees_freedom)
 
 
 def CHIINV(probability, degrees_freedom):
-    raise NotImplementedError("CHIINV() not implemented yet")
+    if scipy_stats is None:
+        raise NotImplementedError("Install `scipy` python package to use CHIINV")
+    return scipy_stats.chi2.isf(probability, degrees_freedom)
 
 
 class CHISQ:
     class DIST:
         def __new__(cls, x, degrees_freedom, cumulative):
-            raise NotImplementedError("CHISQ.DIST() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use CHISQ.DIST")
+            if cumulative:
+                return scipy_stats.chi2.cdf(x, degrees_freedom)
+            return scipy_stats.chi2.pdf(x, degrees_freedom)
 
         @staticmethod
         def RT(x, degrees_freedom):
-            raise NotImplementedError("CHISQ.DIST.RT() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use CHISQ.DIST.RT")
+            return scipy_stats.chi2.sf(x, degrees_freedom)
 
     class INV:
         def __new__(cls, probability, degrees_freedom):
-            raise NotImplementedError("CHISQ.INV() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use CHISQ.INV")
+            return scipy_stats.chi2.ppf(probability, degrees_freedom)
 
         @staticmethod
         def RT(probability, degrees_freedom):
-            raise NotImplementedError("CHISQ.INV.RT() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use CHISQ.INV.RT")
+            return scipy_stats.chi2.isf(probability, degrees_freedom)
 
     @staticmethod
     def TEST(actual_range, expected_range):
-        raise NotImplementedError("CHISQ.TEST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use CHISQ.TEST")
+        actual = flatten_args(actual_range)
+        expected = flatten_args(expected_range)
+        chi2_stat = sum((a - e) ** 2 / e for a, e in zip(actual, expected))
+        df = len(actual) - 1
+        return scipy_stats.chi2.sf(chi2_stat, df)
 
 
 def CHITEST(actual_range, expected_range):
-    raise NotImplementedError("CHITEST() not implemented yet")
+    return CHISQ.TEST(actual_range, expected_range)
 
 
 class CONFIDENCE:
     def __new__(cls, alpha, standard_dev, size):
-        raise NotImplementedError("CONFIDENCE() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use CONFIDENCE")
+        z = scipy_stats.norm.ppf(1 - alpha / 2)
+        return z * standard_dev / math.sqrt(size)
 
     @staticmethod
     def NORM(alpha, standard_dev, size):
-        raise NotImplementedError("CONFIDENCE.NORM() not implemented yet")
+        return CONFIDENCE.__new__(CONFIDENCE, alpha, standard_dev, size)
 
     @staticmethod
     def T(alpha, standard_dev, size):
-        raise NotImplementedError("CONFIDENCE.T() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use CONFIDENCE.T")
+        t_val = scipy_stats.t.ppf(1 - alpha / 2, size - 1)
+        return t_val * standard_dev / math.sqrt(size)
 
 
 def CORREL(data_y, data_x):
@@ -219,7 +267,9 @@ class COVARIANCE:
 
 
 def CRITBINOM(trials, probability_s, alpha):
-    raise NotImplementedError("CRITBINOM() not implemented yet")
+    if scipy_stats is None:
+        raise NotImplementedError("Install `scipy` python package to use CRITBINOM")
+    return scipy_stats.binom.ppf(alpha, int(trials), float(probability_s))
 
 
 def DEVSQ(*args):
@@ -231,41 +281,64 @@ def DEVSQ(*args):
 class EXPON:
     @staticmethod
     def DIST(x, _lambda, cumulative):
-        raise NotImplementedError("EXPON.DIST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use EXPON.DIST")
+        if cumulative:
+            return scipy_stats.expon.cdf(x, scale=1/_lambda)
+        return scipy_stats.expon.pdf(x, scale=1/_lambda)
 
 
 def EXPONDIST(x, _lambda, cumulative):
-    raise NotImplementedError("EXPONDIST() not implemented yet")
+    return EXPON.DIST(x, _lambda, cumulative)
 
 
 class F:
     class DIST:
         def __new__(cls, x, deg_freedom1, deg_freedom2, cumulative):
-            raise NotImplementedError("F.DIST() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use F.DIST")
+            if cumulative:
+                return scipy_stats.f.cdf(x, deg_freedom1, deg_freedom2)
+            return scipy_stats.f.pdf(x, deg_freedom1, deg_freedom2)
 
         @staticmethod
         def RT(x, deg_freedom1, deg_freedom2):
-            raise NotImplementedError("F.DIST.RT() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use F.DIST.RT")
+            return scipy_stats.f.sf(x, deg_freedom1, deg_freedom2)
 
     class INV:
         def __new__(cls, probability, deg_freedom1, deg_freedom2):
-            raise NotImplementedError("F.INV() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use F.INV")
+            return scipy_stats.f.ppf(probability, deg_freedom1, deg_freedom2)
 
         @staticmethod
         def RT(probability, deg_freedom1, deg_freedom2):
-            raise NotImplementedError("F.INV.RT() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use F.INV.RT")
+            return scipy_stats.f.isf(probability, deg_freedom1, deg_freedom2)
 
     @staticmethod
     def TEST(array1, array2):
-        raise NotImplementedError("F.TEST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use F.TEST")
+        arr1 = _numeric_filter(flatten_args(array1))
+        arr2 = _numeric_filter(flatten_args(array2))
+        var1 = statistics.variance(arr1)
+        var2 = statistics.variance(arr2)
+        f_stat = var1 / var2 if var1 > var2 else var2 / var1
+        df1 = len(arr1) - 1 if var1 > var2 else len(arr2) - 1
+        df2 = len(arr2) - 1 if var1 > var2 else len(arr1) - 1
+        return 2 * min(scipy_stats.f.cdf(f_stat, df1, df2), scipy_stats.f.sf(f_stat, df1, df2))
 
 
 def FDIST(x, deg_freedom1, deg_freedom2):
-    raise NotImplementedError("FDIST() not implemented yet")
+    return F.DIST.RT(x, deg_freedom1, deg_freedom2)
 
 
 def FINV(probability, deg_freedom1, deg_freedom2):
-    raise NotImplementedError("FINV() not implemented yet")
+    return F.INV.RT(probability, deg_freedom1, deg_freedom2)
 
 
 def FISHER(x):
@@ -296,7 +369,7 @@ class FORECAST:
 
 
 def FTEST(array1, array2):
-    raise NotImplementedError("FTEST() not implemented yet")
+    return F.TEST(array1, array2)
 
 
 class GAMMA:
@@ -305,19 +378,25 @@ class GAMMA:
 
     @staticmethod
     def DIST(x, alpha, beta, cumulative):
-        raise NotImplementedError("GAMMA.DIST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use GAMMA.DIST")
+        if cumulative:
+            return scipy_stats.gamma.cdf(x, alpha, scale=beta)
+        return scipy_stats.gamma.pdf(x, alpha, scale=beta)
 
     @staticmethod
     def INV(probability, alpha, beta):
-        raise NotImplementedError("GAMMA.INV() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use GAMMA.INV")
+        return scipy_stats.gamma.ppf(probability, alpha, scale=beta)
 
 
 def GAMMADIST(x, alpha, beta, cumulative):
-    raise NotImplementedError("GAMMADIST() not implemented yet")
+    return GAMMA.DIST(x, alpha, beta, cumulative)
 
 
 def GAMMAINV(probability, alpha, beta):
-    raise NotImplementedError("GAMMAINV() not implemented yet")
+    return GAMMA.INV(probability, alpha, beta)
 
 
 def GAUSS(z):
@@ -337,11 +416,15 @@ def HARMEAN(*args):
 class HYPGEOM:
     @staticmethod
     def DIST(sample_s, number_sample, population_s, number_pop, cumulative):
-        raise NotImplementedError("HYPGEOM.DIST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use HYPGEOM.DIST")
+        if cumulative:
+            return scipy_stats.hypergeom.cdf(sample_s, number_pop, population_s, number_sample)
+        return scipy_stats.hypergeom.pmf(sample_s, number_pop, population_s, number_sample)
 
 
 def HYPGEOMDIST(sample_s, number_sample, population_s, number_pop):
-    raise NotImplementedError("HYPGEOMDIST() not implemented yet")
+    return HYPGEOM.DIST(sample_s, number_sample, population_s, number_pop, cumulative=False)
 
 
 def INTERCEPT(known_ys, known_xs):
@@ -373,21 +456,29 @@ def LARGE(data, k):
 
 
 def LOGINV(probability, mean, standard_dev):
-    raise NotImplementedError("LOGINV() not implemented yet")
+    if scipy_stats is None:
+        raise NotImplementedError("Install `scipy` python package to use LOGINV")
+    return scipy_stats.lognorm.ppf(probability, standard_dev, scale=math.exp(mean))
 
 
 class LOGNORM:
     @staticmethod
     def DIST(x, mean, standard_dev, cumulative):
-        raise NotImplementedError("LOGNORM.DIST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use LOGNORM.DIST")
+        if cumulative:
+            return scipy_stats.lognorm.cdf(x, standard_dev, scale=math.exp(mean))
+        return scipy_stats.lognorm.pdf(x, standard_dev, scale=math.exp(mean))
 
     @staticmethod
     def INV(probability, mean, standard_dev):
-        raise NotImplementedError("LOGNORM.INV() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use LOGNORM.INV")
+        return scipy_stats.lognorm.ppf(probability, standard_dev, scale=math.exp(mean))
 
 
 def LOGNORMDIST(x, mean, standard_dev):
-    raise NotImplementedError("LOGNORMDIST() not implemented yet")
+    return LOGNORM.DIST(x, mean, standard_dev, cumulative=True)
 
 
 def MARGINOFERROR(confidence_level, standard_dev, size):
@@ -496,11 +587,15 @@ class MODE:
 class NEGBINOM:
     @staticmethod
     def DIST(number_f, number_s, probability_s, cumulative):
-        raise NotImplementedError("NEGBINOM.DIST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use NEGBINOM.DIST")
+        if cumulative:
+            return scipy_stats.nbinom.cdf(number_f, number_s, probability_s)
+        return scipy_stats.nbinom.pmf(number_f, number_s, probability_s)
 
 
 def NEGBINOMDIST(number_f, number_s, probability_s):
-    raise NotImplementedError("NEGBINOMDIST() not implemented yet")
+    return NEGBINOM.DIST(number_f, number_s, probability_s, cumulative=False)
 
 
 class NORM:
@@ -598,7 +693,19 @@ class PERCENTRANK:
 
     @staticmethod
     def EXC(data, x, significance=3):
-        raise NotImplementedError("PERCENTRANK.EXC() not implemented yet")
+        lst = sorted(_numeric_filter(flatten_args(data)))
+        n = len(lst)
+        if x < lst[0] or x > lst[-1]:
+            raise ValueError("x is outside the data range")
+        for i in range(n - 1):
+            if lst[i] <= x <= lst[i + 1]:
+                if lst[i] == lst[i + 1]:
+                    frac_rank = (i + 1) / (n + 1)
+                else:
+                    frac_rank = ((i + 1) + (x - lst[i]) / (lst[i + 1] - lst[i])) / (n + 1)
+                factor = 10 ** significance
+                return int(frac_rank * factor) / factor
+        return n / (n + 1)
 
     @staticmethod
     def INC(data, x, significance=3):
@@ -619,11 +726,16 @@ def PHI(x):
 
 class POISSON:
     def __new__(cls, x, mean, cumulative):
-        raise NotImplementedError("POISSON() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use POISSON")
+        k = int(x)
+        if cumulative:
+            return scipy_stats.poisson.cdf(k, mean)
+        return scipy_stats.poisson.pmf(k, mean)
 
     @staticmethod
     def DIST(x, mean, cumulative):
-        raise NotImplementedError("POISSON.DIST() not implemented yet")
+        return POISSON.__new__(POISSON, x, mean, cumulative)
 
 
 def PROB(x_range, prob_range, lower_limit, upper_limit=None):
@@ -782,35 +894,73 @@ def STEYX(known_ys, known_xs):
 class T_STAT:
     class DIST:
         def __new__(cls, x, degrees_freedom, cumulative):
-            raise NotImplementedError("T_STAT.DIST() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use T_STAT.DIST")
+            if cumulative:
+                return scipy_stats.t.cdf(x, degrees_freedom)
+            return scipy_stats.t.pdf(x, degrees_freedom)
 
         @staticmethod
         def _2T(x, degrees_freedom):
-            raise NotImplementedError("T_STAT.DIST.2T() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use T_STAT.DIST.2T")
+            return 2 * scipy_stats.t.sf(abs(x), degrees_freedom)
 
         @staticmethod
         def RT(x, degrees_freedom):
-            raise NotImplementedError("T_STAT.DIST.RT() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use T_STAT.DIST.RT")
+            return scipy_stats.t.sf(x, degrees_freedom)
 
     class INV:
         def __new__(cls, probability, degrees_freedom):
-            raise NotImplementedError("T_STAT.INV() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use T_STAT.INV")
+            return scipy_stats.t.ppf(probability, degrees_freedom)
 
         @staticmethod
         def _2T(probability, degrees_freedom):
-            raise NotImplementedError("T_STAT.INV.2T() not implemented yet")
+            if scipy_stats is None:
+                raise NotImplementedError("Install `scipy` python package to use T_STAT.INV.2T")
+            return scipy_stats.t.ppf(1 - probability / 2, degrees_freedom)
 
     @staticmethod
     def TEST(range1, range2, tails, type_):
-        raise NotImplementedError("T_STAT.TEST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use T_STAT.TEST")
+        arr1 = _numeric_filter(flatten_args(range1))
+        arr2 = _numeric_filter(flatten_args(range2))
+        if type_ == 1:
+            # Paired
+            result = scipy_stats.ttest_rel(arr1, arr2)
+        elif type_ == 2:
+            # Two-sample equal variance (pooled)
+            result = scipy_stats.ttest_ind(arr1, arr2, equal_var=True)
+        elif type_ == 3:
+            # Two-sample unequal variance (Welch's)
+            result = scipy_stats.ttest_ind(arr1, arr2, equal_var=False)
+        else:
+            raise ValueError("type_ must be 1, 2, or 3")
+        p_value = result.pvalue
+        if tails == 1:
+            return p_value / 2
+        return p_value
 
 
 def TDIST(x, degrees_freedom, tails):
-    raise NotImplementedError("TDIST() not implemented yet")
+    if scipy_stats is None:
+        raise NotImplementedError("Install `scipy` python package to use TDIST")
+    if tails == 1:
+        return scipy_stats.t.sf(x, degrees_freedom)
+    elif tails == 2:
+        return 2 * scipy_stats.t.sf(abs(x), degrees_freedom)
+    raise ValueError("tails must be 1 or 2")
 
 
 def TINV(probability, degrees_freedom):
-    raise NotImplementedError("TINV() not implemented yet")
+    if scipy_stats is None:
+        raise NotImplementedError("Install `scipy` python package to use TINV")
+    return scipy_stats.t.ppf(1 - probability / 2, degrees_freedom)
 
 
 def TRIMMEAN(data, percent):
@@ -822,7 +972,7 @@ def TRIMMEAN(data, percent):
 
 
 def TTEST(range1, range2, tails, type_):
-    raise NotImplementedError("TTEST() not implemented yet")
+    return T_STAT.TEST(range1, range2, tails, type_)
 
 
 class VAR:
@@ -878,18 +1028,30 @@ def VARPA(*args):
 
 class WEIBULL:
     def __new__(cls, x, alpha, beta, cumulative):
-        raise NotImplementedError("WEIBULL() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use WEIBULL")
+        if cumulative:
+            return scipy_stats.weibull_min.cdf(x, alpha, scale=beta)
+        return scipy_stats.weibull_min.pdf(x, alpha, scale=beta)
 
     @staticmethod
     def DIST(x, alpha, beta, cumulative):
-        raise NotImplementedError("WEIBULL.DIST() not implemented yet")
+        return WEIBULL.__new__(WEIBULL, x, alpha, beta, cumulative)
 
 
 class Z:
     @staticmethod
     def TEST(array, x, sigma=None):
-        raise NotImplementedError("Z.TEST() not implemented yet")
+        if scipy_stats is None:
+            raise NotImplementedError("Install `scipy` python package to use Z.TEST")
+        arr = _numeric_filter(flatten_args(array))
+        n = len(arr)
+        mean = sum(arr) / n
+        if sigma is None:
+            sigma = statistics.stdev(arr)
+        z = (mean - x) / (sigma / math.sqrt(n))
+        return scipy_stats.norm.sf(z)
 
 
 def ZTEST(array, x, sigma=None):
-    raise NotImplementedError("ZTEST() not implemented yet")
+    return Z.TEST(array, x, sigma)

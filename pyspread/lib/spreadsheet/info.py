@@ -3,10 +3,16 @@ from datetime import date, datetime, time
 
 try:
     from pyspread.lib.pycellsheet import EmptyCell
-    from pyspread.lib.spreadsheet.errors import SpreadsheetErrorNa
+    from pyspread.lib.spreadsheet.errors import (
+        SpreadsheetErrorNa, SpreadsheetErrorDivZero, SpreadsheetErrorValue,
+        SpreadsheetErrorRef, SpreadsheetErrorName, SpreadsheetErrorNum
+    )
 except ImportError:
     from lib.pycellsheet import EmptyCell
-    from lib.spreadsheet.errors import SpreadsheetErrorNa
+    from lib.spreadsheet.errors import (
+        SpreadsheetErrorNa, SpreadsheetErrorDivZero, SpreadsheetErrorValue,
+        SpreadsheetErrorRef, SpreadsheetErrorName, SpreadsheetErrorNum
+    )
 
 _INFO_FUNCTIONS = [
     'ERROR', 'ISBLANK', 'ISDATE', 'ISEMAIL', 'ISERR', 'ISERROR', 'ISFORMULA', 'ISLOGICAL',
@@ -18,7 +24,34 @@ __all__ = _INFO_FUNCTIONS + ["_INFO_FUNCTIONS"]
 class ERROR:
     @staticmethod
     def TYPE(error_val):
-        raise NotImplementedError("ERROR.TYPE() not implemented yet")
+        """Return a number corresponding to an error type."""
+        # Error type codes according to Excel/Google Sheets:
+        # 1: #NULL!
+        # 2: #DIV/0!
+        # 3: #VALUE!
+        # 4: #REF!
+        # 5: #NAME?
+        # 6: #NUM!
+        # 7: #N/A
+        # 8: Other error
+
+        if isinstance(error_val, SpreadsheetErrorDivZero):
+            return 2
+        elif isinstance(error_val, SpreadsheetErrorValue):
+            return 3
+        elif isinstance(error_val, SpreadsheetErrorRef):
+            return 4
+        elif isinstance(error_val, SpreadsheetErrorName):
+            return 5
+        elif isinstance(error_val, SpreadsheetErrorNum):
+            return 6
+        elif isinstance(error_val, SpreadsheetErrorNa):
+            return 7
+        elif isinstance(error_val, Exception):
+            return 8
+        else:
+            # Not an error
+            raise SpreadsheetErrorNa("Value is not an error")
 
 
 def ISBLANK(value):
