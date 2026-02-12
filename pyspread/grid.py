@@ -167,8 +167,8 @@ class Grid(QTableView):
         self.horizontalHeader().setDefaultSectionSize(
             self.main_window.settings.default_column_width)
 
-        self.verticalHeader().setMinimumSectionSize(0)
-        self.horizontalHeader().setMinimumSectionSize(0)
+        self.verticalHeader().setMinimumSectionSize(10)
+        self.horizontalHeader().setMinimumSectionSize(10)
 
         # Palette adjustment for cases in  which the Base color is not white
         palette = self.palette()
