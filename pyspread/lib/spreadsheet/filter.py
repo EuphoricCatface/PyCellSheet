@@ -148,3 +148,83 @@ def SORTN(data_range: Range, n=1, display_ties_mode='default', *sort_pairs) -> R
         sliced = sorted_list[: n * row_width]
 
     return RangeOutput(width=row_width, lst=sliced)
+
+
+def UNIQUE(data_range: Range, by_col=False, exactly_once=False) -> RangeOutput:
+    """
+    UNIQUE(data_range, by_col=False, exactly_once=False)
+
+    Returns unique rows (or columns if by_col=True) from data_range.
+
+    - data_range: the range to filter for unique values
+    - by_col: if True, transpose logic to find unique columns instead of rows
+    - exactly_once: if True, only return rows/cols that appear exactly once
+
+    Preserves the order of first occurrence.
+    """
+    if by_col:
+        # Transpose: treat columns as the unit of uniqueness
+        width = data_range.width
+        height = data_range.height
+
+        # Extract each column as a tuple for hashability
+        seen = {}  # column_tuple -> count
+        order = []  # list of column indices in order of first appearance
+
+        for col_idx in range(width):
+            col_data = []
+            for row_idx in range(height):
+                row = data_range[row_idx]
+                col_data.append(row[col_idx] if col_idx < len(row) else EmptyCell())
+
+            col_tuple = tuple(col_data)
+            if col_tuple not in seen:
+                seen[col_tuple] = 1
+                order.append(col_tuple)
+            else:
+                seen[col_tuple] += 1
+
+        # Filter by exactly_once if needed
+        if exactly_once:
+            unique_cols = [col for col in order if seen[col] == 1]
+        else:
+            unique_cols = order
+
+        # Transpose back: convert columns to rows
+        new_list = []
+        for row_idx in range(height):
+            for col_tuple in unique_cols:
+                new_list.append(col_tuple[row_idx])
+
+        return RangeOutput(width=len(unique_cols), lst=new_list)
+
+    else:
+        # Default: find unique rows
+        width = data_range.width
+        height = data_range.height
+
+        seen = {}  # row_tuple -> count
+        order = []  # list of row tuples in order of first appearance
+
+        for row_idx in range(height):
+            row = data_range[row_idx]
+            row_tuple = tuple(row)
+
+            if row_tuple not in seen:
+                seen[row_tuple] = 1
+                order.append(row_tuple)
+            else:
+                seen[row_tuple] += 1
+
+        # Filter by exactly_once if needed
+        if exactly_once:
+            unique_rows = [row for row in order if seen[row] == 1]
+        else:
+            unique_rows = order
+
+        # Flatten back to a list
+        new_list = []
+        for row_tuple in unique_rows:
+            new_list.extend(row_tuple)
+
+        return RangeOutput(width=width, lst=new_list)
