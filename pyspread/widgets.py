@@ -787,7 +787,7 @@ class CellButton(QPushButton):
         result = self.grid.model.code_array._eval_cell(self.key, code)
         self.grid.model.code_array.frozen_cache[repr(self.key)] = result
         self.grid.model.code_array.result_cache.clear()
-        self.grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.grid.model.emit_data_changed_all()
 
 
 class HelpBrowser(QTextBrowser):

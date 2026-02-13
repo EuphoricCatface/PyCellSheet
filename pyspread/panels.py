@@ -170,7 +170,7 @@ class MacroPanel(QDialog):
             self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
             self.code_array.macros_draft[self.current_table] = None
             self.applied_indicator.setProperty("applied", True)
-            self.parent.grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
+            self.parent.grid.model.emit_data_changed_all()
 
         self.parent.grid.gui_update()
 

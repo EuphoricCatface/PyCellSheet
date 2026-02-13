@@ -781,7 +781,7 @@ class Grid(QTableView):
             key = literal_eval(repr_key)
             self._refresh_frozen_cell(key)
 
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
     def refresh_selected_frozen_cells(self):
         """Refreshes selected frozen cells"""
@@ -792,7 +792,7 @@ class Grid(QTableView):
         self.model.code_array.cell_attributes._attr_cache.clear()
         self.model.code_array.cell_attributes._table_cache.clear()
         self.model.code_array.result_cache.clear()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
     def on_show_frozen_pressed(self, toggled: bool):
         """Show frozen cells event handler
@@ -1731,6 +1731,18 @@ class GridTableModel(QAbstractTableModel):
         self.beginResetModel()
         yield
         self.endResetModel()
+
+    def emit_data_changed_all(self):
+        """Emit dataChanged signal for the entire visible grid.
+
+        This properly signals that all cell data may have changed,
+        using valid indices instead of invalid QModelIndex() instances.
+        """
+        if self.rowCount() > 0 and self.columnCount() > 0:
+            top_left = self.index(0, 0)
+            bottom_right = self.index(self.rowCount() - 1,
+                                     self.columnCount() - 1)
+            self.dataChanged.emit(top_left, bottom_right)
 
     @contextmanager
     def inserting_rows(self, index: QModelIndex, first: int, last: int):

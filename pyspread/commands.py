@@ -170,7 +170,7 @@ class PasteSelectedCellData(QUndoCommand):
                 else:
                     break
 
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
     def undo(self):
         """Undo row insertion, updates screen"""
@@ -178,7 +178,7 @@ class PasteSelectedCellData(QUndoCommand):
         for key in self.old_code:
             self.model.code_array[key] = self.old_code[key]
         self.old_code.clear()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
 
 class SetCellCode(QUndoCommand):
@@ -229,7 +229,7 @@ class SetCellCode(QUndoCommand):
             for index, new_code in zip(self.indices, self.new_codes):
                 self.model.setData(index, new_code, Qt.ItemDataRole.EditRole,
                                    raw=True)
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
     def undo(self):
         """Undo cell code setting.
@@ -242,7 +242,7 @@ class SetCellCode(QUndoCommand):
             for index, old_code in zip(self.indices, self.old_codes):
                 self.model.setData(index, old_code, Qt.ItemDataRole.EditRole,
                                    raw=True)
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
 
 class SetRowsHeight(QUndoCommand):
@@ -445,7 +445,7 @@ class DeleteSelectedCellData(QUndoCommand):
                 except KeyError:
                     pass
         self.model.code_array.result_cache.clear()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
     def undo(self):
         """Undo row insertion, updates screen"""
@@ -454,7 +454,7 @@ class DeleteSelectedCellData(QUndoCommand):
             self.model.code_array[key] = self.old_code[key]
         self.old_code.clear()
         self.model.code_array.result_cache.clear()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
 
 class InsertRows(QUndoCommand):
@@ -841,13 +841,13 @@ class SetCellFormat(QUndoCommand):
 
         self.model.setData(self.selected_idx, self.attr,
                            Qt.ItemDataRole.DecorationRole)
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
     def undo(self):
         """Undo cell formatting"""
 
         self.model.code_array.cell_attributes.pop()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
 
 class SetCellMerge(SetCellFormat):
@@ -860,7 +860,7 @@ class SetCellMerge(SetCellFormat):
                            Qt.ItemDataRole.DecorationRole)
         for grid in self.model.main_window.grids:
             grid.update_cell_spans()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
     def undo(self):
         """Undo cell merging"""
@@ -872,7 +872,7 @@ class SetCellMerge(SetCellFormat):
             return
         for grid in self.model.main_window.grids:
             grid.update_cell_spans()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
 
 class SetCellTextAlignment(SetCellFormat):
@@ -883,7 +883,7 @@ class SetCellTextAlignment(SetCellFormat):
 
         self.model.setData(self.selected_idx, self.attr,
                            Qt.ItemDataRole.TextAlignmentRole)
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+        self.model.emit_data_changed_all()
 
 
 class FreezeCell(QUndoCommand):
@@ -918,7 +918,7 @@ class FreezeCell(QUndoCommand):
             attr_dict = AttrDict([("frozen", True)])
             attr = CellAttribute(selection, table, attr_dict)
             self.model.setData([], attr, Qt.ItemDataRole.DecorationRole)
-            self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+            self.model.emit_data_changed_all()
 
     def undo(self):
         """Undo cell freezing"""
@@ -926,7 +926,7 @@ class FreezeCell(QUndoCommand):
         for cell in reversed(self.cells):
             self.model.code_array.frozen_cache.pop(repr(cell))
             self.model.code_array.cell_attributes.pop()
-            self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+            self.model.emit_data_changed_all()
 
 
 class ThawCell(FreezeCell):
@@ -950,7 +950,7 @@ class ThawCell(FreezeCell):
                 attr_dict = AttrDict([("frozen", False)])
                 attr = CellAttribute(selection, table, attr_dict)
                 self.model.setData([], attr, Qt.ItemDataRole.DecorationRole)
-                self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+                self.model.emit_data_changed_all()
 
     def undo(self):
         """Undo cell thawing"""
@@ -959,7 +959,7 @@ class ThawCell(FreezeCell):
                                  reversed(self.res_objs)):
             self.model.code_array.frozen_cache[repr(cell)] = res_obj
             self.model.code_array.cell_attributes.pop()
-            self.model.dataChanged.emit(QModelIndex(), QModelIndex())
+            self.model.emit_data_changed_all()
 
 
 class SetCellRenderer(QUndoCommand):
