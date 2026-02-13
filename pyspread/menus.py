@@ -178,6 +178,8 @@ class ViewMenu(QMenu):
 
         self.addAction(actions.fullscreen)
         self.addSeparator()
+        self.addAction(actions.recalculate)
+        self.addSeparator()
 
         self.toolbar_submenu = self.addMenu('Toolbars')
         self.toolbar_submenu.addAction(actions.toggle_main_toolbar)

@@ -327,3 +327,38 @@ def test_get_all_dependents_no_deps(graph):
     deps = graph.get_all_dependents((0, 0, 0))
 
     assert len(deps) == 0
+
+
+def test_get_all_dirty_empty():
+    """Test getting all dirty cells when none are dirty"""
+    dep_graph = DependencyGraph()
+
+    assert dep_graph.get_all_dirty() == set()
+
+
+def test_get_all_dirty_single():
+    """Test getting all dirty cells with one dirty cell"""
+    dep_graph = DependencyGraph()
+    dep_graph.mark_dirty((0, 0, 0))
+
+    assert dep_graph.get_all_dirty() == {(0, 0, 0)}
+
+
+def test_get_all_dirty_multiple():
+    """Test getting all dirty cells with multiple dirty cells"""
+    dep_graph = DependencyGraph()
+    dep_graph.mark_dirty((0, 0, 0))
+    dep_graph.mark_dirty((0, 1, 0))
+    dep_graph.mark_dirty((0, 2, 0))
+
+    assert dep_graph.get_all_dirty() == {(0, 0, 0), (0, 1, 0), (0, 2, 0)}
+
+
+def test_get_all_dirty_after_clear():
+    """Test getting all dirty cells after clearing some"""
+    dep_graph = DependencyGraph()
+    dep_graph.mark_dirty((0, 0, 0))
+    dep_graph.mark_dirty((0, 1, 0))
+    dep_graph.clear_dirty((0, 0, 0))
+
+    assert dep_graph.get_all_dirty() == {(0, 1, 0)}

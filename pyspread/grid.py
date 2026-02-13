@@ -1948,6 +1948,17 @@ class GridTableModel(QAbstractTableModel):
                 bg_color = QColor(255, 255, 255)
             else:
                 bg_color = QColor(*bg_color_rgb)
+
+            # Add visual indicator for dirty cells (needs recalculation)
+            if self.code_array.dep_graph.is_dirty(key):
+                # Blend with a subtle yellow tint (10% opacity)
+                dirty_overlay = QColor(255, 255, 0, 25)  # Yellow with alpha
+                # Mix colors: blend bg_color with yellow overlay
+                r = int(bg_color.red() * 0.9 + dirty_overlay.red() * 0.1)
+                g = int(bg_color.green() * 0.9 + dirty_overlay.green() * 0.1)
+                b = int(bg_color.blue() * 0.9 + dirty_overlay.blue() * 0.1)
+                bg_color = QColor(r, g, b)
+
             return bg_color
 
         if role == Qt.ItemDataRole.ForegroundRole:

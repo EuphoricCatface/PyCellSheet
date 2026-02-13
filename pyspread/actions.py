@@ -326,6 +326,11 @@ class MainWindowActions(AttrDict):
                                  statustip='Show grid in fullscreen mode '
                                            '(press <F11> to leave)')
 
+        self.recalculate = Action(self.parent, "Recalculate",
+                                  self.parent.on_recalculate,
+                                  shortcut='F9' if self.shortcuts else "",
+                                  statustip='Force recalculation of all dirty cells')
+
         self.toggle_main_toolbar = Action(self.parent, "Main toolbar",
                                           self.parent.on_toggle_main_toolbar,
                                           checkable=True,

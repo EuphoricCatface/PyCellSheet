@@ -1585,6 +1585,30 @@ class CodeArray(DataArray):
 
         return super().pop(key)
 
+    def recalculate_dirty(self) -> int:
+        """Force recalculation of all dirty cells
+
+        Returns the number of cells recalculated
+
+        """
+
+        dirty_cells = list(self.dep_graph.get_all_dirty())
+
+        if not dirty_cells:
+            return 0
+
+        # Force recalculation by accessing each dirty cell
+        # This will evaluate and cache, clearing dirty flags
+        for key in dirty_cells:
+            try:
+                # Access the cell - this triggers evaluation
+                _ = self[key]
+            except Exception:
+                # Ignore errors during recalculation
+                pass
+
+        return len(dirty_cells)
+
     def get_globals(self) -> dict:
         """Returns globals dict"""
 

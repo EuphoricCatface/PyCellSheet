@@ -512,6 +512,26 @@ class MainWindow(QMainWindow):
             self._previous_window_state = self.windowState()
             self.setWindowState(Qt.WindowState.WindowFullScreen)
 
+    def on_recalculate(self):
+        """Recalculate dirty cells event handler (F9 shortcut)"""
+
+        num_recalculated = self.grid.model.code_array.recalculate_dirty()
+
+        if num_recalculated > 0:
+            # Update the grid display
+            self.grid.model.dataChanged.emit(
+                self.grid.model.index(0, 0),
+                self.grid.model.index(
+                    self.grid.model.rowCount() - 1,
+                    self.grid.model.columnCount() - 1
+                )
+            )
+            self.statusBar().showMessage(
+                f"Recalculated {num_recalculated} cells", 2000
+            )
+        else:
+            self.statusBar().showMessage("No dirty cells to recalculate", 2000)
+
     def on_approve(self):
         """Approve event handler"""
 

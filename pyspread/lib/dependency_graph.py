@@ -273,3 +273,15 @@ class DependencyGraph:
 
         dfs(key)
         return result
+
+    def get_all_dirty(self):
+        """Get all dirty cells
+
+        Returns
+        -------
+        set
+            Set of all dirty cell keys
+
+        """
+
+        return set(self.dirty)
