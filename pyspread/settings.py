@@ -109,11 +109,6 @@ class Settings:
     border_choice = "All borders"
     """The state of the border choice button"""
 
-    timeout = 1000
-    """Timeout for cell calculations in milliseconds"""
-
-    """Timeout for frozen cell updates in milliseconds"""
-
     signature_key = None
     """Key for signing save files"""
 
@@ -238,7 +233,6 @@ class Settings:
         settings.value("file_history", [], 'QStringList')
         if self.file_history:
             settings.setValue("file_history", self.file_history)
-        settings.setValue("timeout", self.timeout)
         settings.setValue("signature_key", self.signature_key)
         settings.setValue("show_statusbar_sum", self.show_statusbar_sum)
 
@@ -313,7 +307,6 @@ class Settings:
         setting2attr("last_file_export_path")
         setting2attr("max_file_history", mapper=int)
         setting2attr("file_history")
-        setting2attr("timeout", mapper=int)
         setting2attr("signature_key")
         setting2attr("show_statusbar_sum", mapper=qt_bool)
 

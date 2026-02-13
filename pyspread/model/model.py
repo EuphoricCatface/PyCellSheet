@@ -56,7 +56,6 @@ from inspect import getmembers, isfunction, isgenerator
 import io
 from itertools import product
 import re
-import signal
 import sys
 from traceback import print_exception
 from typing import (
@@ -1498,13 +1497,6 @@ class CodeArray(DataArray):
             return exp_parsed
         #  --- ExpParser END ---  #
 
-        try:
-            signal.signal(signal.SIGALRM, self.handler)
-            signal.alarm(self.settings.timeout)
-        except AttributeError:
-            # No Unix system
-            pass
-
         #  --- RefParser ---  #
         ref_parsed = self.ref_parser.parser(exp_parsed)
 
@@ -1542,13 +1534,6 @@ class CodeArray(DataArray):
         except Exception as err:
             result = err
         #  --- PythonEval END ---  #
-
-        finally:
-            try:
-                signal.alarm(0)
-            except AttributeError:
-                # No POSIX system
-                pass
 
         # Change back cell value for evaluation from other cells
         # self.dict_grid[key] = _old_code
@@ -1609,21 +1594,9 @@ class CodeArray(DataArray):
         sys.stdout = code_out
         sys.stderr = code_err
 
-        try:
-            signal.signal(signal.SIGALRM, self.handler)
-            signal.alarm(self.settings.timeout)
-        except AttributeError:
-            # No POSIX system
-            pass
-
         sheet_globals = {}
         try:
             exec(self.macros[current_table], sheet_globals)
-            try:
-                signal.alarm(0)
-            except AttributeError:
-                # No POSIX system
-                pass
 
         except Exception:
             exc_info = sys.exc_info()
@@ -1763,15 +1736,5 @@ class CodeArray(DataArray):
             except Exception:
                 # re errors are cryptical: sre_constants,...
                 pass
-
-    def handler(self, signum: Any, frame: Any):
-        """Signal handler for timeout
-
-        :param signum: Ignored
-        :param frame: Ignored
-
-        """
-
-        raise RuntimeError("Timeout after {} s.".format(self.settings.timeout))
 
 # End of class CodeArray
