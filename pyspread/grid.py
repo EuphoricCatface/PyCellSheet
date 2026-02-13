@@ -2443,7 +2443,10 @@ class GridCellDelegate(QStyledItemDelegate):
         :param index: Index of cell for which icon is rendered
 
         """
-        from pyspread.icons import Icon
+        try:
+            from pyspread.icons import Icon
+        except ImportError:
+            from icons import Icon
 
         # Icon size (16x16 pixels, or scaled by zoom)
         icon_size = 16 * self.grid.zoom
