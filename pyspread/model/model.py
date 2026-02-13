@@ -1362,12 +1362,6 @@ class CodeArray(DataArray):
 
     """
 
-    # Cache for results from __getitem__ calls
-    result_cache = {}
-
-    # Cache for frozen objects
-    frozen_cache = {}
-
     # Safe mode: If True then Whether pyspread is operating in safe_mode
     # In safe_mode, cells are not evaluated but its code is returned instead.
     safe_mode = False
@@ -1377,6 +1371,12 @@ class CodeArray(DataArray):
 
         self.ref_parser = ReferenceParser(self)
         self.cell_meta_gen = CELL_META_GENERATOR(self)
+
+        # Cache for results from __getitem__ calls (instance variable)
+        self.result_cache = {}
+
+        # Cache for frozen objects (instance variable)
+        self.frozen_cache = {}
 
     def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]], value: str):
@@ -1395,12 +1395,10 @@ class CodeArray(DataArray):
 
         # Prevent unchanged cells from being recalculated on cursor movement
 
-        repr_key = repr(key)
-
-        unchanged = (repr_key in self.result_cache and
+        unchanged = (key in self.result_cache and
                      value == self(key)) or \
                     ((value is None or value == "") and
-                     repr_key not in self.result_cache)
+                     key not in self.result_cache)
 
         super().__setitem__(key, value)
 
@@ -1423,8 +1421,8 @@ class CodeArray(DataArray):
 
         # Cached cell handling
 
-        if repr(key) in self.result_cache:
-            return self.result_cache[repr(key)]
+        if key in self.result_cache:
+            return self.result_cache[key]
 
         if not any(isinstance(k, slice) for k in key):
             # Button cell handling
@@ -1433,18 +1431,18 @@ class CodeArray(DataArray):
             # Frozen cell handling
             frozen_res = self.cell_attributes[key].frozen
             if frozen_res:
-                if repr(key) in self.frozen_cache:
-                    return self.frozen_cache[repr(key)]
+                if key in self.frozen_cache:
+                    return self.frozen_cache[key]
                 # Frozen cache is empty.
                 # Maybe we have a reload without the frozen cache
                 result = self._eval_cell(key, code)
-                self.frozen_cache[repr(key)] = result
+                self.frozen_cache[key] = result
                 return result
 
         # Normal cell handling
 
         result = self._eval_cell(key, code)
-        self.result_cache[repr(key)] = result
+        self.result_cache[key] = result
 
         return result
 
@@ -1579,7 +1577,7 @@ class CodeArray(DataArray):
         """
 
         try:
-            self.result_cache.pop(repr(key))
+            self.result_cache.pop(key)
 
         except KeyError:
             pass

@@ -911,7 +911,7 @@ class FreezeCell(QUndoCommand):
 
             # Add frozen cache content
             res_obj = self.model.code_array[cell]
-            self.model.code_array.frozen_cache[repr(cell)] = res_obj
+            self.model.code_array.frozen_cache[cell] = res_obj
 
             # Set the frozen state
             selection = Selection([], [], [], [], [(row, column)])
@@ -924,7 +924,7 @@ class FreezeCell(QUndoCommand):
         """Undo cell freezing"""
 
         for cell in reversed(self.cells):
-            self.model.code_array.frozen_cache.pop(repr(cell))
+            self.model.code_array.frozen_cache.pop(cell)
             self.model.code_array.cell_attributes.pop()
             self.model.emit_data_changed_all()
 
@@ -940,10 +940,10 @@ class ThawCell(FreezeCell):
         for cell in self.cells:
             row, column, table = cell
 
-            if repr(cell) in self.model.code_array.frozen_cache:
+            if cell in self.model.code_array.frozen_cache:
                 # Remove and store frozen cache content
                 self.res_objs.append(
-                    self.model.code_array.frozen_cache.pop(repr(cell)))
+                    self.model.code_array.frozen_cache.pop(cell))
 
                 # Remove the frozen state
                 selection = Selection([], [], [], [], [(row, column)])
@@ -957,7 +957,7 @@ class ThawCell(FreezeCell):
 
         for cell, res_obj in zip(reversed(self.cells),
                                  reversed(self.res_objs)):
-            self.model.code_array.frozen_cache[repr(cell)] = res_obj
+            self.model.code_array.frozen_cache[cell] = res_obj
             self.model.code_array.cell_attributes.pop()
             self.model.emit_data_changed_all()
 
