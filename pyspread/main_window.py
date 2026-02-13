@@ -553,30 +553,6 @@ class MainWindow(QMainWindow):
 
         self.undo_stack.redo()
 
-    def on_toggle_refresh_timer(self, toggled: bool):
-        """Toggles periodic timer for frozen cells
-
-        :param toggled: Toggle state
-
-        """
-
-        if toggled:
-            self.grid.refresh_frozen_cells()
-            self.refresh_timer.start(self.settings.refresh_timeout)
-        else:
-            self.refresh_timer.stop()
-
-    def on_refresh_timer(self):
-        """Event handler for self.refresh_timer.timeout
-
-        Called for periodic updates of frozen cells.
-        Does nothing if either the entry_line or a cell editor is active.
-
-        """
-
-        if not self.entry_line.hasFocus() \
-           and self.grid.state() != self.grid.State.EditingState:
-            self.grid.refresh_frozen_cells()
 
     def _toggle_widget(self, widget: QWidget, action_name: str, toggled: bool):
         """Toggles widget visibility and updates toggle actions
@@ -731,10 +707,6 @@ class MainWindow(QMainWindow):
         renderer = attributes.renderer
         widgets.renderer_button.set_current_action(renderer)
         widgets.renderer_button.set_menu_checked(renderer)
-
-        self.main_window_actions.freeze_cell.setChecked(attributes.frozen)
-        self.main_window_toolbar_actions.freeze_cell.setChecked(
-            attributes.frozen)
 
         self.main_window_actions.lock_cell.setChecked(attributes.locked)
         self.main_window_toolbar_actions.lock_cell.setChecked(

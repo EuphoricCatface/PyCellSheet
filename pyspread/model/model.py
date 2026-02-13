@@ -226,7 +226,6 @@ class DefaultCellAttributeDict(AttrDict):
         self.angle = 0.0
         self.vertical_align = "align_top"
         self.justification = "justify_left"
-        self.frozen = False
         self.merge_area = None
         self.renderer = "text"
         self.button_cell = False
@@ -1375,9 +1374,6 @@ class CodeArray(DataArray):
         # Cache for results from __getitem__ calls (instance variable)
         self.result_cache = {}
 
-        # Cache for frozen objects (instance variable)
-        self.frozen_cache = {}
-
     def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]], value: str):
         """Sets cell code and resets result cache
@@ -1428,16 +1424,6 @@ class CodeArray(DataArray):
             # Button cell handling
             if self.cell_attributes[key].button_cell is not False:
                 return
-            # Frozen cell handling
-            frozen_res = self.cell_attributes[key].frozen
-            if frozen_res:
-                if key in self.frozen_cache:
-                    return self.frozen_cache[key]
-                # Frozen cache is empty.
-                # Maybe we have a reload without the frozen cache
-                result = self._eval_cell(key, code)
-                self.frozen_cache[key] = result
-                return result
 
         # Normal cell handling
 

@@ -757,51 +757,9 @@ class Grid(QTableView):
         grid = self.main_window.focused_grid
         grid.zoom = 1.0
 
-    def _refresh_frozen_cell(self, key: Tuple[int, int, int]):
-        """Refreshes the frozen cell key
-
-        Does neither emit dataChanged nor clear _attr_cache or _table_cache.
-
-        :param key: Key of cell to be refreshed
-
-        """
-
-        if self.model.code_array.cell_attributes[key].frozen:
-            code = self.model.code_array(key)
-            result = self.model.code_array._eval_cell(key, code)
-            self.model.code_array.frozen_cache[repr(key)] = result
-
-    def refresh_frozen_cells(self):
-        """Refreshes all frozen cells"""
-
-        frozen_cache = self.model.code_array.frozen_cache
-        cell_attributes = self.model.code_array.cell_attributes
-
-        for repr_key in frozen_cache:
-            key = literal_eval(repr_key)
-            self._refresh_frozen_cell(key)
 
         self.model.emit_data_changed_all()
 
-    def refresh_selected_frozen_cells(self):
-        """Refreshes selected frozen cells"""
-
-        for idx in self.selected_idx:
-            self._refresh_frozen_cell((idx.row(), idx.column(), self.table))
-
-        self.model.code_array.cell_attributes._attr_cache.clear()
-        self.model.code_array.cell_attributes._table_cache.clear()
-        self.model.code_array.result_cache.clear()
-        self.model.emit_data_changed_all()
-
-    def on_show_frozen_pressed(self, toggled: bool):
-        """Show frozen cells event handler
-
-        :param toggled: Toggle state
-
-        """
-
-        self.main_window.settings.show_frozen = toggled
 
     def on_font_dialog(self):
         """Font dialog event handler"""
@@ -1281,30 +1239,6 @@ class Grid(QTableView):
                 self.setIndexWidget(index, button)
                 self.widget_indices.append(index)
 
-    def on_freeze_pressed(self, toggled: bool):
-        """Freeze cell event handler
-
-        :param toggled: Toggle state
-
-        """
-
-        grid = self.main_window.focused_grid
-
-        current_attr = self.model.code_array.cell_attributes[grid.current]
-        if current_attr.frozen == toggled:
-            return  # Something is wrong with the GUI update
-
-        cells = list(self.selection.cell_generator(shape=self.model.shape,
-                                                   table=self.table))
-        if toggled:
-            # We have an non-frozen cell that has to be frozen
-            description = f"Freeze cells {cells}"
-            command = commands.FreezeCell(self.model, cells, description)
-        else:
-            # We have an frozen cell that has to be unfrozen
-            description = f"Thaw cells {cells}"
-            command = commands.ThawCell(self.model, cells, description)
-        self.main_window.undo_stack.push(command)
 
     def on_button_cell_pressed(self, toggled: bool):
         """Button cell event handler
@@ -2009,16 +1943,11 @@ class GridTableModel(QAbstractTableModel):
                     return value
 
         if role == Qt.ItemDataRole.BackgroundRole:
-            if self.main_window.settings.show_frozen \
-               and self.code_array.cell_attributes[key].frozen:
-                pattern_rgb = self.grid.palette().highlight().color()
-                bg_color = QBrush(pattern_rgb, Qt.BrushStyle.BDiagPattern)
+            bg_color_rgb = self.code_array.cell_attributes[key].bgcolor
+            if bg_color_rgb is None:
+                bg_color = QColor(255, 255, 255)
             else:
-                bg_color_rgb = self.code_array.cell_attributes[key].bgcolor
-                if bg_color_rgb is None:
-                    bg_color = QColor(255, 255, 255)
-                else:
-                    bg_color = QColor(*bg_color_rgb)
+                bg_color = QColor(*bg_color_rgb)
             return bg_color
 
         if role == Qt.ItemDataRole.ForegroundRole:
