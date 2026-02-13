@@ -1371,7 +1371,15 @@ class CodeArray(DataArray):
         self.cell_meta_gen = CELL_META_GENERATOR(self)
 
         # Cache for results from __getitem__ calls (instance variable)
+        # DEPRECATED: Will be replaced by smart_cache
         self.result_cache = {}
+
+        # Dependency tracking and smart caching
+        from ..lib.dependency_graph import DependencyGraph
+        from ..lib.smart_cache import SmartCache
+
+        self.dep_graph = DependencyGraph()
+        self.smart_cache = SmartCache(self.dep_graph)
 
     def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]], value: str):
@@ -1398,7 +1406,13 @@ class CodeArray(DataArray):
         super().__setitem__(key, value)
 
         if not unchanged:
-            # Reset result cache
+            # Invalidate cache for this cell and its dependents
+            # Remove dependencies for this cell (will be re-tracked on next eval)
+            self.dep_graph.remove_cell(key)
+            self.smart_cache.invalidate(key)
+
+            # Also clear old result_cache for backwards compatibility
+            # TODO: Remove this once smart_cache is fully integrated
             self.result_cache = {}
 
     def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
@@ -1414,8 +1428,15 @@ class CodeArray(DataArray):
         if code is None:
             return EmptyCell
 
-        # Cached cell handling
+        # Smart cache handling (new approach)
+        from ..lib.smart_cache import SmartCache
 
+        cached = self.smart_cache.get(key)
+        if cached is not SmartCache.INVALID:
+            # Cache hit! Return deepcopied value (cache stores original)
+            return deepcopy(cached)
+
+        # Old result_cache fallback (for backwards compatibility during transition)
         if key in self.result_cache:
             return self.result_cache[key]
 
@@ -1424,10 +1445,15 @@ class CodeArray(DataArray):
             if self.cell_attributes[key].button_cell is not False:
                 return
 
-        # Normal cell handling
-
+        # Normal cell handling - evaluate the cell
         result = self._eval_cell(key, code)
+
+        # Store in both caches (for backwards compatibility)
         self.result_cache[key] = result
+        self.smart_cache.set(key, result)
+
+        # Clear dirty flag after successful evaluation
+        self.dep_graph.clear_dirty(key)
 
         return result
 
@@ -1500,6 +1526,15 @@ class CodeArray(DataArray):
         #  --- RefParser ---  #
         ref_parsed = self.ref_parser.parser(exp_parsed)
 
+        #  --- Dependency Tracking & Cycle Detection START ---  #
+        # Check for circular references before evaluating
+        from ..lib.exceptions import CircularRefError
+
+        try:
+            self.dep_graph.check_for_cycles(key)
+        except CircularRefError as err:
+            return err
+
         #  --- PythonEval START ---  #
         env = deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
@@ -1517,12 +1552,20 @@ class CodeArray(DataArray):
             "RangeOutput": RangeOutput  # Needed for RangeOutput.OFFSET evaluation
         }
         try:
-            # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-            result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
-            if isinstance(result, RangeOutput):
-                PythonEvaluator.range_output_handler(self, result, key)
-            if isinstance(result, RangeOutput.OFFSET):
-                result = PythonEvaluator.range_offset_handler(self, result, key)
+            # Track dependencies during evaluation
+            from ..lib.pycellsheet import DependencyTracker
+
+            with DependencyTracker.track(key):
+                # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
+                result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
+                if isinstance(result, RangeOutput):
+                    PythonEvaluator.range_output_handler(self, result, key)
+                if isinstance(result, RangeOutput.OFFSET):
+                    result = PythonEvaluator.range_offset_handler(self, result, key)
+
+        except CircularRefError as err:
+            # Circular reference detected during evaluation
+            result = err
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
