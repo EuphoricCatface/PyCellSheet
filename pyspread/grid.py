@@ -1935,7 +1935,10 @@ class GridTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DecorationRole:
             # Show refresh icon for dirty cells (needs recalculation)
             if self.code_array.dep_graph.is_dirty(key):
-                from pyspread.icons import Icon
+                try:
+                    from pyspread.icons import Icon
+                except ImportError:
+                    from icons import Icon
                 return Icon.refresh
 
             # Otherwise, handle image rendering

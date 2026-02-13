@@ -108,7 +108,13 @@ try:
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
     from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+
+    # Dependency tracking and smart caching
+    from pyspread.lib.dependency_graph import DependencyGraph
+    from pyspread.lib.smart_cache import SmartCache
+    from pyspread.lib.exceptions import CircularRefError
+
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -118,7 +124,12 @@ except ImportError:
     from lib.selection import Selection
     from lib.string_helpers import ZEN
     from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+
+    # Dependency tracking and smart caching
+    from lib.dependency_graph import DependencyGraph
+    from lib.smart_cache import SmartCache
+    from lib.exceptions import CircularRefError
 
 
 INITSCRIPT_DEFAULT = """
@@ -1370,10 +1381,6 @@ class CodeArray(DataArray):
         self.ref_parser = ReferenceParser(self)
         self.cell_meta_gen = CELL_META_GENERATOR(self)
 
-        # Dependency tracking and smart caching
-        from ..lib.dependency_graph import DependencyGraph
-        from ..lib.smart_cache import SmartCache
-
         self.dep_graph = DependencyGraph()
         self.smart_cache = SmartCache(self.dep_graph)
 
@@ -1393,8 +1400,6 @@ class CodeArray(DataArray):
             numpy.set_string_function(lambda s: repr(s.tolist() if hasattr(s, "tolist") else s))
 
         # Prevent unchanged cells from being recalculated on cursor movement
-        from ..lib.smart_cache import SmartCache
-
         cached = self.smart_cache.get(key)
         unchanged = (cached is not SmartCache.INVALID and
                      value == self(key)) or \
@@ -1423,8 +1428,6 @@ class CodeArray(DataArray):
             return EmptyCell
 
         # Smart cache handling
-        from ..lib.smart_cache import SmartCache
-
         cached = self.smart_cache.get(key)
         if cached is not SmartCache.INVALID:
             # Cache hit! Return deepcopied value (cache stores original)
@@ -1517,8 +1520,6 @@ class CodeArray(DataArray):
 
         #  --- Dependency Tracking & Cycle Detection START ---  #
         # Check for circular references before evaluating
-        from ..lib.exceptions import CircularRefError
-
         try:
             self.dep_graph.check_for_cycles(key)
         except CircularRefError as err:
@@ -1542,8 +1543,6 @@ class CodeArray(DataArray):
         }
         try:
             # Track dependencies during evaluation
-            from ..lib.pycellsheet import DependencyTracker
-
             with DependencyTracker.track(key):
                 # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
                 result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
