@@ -1370,10 +1370,6 @@ class CodeArray(DataArray):
         self.ref_parser = ReferenceParser(self)
         self.cell_meta_gen = CELL_META_GENERATOR(self)
 
-        # Cache for results from __getitem__ calls (instance variable)
-        # DEPRECATED: Will be replaced by smart_cache
-        self.result_cache = {}
-
         # Dependency tracking and smart caching
         from ..lib.dependency_graph import DependencyGraph
         from ..lib.smart_cache import SmartCache
@@ -1397,11 +1393,13 @@ class CodeArray(DataArray):
             numpy.set_string_function(lambda s: repr(s.tolist() if hasattr(s, "tolist") else s))
 
         # Prevent unchanged cells from being recalculated on cursor movement
+        from ..lib.smart_cache import SmartCache
 
-        unchanged = (key in self.result_cache and
+        cached = self.smart_cache.get(key)
+        unchanged = (cached is not SmartCache.INVALID and
                      value == self(key)) or \
                     ((value is None or value == "") and
-                     key not in self.result_cache)
+                     cached is SmartCache.INVALID)
 
         super().__setitem__(key, value)
 
@@ -1410,10 +1408,6 @@ class CodeArray(DataArray):
             # Remove dependencies for this cell (will be re-tracked on next eval)
             self.dep_graph.remove_cell(key)
             self.smart_cache.invalidate(key)
-
-            # Also clear old result_cache for backwards compatibility
-            # TODO: Remove this once smart_cache is fully integrated
-            self.result_cache = {}
 
     def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]]) -> Any:
@@ -1428,17 +1422,13 @@ class CodeArray(DataArray):
         if code is None:
             return EmptyCell
 
-        # Smart cache handling (new approach)
+        # Smart cache handling
         from ..lib.smart_cache import SmartCache
 
         cached = self.smart_cache.get(key)
         if cached is not SmartCache.INVALID:
             # Cache hit! Return deepcopied value (cache stores original)
             return deepcopy(cached)
-
-        # Old result_cache fallback (for backwards compatibility during transition)
-        if key in self.result_cache:
-            return self.result_cache[key]
 
         if not any(isinstance(k, slice) for k in key):
             # Button cell handling
@@ -1448,8 +1438,7 @@ class CodeArray(DataArray):
         # Normal cell handling - evaluate the cell
         result = self._eval_cell(key, code)
 
-        # Store in both caches (for backwards compatibility)
-        self.result_cache[key] = result
+        # Store in smart cache
         self.smart_cache.set(key, result)
 
         # Clear dirty flag after successful evaluation
@@ -1590,11 +1579,9 @@ class CodeArray(DataArray):
 
         """
 
-        try:
-            self.result_cache.pop(key)
-
-        except KeyError:
-            pass
+        # Invalidate cache and remove dependencies
+        self.dep_graph.remove_cell(key)
+        self.smart_cache.invalidate(key)
 
         return super().pop(key)
 
@@ -1655,8 +1642,8 @@ class CodeArray(DataArray):
         code_out.close()
         code_err.close()
 
-        # Reset result cache
-        self.result_cache.clear()
+        # Reset cache - clear all since init scripts affect globals
+        self.smart_cache.clear()
         self.sheet_globals_copyable[current_table] = dict()
         self.sheet_globals_uncopyable[current_table] = dict()
 
