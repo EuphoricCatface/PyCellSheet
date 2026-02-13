@@ -44,10 +44,12 @@ class DependencyTracker:
         """
         class TrackingContext:
             def __enter__(self):
+                print(f"DEBUG: DependencyTracker.track.__enter__({key})")
                 cls.set_current_cell(key)
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
+                print(f"DEBUG: DependencyTracker.track.__exit__({key})")
                 cls.clear_current_cell()
                 return False
 
@@ -329,7 +331,9 @@ class ReferenceParser:
 
             # Record dependency if we're currently evaluating a cell
             current_cell = DependencyTracker.get_current_cell()
+            print(f"DEBUG: cell_single_ref('{addr}') - current_cell={current_cell}, dependency_key={dependency_key}")
             if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
+                print(f"DEBUG: Recording dependency: {current_cell} depends on {dependency_key}")
                 self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
 
             return copy.deepcopy(self.code_array[row, col, self.sheet_idx])

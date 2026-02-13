@@ -2012,7 +2012,16 @@ class GridTableModel(QAbstractTableModel):
                 self.code_array[key] = f"{value}"
 
             if not self.main_window.prevent_updates:
+                # Emit dataChanged for the edited cell
                 self.dataChanged.emit(index, index)
+
+                # Also emit dataChanged for all dirty dependents (so they repaint)
+                if hasattr(self.code_array, 'dep_graph'):
+                    for dependent_key in self.code_array.dep_graph.dirty:
+                        if dependent_key != key and dependent_key[2] == table:  # Same sheet
+                            dep_row, dep_col, _ = dependent_key
+                            dep_index = self.index(dep_row, dep_col)
+                            self.dataChanged.emit(dep_index, dep_index)
 
             return True
 
@@ -2503,7 +2512,9 @@ class GridCellDelegate(QStyledItemDelegate):
             self._render_matplotlib(painter, rect, index)
 
         # Paint dirty indicator icon on the right side
-        if self.code_array.dep_graph.is_dirty(key):
+        is_dirty = self.code_array.dep_graph.is_dirty(key)
+        if is_dirty:
+            print(f"DEBUG: paint_() rendering icon for dirty cell {key}")
             self._render_dirty_icon(painter, rect, index)
 
         option.rect = old_rect

@@ -100,10 +100,11 @@ class SmartCache:
     def is_valid(self, key):
         """Check if a cached value is valid
 
-        A cached value is valid if:
-        1. It exists in the cache
-        2. The cell is not marked dirty
-        3. None of its dependencies are dirty
+        A cached value is valid if it exists in the cache.
+
+        NOTE: Dirty cells still return their cached value - they show stale
+        data until explicitly recalculated (F9, click, etc). This allows
+        the dirty indicator to persist and show which cells need updating.
 
         Parameters
         ----------
@@ -113,43 +114,49 @@ class SmartCache:
         Returns
         -------
         bool
-            True if cached value is valid, False otherwise
+            True if cached value exists, False otherwise
 
         """
 
-        # Not in cache at all
-        if key not in self._cache:
-            return False
+        # Just check if it's in cache - dirty cells use stale cache
+        return key in self._cache
 
-        # Cell itself is dirty
-        if self.dep_graph.is_dirty(key):
-            return False
-
-        # Check if any dependency is dirty
-        all_deps = self.dep_graph.get_all_dependencies(key)
-        for dep in all_deps:
-            if self.dep_graph.is_dirty(dep):
-                return False
-
-        return True
-
-    def invalidate(self, key):
+    def invalidate(self, key, _visited=None):
         """Invalidate a cache entry
 
         Removes the cache entry and marks the cell and all its dependents dirty.
+        Recursively invalidates all dependent cells' caches for automatic recalculation.
 
         Parameters
         ----------
         key: tuple
             Cell key (row, col, table)
+        _visited: set, optional
+            Internal parameter to track visited cells and avoid infinite loops
 
         """
+
+        # Track visited cells to avoid infinite loops
+        if _visited is None:
+            _visited = set()
+
+        if key in _visited:
+            return
+        _visited.add(key)
 
         # Remove from cache
         self._cache.pop(key, None)
 
-        # Mark dirty (propagates to dependents)
+        # Mark dirty
+        print(f"DEBUG: SmartCache.invalidate({key}) - marking dirty and clearing cache")
         self.dep_graph.mark_dirty(key)
+
+        # Recursively invalidate all dependents (so they recalculate automatically)
+        dependents = self.dep_graph.dependents.get(key, set())
+        if dependents:
+            print(f"DEBUG: Recursively invalidating dependents: {dependents}")
+        for dependent in dependents:
+            self.invalidate(dependent, _visited)
 
     def clear(self):
         """Clear all cache entries"""

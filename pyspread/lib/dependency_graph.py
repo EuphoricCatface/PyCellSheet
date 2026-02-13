@@ -73,14 +73,18 @@ class DependencyGraph:
 
         """
 
+        print(f"DEBUG: add_dependency({dependent}, {dependency})")
         self.dependencies[dependent].add(dependency)
         self.dependents[dependency].add(dependent)
+        print(f"DEBUG: dependencies now: {dict(self.dependencies)}")
+        print(f"DEBUG: dependents now: {dict(self.dependents)}")
 
     def remove_cell(self, key):
         """Remove all dependencies for a cell
 
         Removes the cell as a dependent (removes forward edges from this cell).
-        Also removes the cell from other cells' dependent sets (reverse edges).
+        Does NOT remove reverse edges (what depends on this cell) - those are needed
+        for dirty propagation.
 
         Parameters
         ----------
@@ -95,11 +99,10 @@ class DependencyGraph:
                 self.dependents[dependency].discard(key)
             del self.dependencies[key]
 
-        # Remove reverse edges: nothing depends on this cell anymore
-        if key in self.dependents:
-            for dependent in self.dependents[key]:
-                self.dependencies[dependent].discard(key)
-            del self.dependents[key]
+        # DO NOT remove reverse edges - we need them for dirty propagation!
+        # When cell A changes, cells that depend on A need to be marked dirty.
+        # The dependents[A] set will be naturally updated when dependent cells
+        # are re-evaluated and call add_dependency() again.
 
     def check_for_cycles(self, start_key):
         """Check if there are any cycles starting from the given cell
@@ -160,9 +163,13 @@ class DependencyGraph:
             return  # Already dirty, avoid redundant work
 
         self.dirty.add(key)
+        print(f"DEBUG: mark_dirty({key}) - now dirty: {self.dirty}")
 
         # Propagate to all dependents (cells that depend on this cell)
-        for dependent in self.dependents.get(key, set()):
+        dependents = self.dependents.get(key, set())
+        if dependents:
+            print(f"DEBUG: Propagating to dependents: {dependents}")
+        for dependent in dependents:
             self.mark_dirty(dependent)  # Recursive propagation
 
     def is_dirty(self, key):
@@ -180,7 +187,10 @@ class DependencyGraph:
 
         """
 
-        return key in self.dirty
+        result = key in self.dirty
+        if result:
+            print(f"DEBUG: is_dirty({key}) = True")
+        return result
 
     def clear_dirty(self, key):
         """Clear the dirty flag for a cell
