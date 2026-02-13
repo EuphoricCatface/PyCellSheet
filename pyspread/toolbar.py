@@ -278,7 +278,6 @@ class FormatToolbar(ToolBarBase):
 
         self.addSeparator()
 
-        self.addAction(actions.freeze_cell)
         self.addAction(actions.lock_cell)
         self.addAction(actions.button_cell)
 

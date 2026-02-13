@@ -116,7 +116,6 @@ class MainWindow(QMainWindow):
         self.settings = Settings(self, reset_settings=default_settings)
         self.workflows = Workflows(self)
         self.undo_stack = QUndoStack(self)
-        self.refresh_timer = QTimer()
 
         self._init_widgets()
 
@@ -262,7 +261,6 @@ class MainWindow(QMainWindow):
 
         QApplication.instance().focusChanged.connect(self.on_focus_changed)
         self.gui_update.connect(self.on_gui_update)
-        self.refresh_timer.timeout.connect(self.on_refresh_timer)
 
         # Connect widgets only to first grid
         self.widgets.text_color_button.colorChanged.connect(
