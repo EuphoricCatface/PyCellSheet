@@ -55,6 +55,8 @@ class MacroPanel(QDialog):
             self.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             self._applied = True
             self.stylesheet_update()
+            if parent:
+                parent.installEventFilter(self)
 
         def stylesheet_update(self):
             # Qt does not guarantee the applying of new style
@@ -66,12 +68,20 @@ class MacroPanel(QDialog):
                 "QLabel[applied=false] { color: red } \n"
             )
 
-        def paintEvent(self, a0):
-            super().paintEvent(a0)
+        def _reposition(self):
             if self.parent():
                 self.move(
                     self.parent().width() - self.width(), 0
                 )
+
+        def eventFilter(self, obj, event):
+            if event.type() == event.Type.Resize:
+                self._reposition()
+            return False
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self._reposition()
 
         @pyqtProperty(bool)
         def applied(self):

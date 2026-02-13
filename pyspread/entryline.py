@@ -29,7 +29,7 @@
 from contextlib import contextmanager
 
 from PyQt6.QtCore import Qt, QEvent
-from PyQt6.QtGui import QTextOption, QKeyEvent
+from PyQt6.QtGui import QFontMetrics, QTextOption, QKeyEvent
 from PyQt6.QtWidgets import QWidget, QMainWindow
 
 try:
@@ -57,7 +57,7 @@ class Entryline(SpellTextEdit):
 
         self.main_window = main_window
 
-        min_height = self.cursorRect().y() + self.cursorRect().height() + 20
+        min_height = QFontMetrics(self.font()).height() + 20
         self.setMinimumHeight(min_height)
 
         self.setWordWrapMode(QTextOption.WrapMode.WrapAnywhere)

@@ -73,6 +73,7 @@ try:
     from pyspread import commands
     from pyspread.dialogs import DiscardDataDialog
     from pyspread.grid_renderer import (painter_save, CellRenderer,
+                                        CellEdgeRenderer,
                                         QColorCache, BorderWidthBottomCache,
                                         BorderWidthRightCache,
                                         EdgeBordersCache,
@@ -96,10 +97,10 @@ try:
 except ImportError:
     import commands
     from dialogs import DiscardDataDialog
-    from grid_renderer import (painter_save, CellRenderer, QColorCache,
-                               BorderWidthBottomCache, BorderWidthRightCache,
-                               EdgeBordersCache, BorderColorRightCache,
-                               BorderColorBottomCache)
+    from grid_renderer import (painter_save, CellRenderer, CellEdgeRenderer,
+                               QColorCache, BorderWidthBottomCache,
+                               BorderWidthRightCache, EdgeBordersCache,
+                               BorderColorRightCache, BorderColorBottomCache)
     from model.model import (CodeArray, CellAttribute, DefaultCellAttributeDict,
                             class_format_functions)
     from lib.attrdict import AttrDict
@@ -578,6 +579,7 @@ class Grid(QTableView):
     def update_zoom(self):
         """Updates the zoom level visualization to the current zoom factor"""
 
+        CellEdgeRenderer.intersection_cache.clear()
         self.verticalHeader().update_zoom()
         self.horizontalHeader().update_zoom()
 
