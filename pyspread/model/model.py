@@ -1516,7 +1516,10 @@ class CodeArray(DataArray):
         #  --- ExpParser END ---  #
 
         #  --- RefParser ---  #
-        ref_parsed = self.ref_parser.parser(exp_parsed)
+        try:
+            ref_parsed = self.ref_parser.parser(exp_parsed)
+        except Exception as err:
+            return err
 
         #  --- Dependency Tracking & Cycle Detection START ---  #
         # Check for circular references before evaluating
