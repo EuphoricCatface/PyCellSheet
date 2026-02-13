@@ -1933,15 +1933,7 @@ class GridTableModel(QAbstractTableModel):
             return wrap_text(safe_str(output))
 
         if role == Qt.ItemDataRole.DecorationRole:
-            # Show refresh icon for dirty cells (needs recalculation)
-            if self.code_array.dep_graph.is_dirty(key):
-                try:
-                    from pyspread.icons import Icon
-                except ImportError:
-                    from icons import Icon
-                return Icon.refresh
-
-            # Otherwise, handle image rendering
+            # Handle image rendering (dirty icon is painted separately in paint_)
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
                 value = self.code_array[key]
@@ -2446,6 +2438,31 @@ class GridCellDelegate(QStyledItemDelegate):
 
         self._render_svg(painter, rect, index, svg_str=svg_str)
 
+    def _render_dirty_icon(self, painter: QPainter, rect: QRectF,
+                          index: QModelIndex):
+        """Renders refresh icon on the right side for dirty cells
+
+        :param painter: Painter with which icon is rendered
+        :param rect: Cell rect of the cell to be painted
+        :param index: Index of cell for which icon is rendered
+
+        """
+        from pyspread.icons import Icon
+
+        # Icon size (16x16 pixels, or scaled by zoom)
+        icon_size = 16 * self.grid.zoom
+        padding = 4 * self.grid.zoom  # Padding from right edge
+
+        # Position icon on the right side
+        icon_x = rect.right() - icon_size - padding
+        icon_y = rect.center().y() - icon_size / 2  # Vertically centered
+
+        # Create icon rect
+        icon_rect = QRectF(icon_x, icon_y, icon_size, icon_size)
+
+        # Render the icon
+        Icon.refresh.paint(painter, icon_rect.toRect(), Qt.AlignmentFlag.AlignCenter)
+
     def paint_(self, painter: QPainter, rect: QRectF,
                option: QStyleOptionViewItem, index: QModelIndex):
         """Calls the overloaded paint function or creates html delegate
@@ -2485,6 +2502,10 @@ class GridCellDelegate(QStyledItemDelegate):
 
         elif renderer == "matplotlib":
             self._render_matplotlib(painter, rect, index)
+
+        # Paint dirty indicator icon on the right side
+        if self.code_array.dep_graph.is_dirty(key):
+            self._render_dirty_icon(painter, rect, index)
 
         option.rect = old_rect
 
