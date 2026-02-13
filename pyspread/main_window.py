@@ -392,8 +392,6 @@ class MainWindow(QMainWindow):
             self.safe_mode_widget.hide()
             # Disable approval menu entry
             self.main_window_actions.approve.setEnabled(False)
-            # Clear result cache
-            self.grid.model.code_array.result_cache.clear()
             # Execute macros
             self.macro_panel.on_apply()
 

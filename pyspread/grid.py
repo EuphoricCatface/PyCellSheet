@@ -2079,10 +2079,6 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.dict_grid.sheet_globals_uncopyable = {i: dict() for i in range(self.shape[2])}
             self.code_array.dict_grid.sheet_globals_copyable = {i: dict() for i in range(self.shape[2])}
 
-            # Clear caches
-            # self.main_window.undo_stack.clear()
-            self.code_array.result_cache.clear()
-
 
 class GridCellDelegate(QStyledItemDelegate):
     """QStyledItemDelegate for main grid QTableView"""
