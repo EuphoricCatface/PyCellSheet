@@ -112,7 +112,6 @@ class Settings:
     timeout = 1000
     """Timeout for cell calculations in milliseconds"""
 
-    refresh_timeout = 1000
     """Timeout for frozen cell updates in milliseconds"""
 
     signature_key = None
@@ -129,7 +128,6 @@ class Settings:
 
     print_zoom = None
 
-    show_frozen = False
     """If `True` then frozen cell background is striped"""
 
     find_dialog_state = None
@@ -241,7 +239,6 @@ class Settings:
         if self.file_history:
             settings.setValue("file_history", self.file_history)
         settings.setValue("timeout", self.timeout)
-        settings.setValue("refresh_timeout", self.refresh_timeout)
         settings.setValue("signature_key", self.signature_key)
         settings.setValue("show_statusbar_sum", self.show_statusbar_sum)
 
@@ -317,7 +314,6 @@ class Settings:
         setting2attr("max_file_history", mapper=int)
         setting2attr("file_history")
         setting2attr("timeout", mapper=int)
-        setting2attr("refresh_timeout", mapper=int)
         setting2attr("signature_key")
         setting2attr("show_statusbar_sum", mapper=qt_bool)
 

@@ -390,25 +390,6 @@ class MainWindowActions(AttrDict):
                              shortcut='Ctrl+0' if self.shortcuts else "",
                              statustip='Show grid on standard zoom level')
 
-        self.refresh_cells = \
-            Action(self.parent, "Refresh selected cells",
-                   self.parent.grid.refresh_selected_frozen_cells,
-                   icon=Icon.refresh,
-                   shortcut=QKeySequence.StandardKey.Refresh if self.shortcuts else "",
-                   statustip='Refresh selected cells even when frozen')
-
-        self.toggle_periodic_updates = \
-            Action(self.parent, "Toggle periodic updates",
-                   self.parent.on_toggle_refresh_timer,
-                   icon=Icon.toggle_periodic_updates, checkable=True,
-                   statustip='Toggles periodic updates for frozen cells')
-
-        self.show_frozen = Action(self.parent, "Show frozen",
-                                  self.parent.grid.on_show_frozen_pressed,
-                                  icon=Icon.show_frozen,
-                                  checkable=True,
-                                  statustip='Indicates frozen cells with a '
-                                            'background crosshatch')
 
     def create_format_actions(self):
         """actions for Format menu"""
@@ -514,14 +495,6 @@ class MainWindowActions(AttrDict):
             self.parent.widgets.background_color_button.on_pressed,
             icon=Icon.background_color,
             statustip='Lauch background color dialog')
-
-        self.freeze_cell = Action(self.parent, "Freeze cell",
-                                  self.parent.grid.on_freeze_pressed,
-                                  icon=Icon.freeze,
-                                  checkable=True,
-                                  statustip='Freeze the selected cell so that '
-                                            'is is only updated when <F5> is '
-                                            'pressed')
 
         self.lock_cell = Action(self.parent, "Lock cell",
                                 self.parent.grid.on_lock_pressed,
