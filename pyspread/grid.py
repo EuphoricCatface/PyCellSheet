@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -759,51 +760,9 @@ class Grid(QTableView):
         grid = self.main_window.focused_grid
         grid.zoom = 1.0
 
-    def _refresh_frozen_cell(self, key: Tuple[int, int, int]):
-        """Refreshes the frozen cell key
 
-        Does neither emit dataChanged nor clear _attr_cache or _table_cache.
+        self.model.emit_data_changed_all()
 
-        :param key: Key of cell to be refreshed
-
-        """
-
-        if self.model.code_array.cell_attributes[key].frozen:
-            code = self.model.code_array(key)
-            result = self.model.code_array._eval_cell(key, code)
-            self.model.code_array.frozen_cache[repr(key)] = result
-
-    def refresh_frozen_cells(self):
-        """Refreshes all frozen cells"""
-
-        frozen_cache = self.model.code_array.frozen_cache
-        cell_attributes = self.model.code_array.cell_attributes
-
-        for repr_key in frozen_cache:
-            key = literal_eval(repr_key)
-            self._refresh_frozen_cell(key)
-
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
-
-    def refresh_selected_frozen_cells(self):
-        """Refreshes selected frozen cells"""
-
-        for idx in self.selected_idx:
-            self._refresh_frozen_cell((idx.row(), idx.column(), self.table))
-
-        self.model.code_array.cell_attributes._attr_cache.clear()
-        self.model.code_array.cell_attributes._table_cache.clear()
-        self.model.code_array.result_cache.clear()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
-
-    def on_show_frozen_pressed(self, toggled: bool):
-        """Show frozen cells event handler
-
-        :param toggled: Toggle state
-
-        """
-
-        self.main_window.settings.show_frozen = toggled
 
     def on_font_dialog(self):
         """Font dialog event handler"""
@@ -1283,30 +1242,6 @@ class Grid(QTableView):
                 self.setIndexWidget(index, button)
                 self.widget_indices.append(index)
 
-    def on_freeze_pressed(self, toggled: bool):
-        """Freeze cell event handler
-
-        :param toggled: Toggle state
-
-        """
-
-        grid = self.main_window.focused_grid
-
-        current_attr = self.model.code_array.cell_attributes[grid.current]
-        if current_attr.frozen == toggled:
-            return  # Something is wrong with the GUI update
-
-        cells = list(self.selection.cell_generator(shape=self.model.shape,
-                                                   table=self.table))
-        if toggled:
-            # We have an non-frozen cell that has to be frozen
-            description = f"Freeze cells {cells}"
-            command = commands.FreezeCell(self.model, cells, description)
-        else:
-            # We have an frozen cell that has to be unfrozen
-            description = f"Thaw cells {cells}"
-            command = commands.ThawCell(self.model, cells, description)
-        self.main_window.undo_stack.push(command)
 
     def on_button_cell_pressed(self, toggled: bool):
         """Button cell event handler
@@ -1769,6 +1704,18 @@ class GridTableModel(QAbstractTableModel):
         yield
         self.endResetModel()
 
+    def emit_data_changed_all(self):
+        """Emit dataChanged signal for the entire visible grid.
+
+        This properly signals that all cell data may have changed,
+        using valid indices instead of invalid QModelIndex() instances.
+        """
+        if self.rowCount() > 0 and self.columnCount() > 0:
+            top_left = self.index(0, 0)
+            bottom_right = self.index(self.rowCount() - 1,
+                                     self.columnCount() - 1)
+            self.dataChanged.emit(top_left, bottom_right)
+
     @contextmanager
     def inserting_rows(self, index: QModelIndex, first: int, last: int):
         """Context manager for inserting rows
@@ -2022,6 +1969,7 @@ class GridTableModel(QAbstractTableModel):
             return wrap_text(safe_str(output))
 
         if role == Qt.ItemDataRole.DecorationRole:
+            # Handle image rendering (dirty icon is painted separately in paint_)
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
                 value = self.code_array[key]
@@ -2034,16 +1982,11 @@ class GridTableModel(QAbstractTableModel):
                     return value
 
         if role == Qt.ItemDataRole.BackgroundRole:
-            if self.main_window.settings.show_frozen \
-               and self.code_array.cell_attributes[key].frozen:
-                pattern_rgb = self.grid.palette().highlight().color()
-                bg_color = QBrush(pattern_rgb, Qt.BrushStyle.BDiagPattern)
+            bg_color_rgb = self.code_array.cell_attributes[key].bgcolor
+            if bg_color_rgb is None:
+                bg_color = QColor(255, 255, 255)
             else:
-                bg_color_rgb = self.code_array.cell_attributes[key].bgcolor
-                if bg_color_rgb is None:
-                    bg_color = QColor(255, 255, 255)
-                else:
-                    bg_color = QColor(*bg_color_rgb)
+                bg_color = QColor(*bg_color_rgb)
             return bg_color
 
         if role == Qt.ItemDataRole.ForegroundRole:
@@ -2105,7 +2048,16 @@ class GridTableModel(QAbstractTableModel):
                 self.code_array[key] = f"{value}"
 
             if not self.main_window.prevent_updates:
+                # Emit dataChanged for the edited cell
                 self.dataChanged.emit(index, index)
+
+                # Also emit dataChanged for all dirty dependents (so they repaint)
+                if hasattr(self.code_array, 'dep_graph'):
+                    for dependent_key in self.code_array.dep_graph.dirty:
+                        if dependent_key != key and dependent_key[2] == table:  # Same sheet
+                            dep_row, dep_col, _ = dependent_key
+                            dep_index = self.index(dep_row, dep_col)
+                            self.dataChanged.emit(dep_index, dep_index)
 
             return True
 
@@ -2171,10 +2123,6 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.dict_grid.macros_draft = dict()
             self.code_array.dict_grid.sheet_globals_uncopyable = {i: dict() for i in range(self.shape[2])}
             self.code_array.dict_grid.sheet_globals_copyable = {i: dict() for i in range(self.shape[2])}
-
-            # Clear caches
-            # self.main_window.undo_stack.clear()
-            self.code_array.result_cache.clear()
 
 
 class GridCellDelegate(QStyledItemDelegate):
@@ -2531,6 +2479,34 @@ class GridCellDelegate(QStyledItemDelegate):
 
         self._render_svg(painter, rect, index, svg_str=svg_str)
 
+    def _render_dirty_icon(self, painter: QPainter, rect: QRectF,
+                          index: QModelIndex):
+        """Renders refresh icon on the right side for dirty cells
+
+        :param painter: Painter with which icon is rendered
+        :param rect: Cell rect of the cell to be painted
+        :param index: Index of cell for which icon is rendered
+
+        """
+        try:
+            from pyspread.icons import Icon
+        except ImportError:
+            from icons import Icon
+
+        # Icon size (16x16 pixels, or scaled by zoom)
+        icon_size = 16 * self.grid.zoom
+        padding = 4 * self.grid.zoom  # Padding from right edge
+
+        # Position icon on the right side
+        icon_x = rect.right() - icon_size - padding
+        icon_y = rect.center().y() - icon_size / 2  # Vertically centered
+
+        # Create icon rect
+        icon_rect = QRectF(icon_x, icon_y, icon_size, icon_size)
+
+        # Render the icon
+        Icon.refresh.paint(painter, icon_rect.toRect(), Qt.AlignmentFlag.AlignCenter)
+
     def paint_(self, painter: QPainter, rect: QRectF,
                option: QStyleOptionViewItem, index: QModelIndex):
         """Calls the overloaded paint function or creates html delegate
@@ -2570,6 +2546,12 @@ class GridCellDelegate(QStyledItemDelegate):
 
         elif renderer == "matplotlib":
             self._render_matplotlib(painter, rect, index)
+
+        # Paint dirty indicator icon on the right side
+        is_dirty = self.code_array.dep_graph.is_dirty(key)
+        if is_dirty:
+            print(f"DEBUG: paint_() rendering icon for dirty cell {key}")
+            self._render_dirty_icon(painter, rect, index)
 
         option.rect = old_rect
 

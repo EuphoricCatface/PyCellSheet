@@ -84,12 +84,9 @@ class TestMainWindow:
 
         main_window.safe_mode = False
         assert not main_window.main_window_actions.approve.isEnabled()
-        assert not self.grid.model.code_array.result_cache
         assert not main_window.safe_mode
 
     def test_on_clear_globals(self):
         """Unit test for on_clear_globals"""
 
-        self.grid.model.code_array.result_cache["test"] = "Testres"
         main_window.on_clear_globals()
-        assert not self.grid.model.code_array.result_cache

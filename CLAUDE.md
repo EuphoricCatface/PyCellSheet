@@ -45,8 +45,44 @@ Cell Contents -> Expression Parser -> Reference Parser -> Python Evaluator -> (F
 
 ## Key Source Files
 
+## Import Pattern
+
+**CRITICAL**: Always use try/except pattern for imports to support both development and installed modes:
+
+```python
+try:
+    from pyspread.lib.module import Class
+except ImportError:
+    from lib.module import Class
+```
+
+**NEVER** import inline in methods. All imports must be in the try/except block at the top of the file.
+
+**Example violation**:
+```python
+def some_method(self):
+    from pyspread.icons import Icon  # ❌ WRONG - inline import
+    ...
+```
+
+**Correct pattern**:
+```python
+# At top of file
+try:
+    from pyspread.icons import Icon
+except ImportError:
+    from icons import Icon
+
+def some_method(self):
+    # Use Icon here ✅
+    ...
+```
+
 ### PyCellSheet additions (where most development happens)
-- `pyspread/lib/pycellsheet.py` - Core types and parsers: `Empty`/`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`, `ExpressionParser`, `ReferenceParser`, `PythonEvaluator`, `Formatter`, `HelpText`, `CELL_META_GENERATOR`, `flatten_args()`
+- `pyspread/lib/pycellsheet.py` - Core types and parsers: `Empty`/`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`, `ExpressionParser`, `ReferenceParser`, `PythonEvaluator`, `Formatter`, `HelpText`, `CELL_META_GENERATOR`, `DependencyTracker`, `flatten_args()`
+- `pyspread/lib/dependency_graph.py` - Dependency tracking with forward/reverse edges, dirty flags, and circular reference detection via DFS
+- `pyspread/lib/smart_cache.py` - Dependency-aware cache with INVALID sentinel and transitive dirty checking
+- `pyspread/lib/exceptions.py` - Custom exceptions: `PyCellSheetError`, `CircularRefError`
 - `pyspread/lib/spreadsheet/` - Spreadsheet function library (UPPERCASE functions). `math.py` (~60 functions), `engineering.py`, `filter.py`, `info.py`, `logical.py` are largely implemented. `statistical.py` has basic functions (AVERAGE, COUNT, MAX, MIN, MEDIAN, etc.) but ~60 stubs remain. Other modules (financial, text, etc.) are mostly stubs.
 - `pyspread/lib/spreadsheet/__init__.py` - Re-exports all function modules via `__all__`
 
@@ -69,10 +105,10 @@ Four-layer model (inherited from pyspread, modified):
 
 - **Layer 0 - KeyValueStore**: `dict` with default `None` for missing keys
 - **Layer 1 - DictGrid**: Stores cell contents as `{(row, col, table): str}`. Also holds `cell_attributes`, `macros` (list of init script strings per sheet), `exp_parser_code`, row/col sizes.
-- **Layer 2 - DataArray**: Adds slicing, insertion/deletion. Holds non-persisted state: `macros_draft`, `sheet_globals_copyable`, `sheet_globals_uncopyable`, `exp_parser` instance.
-- **Layer 3 - CodeArray**: Evaluates cells on access via `__getitem__` -> `_eval_cell()`. Maintains `result_cache` and `frozen_cache`.
+- **Layer 2 - DataArray**: Adds slicing, insertion/deletion. Holds non-persisted state: `macros_draft`, `sheet_globals_copyable`, `sheet_globals_uncopyable`, `exp_parser` instance, `dep_graph`, `smart_cache`.
+- **Layer 3 - CodeArray**: Evaluates cells on access via `__getitem__` -> `_eval_cell()`. Uses `SmartCache` for dependency-aware caching and `DependencyGraph` for tracking cell relationships and circular reference detection.
 
-The grid is currently a 3D dict keyed by `(row, col, table)`. A later goal is to replace this with an array of 2D matrices.
+The grid is currently a 3D dict keyed by `(row, col, table)` where the key format is **(row, col, table)**, not (col, row, table). A later goal is to replace this with an array of 2D matrices.
 
 ## Types
 
@@ -83,12 +119,41 @@ The grid is currently a 3D dict keyed by `(row, col, table)`. A later goal is to
 - `HelpText` - Wraps `help()` output for display in tooltips. Tries `__name__` for the query display.
 - `CELL_META_GENERATOR` - Singleton that provides `CM()`/`cell_meta()` in cells. Returns a `CELL_META` object with `.code` and `.attributes` properties for the current or referenced cell.
 
+## Dependency Tracking & Smart Caching
+
+**DependencyGraph** (`lib/dependency_graph.py`):
+- **Forward edges**: `dependencies[A2] = {A1}` means A2 depends on A1
+- **Reverse edges**: `dependents[A1] = {A2}` means A1 is depended on by A2
+- **Dirty flags**: `dirty = {A1, A2}` tracks cells needing recalculation
+- **Circular reference detection**: DFS with recursion stack, raises `CircularRefError`
+- **remove_cell(remove_reverse_edges=False)**: Preserves reverse edges by default to maintain dependency chains when cells are edited or deleted
+
+**SmartCache** (`lib/smart_cache.py`):
+- **INVALID sentinel**: `object()` distinguishes "not cached" from "cached None"
+- **Dependency-aware invalidation**: Marks cell and all transitive dependents dirty
+- **Validation**: Checks if cell or any transitive dependencies are dirty before returning cached value
+- **Storage**: Stores original values, returns `deepcopy()` on retrieval
+
+**DependencyTracker** (context manager in `lib/pycellsheet.py`):
+- **Thread-local storage**: Tracks currently evaluating cell
+- **Nested evaluation support**: Saves and restores previous context for recursive cell evaluation
+- **Automatic recording**: When `C("A1")` is called, records dependency from current cell to A1
+- **Circular reference detection**: Calls `check_for_cycles()` after adding each dependency
+
+**Cell Evaluation Pipeline** with dependency tracking:
+1. **__getitem__**: Checks cache validity (dirty flags + dependencies)
+2. **_eval_cell**: Wraps evaluation in `DependencyTracker.track(key)` context
+3. **C()/R()**: Records dependency and checks for circular references before accessing cell
+4. **__setitem__**: Invalidates cache (propagates to dependents), removes forward edges only
+5. **pop()**: Same as __setitem__ - preserves reverse edges for proper dependency tracking
+
 ## Known Issues and Quirks
 
 - `coord_to_spreadsheet_ref` has a bug with column 0: it hardcodes "A" but the general algorithm would also produce "A" for col=0 via the else branch if it handled it
 - Expression parser currently hardcoded to "Mixed" mode as a workaround until UI is built (see `DataArray.__init__`)
-- No dependency graph or recalculation ordering yet
-- No circular reference detection
+- ~~No dependency graph or recalculation ordering yet~~ ✅ **DONE** - DependencyGraph implemented with smart caching
+- ~~No circular reference detection~~ ✅ **DONE** - Circular references detected via DFS during evaluation
+- No UI for dirty cell visualization yet (refresh icon, recalc mode, F9 shortcuts)
 - Sheet names are currently numeric indices (string `"0"`, `"1"`, ...) - named sheets are a later goal
 
 ## Build and Run
@@ -105,13 +170,19 @@ python pyspread/__main__.py
 
 ## Testing
 
-Inherited pyspread tests exist in `pyspread/test/` and `pyspread/lib/test/` but have not been updated for PyCellSheet changes. No PyCellSheet-specific tests exist yet.
+**Dependency Tracking Tests** (62 tests total, all passing):
+- `pyspread/lib/test/test_dependency_graph.py` - 27 tests for DependencyGraph (add/remove, cycles, dirty flags, transitive closure)
+- `pyspread/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
+- `pyspread/model/test/test_dependency_integration.py` - 15 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection)
+
+**Legacy pyspread tests** exist in `pyspread/test/` and `pyspread/lib/test/` but have not been updated for PyCellSheet changes.
 
 ## Later Goals (from design note, not yet implemented)
 
 - Replace 3D matrix with array of 2D matrices
-- Dependency graph, update chaining, circular reference detection
+- ~~Dependency graph, update chaining, circular reference detection~~ ✅ **DONE**
 - `compile()` caching for cell code
+- UI for dirty cell visualization (refresh icon, recalc mode, F9 shortcuts)
 - Named sheets (currently numeric)
 - Custom function scripts per workbook
 - Configurable Formatter (per-workspace and per-cell scope; basic static version now exists)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -56,7 +57,6 @@ from inspect import getmembers, isfunction, isgenerator
 import io
 from itertools import product
 import re
-import signal
 import sys
 from traceback import print_exception
 from typing import (
@@ -109,7 +109,13 @@ try:
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
     from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+
+    # Dependency tracking and smart caching
+    from pyspread.lib.dependency_graph import DependencyGraph
+    from pyspread.lib.smart_cache import SmartCache
+    from pyspread.lib.exceptions import CircularRefError
+
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -119,7 +125,12 @@ except ImportError:
     from lib.selection import Selection
     from lib.string_helpers import ZEN
     from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+
+    # Dependency tracking and smart caching
+    from lib.dependency_graph import DependencyGraph
+    from lib.smart_cache import SmartCache
+    from lib.exceptions import CircularRefError
 
 
 INITSCRIPT_DEFAULT = """
@@ -226,7 +237,6 @@ class DefaultCellAttributeDict(AttrDict):
         self.angle = 0.0
         self.vertical_align = "align_top"
         self.justification = "justify_left"
-        self.frozen = False
         self.merge_area = None
         self.renderer = "text"
         self.button_cell = False
@@ -1401,12 +1411,6 @@ class CodeArray(DataArray):
 
     """
 
-    # Cache for results from __getitem__ calls
-    result_cache = {}
-
-    # Cache for frozen objects
-    frozen_cache = {}
-
     # Safe mode: If True then Whether pyspread is operating in safe_mode
     # In safe_mode, cells are not evaluated but its code is returned instead.
     safe_mode = False
@@ -1416,6 +1420,9 @@ class CodeArray(DataArray):
 
         self.ref_parser = ReferenceParser(self)
         self.cell_meta_gen = CELL_META_GENERATOR(self)
+
+        self.dep_graph = DependencyGraph()
+        self.smart_cache = SmartCache(self.dep_graph)
 
     def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]], value: str):
@@ -1433,19 +1440,22 @@ class CodeArray(DataArray):
             numpy.set_string_function(lambda s: repr(s.tolist() if hasattr(s, "tolist") else s))
 
         # Prevent unchanged cells from being recalculated on cursor movement
-
-        repr_key = repr(key)
-
-        unchanged = (repr_key in self.result_cache and
+        cached = self.smart_cache.get(key)
+        unchanged = (cached is not SmartCache.INVALID and
                      value == self(key)) or \
                     ((value is None or value == "") and
-                     repr_key not in self.result_cache)
+                     cached is SmartCache.INVALID)
 
         super().__setitem__(key, value)
 
         if not unchanged:
-            # Reset result cache
-            self.result_cache = {}
+            # Invalidate cache for this cell and its dependents
+            # IMPORTANT: Invalidate BEFORE removing from dep graph,
+            # so invalidate() can propagate to dependents
+            self.smart_cache.invalidate(key)
+            # Remove dependencies for this cell (will be re-tracked on next eval)
+            # Reverse edges are preserved by default for cycle detection
+            self.dep_graph.remove_cell(key)
 
     def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]]) -> Any:
@@ -1457,33 +1467,33 @@ class CodeArray(DataArray):
 
         code = self(key)
 
+        # Smart cache handling (check even for empty cells)
+        cached = self.smart_cache.get(key)
+        if cached is not SmartCache.INVALID:
+            # Cache hit! Return deepcopied value (cache stores original)
+            return deepcopy(cached)
+
+        # Empty cells still need to be cached and have dirty flag cleared
         if code is None:
+            # Store EmptyCell in cache
+            self.smart_cache.set(key, EmptyCell)
+            # Clear dirty flag
+            self.dep_graph.clear_dirty(key)
             return EmptyCell
-
-        # Cached cell handling
-
-        if repr(key) in self.result_cache:
-            return self.result_cache[repr(key)]
 
         if not any(isinstance(k, slice) for k in key):
             # Button cell handling
             if self.cell_attributes[key].button_cell is not False:
                 return
-            # Frozen cell handling
-            frozen_res = self.cell_attributes[key].frozen
-            if frozen_res:
-                if repr(key) in self.frozen_cache:
-                    return self.frozen_cache[repr(key)]
-                # Frozen cache is empty.
-                # Maybe we have a reload without the frozen cache
-                result = self._eval_cell(key, code)
-                self.frozen_cache[repr(key)] = result
-                return result
 
-        # Normal cell handling
-
+        # Normal cell handling - evaluate the cell
         result = self._eval_cell(key, code)
-        self.result_cache[repr(key)] = result
+
+        # Store in smart cache
+        self.smart_cache.set(key, result)
+
+        # Clear dirty flag after successful evaluation
+        self.dep_graph.clear_dirty(key)
 
         return result
 
@@ -1553,15 +1563,18 @@ class CodeArray(DataArray):
             return exp_parsed
         #  --- ExpParser END ---  #
 
-        try:
-            signal.signal(signal.SIGALRM, self.handler)
-            signal.alarm(self.settings.timeout)
-        except AttributeError:
-            # No Unix system
-            pass
-
         #  --- RefParser ---  #
-        ref_parsed = self.ref_parser.parser(exp_parsed)
+        try:
+            ref_parsed = self.ref_parser.parser(exp_parsed)
+        except Exception as err:
+            return err
+
+        #  --- Dependency Tracking & Cycle Detection START ---  #
+        # Check for circular references before evaluating
+        try:
+            self.dep_graph.check_for_cycles(key)
+        except CircularRefError as err:
+            return err
 
         #  --- PythonEval START ---  #
         env = deepcopy(self.sheet_globals_copyable[key[2]])
@@ -1580,12 +1593,18 @@ class CodeArray(DataArray):
             "RangeOutput": RangeOutput  # Needed for RangeOutput.OFFSET evaluation
         }
         try:
-            # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-            result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
-            if isinstance(result, RangeOutput):
-                PythonEvaluator.range_output_handler(self, result, key)
-            if isinstance(result, RangeOutput.OFFSET):
-                result = PythonEvaluator.range_offset_handler(self, result, key)
+            # Track dependencies during evaluation
+            with DependencyTracker.track(key):
+                # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
+                result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
+                if isinstance(result, RangeOutput):
+                    PythonEvaluator.range_output_handler(self, result, key)
+                if isinstance(result, RangeOutput.OFFSET):
+                    result = PythonEvaluator.range_offset_handler(self, result, key)
+
+        except CircularRefError as err:
+            # Circular reference detected during evaluation
+            result = err
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
@@ -1597,13 +1616,6 @@ class CodeArray(DataArray):
         except Exception as err:
             result = err
         #  --- PythonEval END ---  #
-
-        finally:
-            try:
-                signal.alarm(0)
-            except AttributeError:
-                # No POSIX system
-                pass
 
         # Change back cell value for evaluation from other cells
         # self.dict_grid[key] = _old_code
@@ -1617,13 +1629,37 @@ class CodeArray(DataArray):
 
         """
 
-        try:
-            self.result_cache.pop(repr(key))
-
-        except KeyError:
-            pass
+        # Invalidate cache and remove dependencies
+        # Reverse edges are preserved by default to allow proper invalidation
+        # when the cell is re-added
+        self.dep_graph.remove_cell(key)
+        self.smart_cache.invalidate(key)
 
         return super().pop(key)
+
+    def recalculate_dirty(self) -> int:
+        """Force recalculation of all dirty cells
+
+        Returns the number of cells recalculated
+
+        """
+
+        dirty_cells = list(self.dep_graph.get_all_dirty())
+
+        if not dirty_cells:
+            return 0
+
+        # Force recalculation by accessing each dirty cell
+        # This will evaluate and cache, clearing dirty flags
+        for key in dirty_cells:
+            try:
+                # Access the cell - this triggers evaluation
+                _ = self[key]
+            except Exception:
+                # Ignore errors during recalculation
+                pass
+
+        return len(dirty_cells)
 
     def get_globals(self) -> dict:
         """Returns globals dict"""
@@ -1664,21 +1700,9 @@ class CodeArray(DataArray):
         sys.stdout = code_out
         sys.stderr = code_err
 
-        try:
-            signal.signal(signal.SIGALRM, self.handler)
-            signal.alarm(self.settings.timeout)
-        except AttributeError:
-            # No POSIX system
-            pass
-
         sheet_globals = {}
         try:
             exec(self.macros[current_table], sheet_globals)
-            try:
-                signal.alarm(0)
-            except AttributeError:
-                # No POSIX system
-                pass
 
         except Exception:
             exc_info = sys.exc_info()
@@ -1694,8 +1718,8 @@ class CodeArray(DataArray):
         code_out.close()
         code_err.close()
 
-        # Reset result cache
-        self.result_cache.clear()
+        # Reset cache - clear all since init scripts affect globals
+        self.smart_cache.clear()
         self.sheet_globals_copyable[current_table] = dict()
         self.sheet_globals_uncopyable[current_table] = dict()
 
@@ -1818,15 +1842,5 @@ class CodeArray(DataArray):
             except Exception:
                 # re errors are cryptical: sre_constants,...
                 pass
-
-    def handler(self, signum: Any, frame: Any):
-        """Signal handler for timeout
-
-        :param signum: Ignored
-        :param frame: Ignored
-
-        """
-
-        raise RuntimeError("Timeout after {} s.".format(self.settings.timeout))
 
 # End of class CodeArray

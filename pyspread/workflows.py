@@ -368,7 +368,7 @@ class Workflows:
             # Update index widgets
             grid.update_index_widgets()
 
-            grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
+            grid.model.emit_data_changed_all()
 
             # Select upper left cell because initial selection oddities
             grid.reset_selection()

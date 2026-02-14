@@ -116,7 +116,6 @@ class MainWindow(QMainWindow):
         self.settings = Settings(self, reset_settings=default_settings)
         self.workflows = Workflows(self)
         self.undo_stack = QUndoStack(self)
-        self.refresh_timer = QTimer()
 
         self._init_widgets()
 
@@ -262,7 +261,6 @@ class MainWindow(QMainWindow):
 
         QApplication.instance().focusChanged.connect(self.on_focus_changed)
         self.gui_update.connect(self.on_gui_update)
-        self.refresh_timer.timeout.connect(self.on_refresh_timer)
 
         # Connect widgets only to first grid
         self.widgets.text_color_button.colorChanged.connect(
@@ -394,8 +392,6 @@ class MainWindow(QMainWindow):
             self.safe_mode_widget.hide()
             # Disable approval menu entry
             self.main_window_actions.approve.setEnabled(False)
-            # Clear result cache
-            self.grid.model.code_array.result_cache.clear()
             # Execute macros
             self.macro_panel.on_apply()
 
@@ -512,6 +508,26 @@ class MainWindow(QMainWindow):
             self._previous_window_state = self.windowState()
             self.setWindowState(Qt.WindowState.WindowFullScreen)
 
+    def on_recalculate(self):
+        """Recalculate dirty cells event handler (F9 shortcut)"""
+
+        num_recalculated = self.grid.model.code_array.recalculate_dirty()
+
+        if num_recalculated > 0:
+            # Update the grid display
+            self.grid.model.dataChanged.emit(
+                self.grid.model.index(0, 0),
+                self.grid.model.index(
+                    self.grid.model.rowCount() - 1,
+                    self.grid.model.columnCount() - 1
+                )
+            )
+            self.statusBar().showMessage(
+                f"Recalculated {num_recalculated} cells", 2000
+            )
+        else:
+            self.statusBar().showMessage("No dirty cells to recalculate", 2000)
+
     def on_approve(self):
         """Approve event handler"""
 
@@ -553,30 +569,6 @@ class MainWindow(QMainWindow):
 
         self.undo_stack.redo()
 
-    def on_toggle_refresh_timer(self, toggled: bool):
-        """Toggles periodic timer for frozen cells
-
-        :param toggled: Toggle state
-
-        """
-
-        if toggled:
-            self.grid.refresh_frozen_cells()
-            self.refresh_timer.start(self.settings.refresh_timeout)
-        else:
-            self.refresh_timer.stop()
-
-    def on_refresh_timer(self):
-        """Event handler for self.refresh_timer.timeout
-
-        Called for periodic updates of frozen cells.
-        Does nothing if either the entry_line or a cell editor is active.
-
-        """
-
-        if not self.entry_line.hasFocus() \
-           and self.grid.state() != self.grid.State.EditingState:
-            self.grid.refresh_frozen_cells()
 
     def _toggle_widget(self, widget: QWidget, action_name: str, toggled: bool):
         """Toggles widget visibility and updates toggle actions
@@ -731,10 +723,6 @@ class MainWindow(QMainWindow):
         renderer = attributes.renderer
         widgets.renderer_button.set_current_action(renderer)
         widgets.renderer_button.set_menu_checked(renderer)
-
-        self.main_window_actions.freeze_cell.setChecked(attributes.frozen)
-        self.main_window_toolbar_actions.freeze_cell.setChecked(
-            attributes.frozen)
 
         self.main_window_actions.lock_cell.setChecked(attributes.locked)
         self.main_window_toolbar_actions.lock_cell.setChecked(
