@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright Martin Manns
+# Copyright Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
