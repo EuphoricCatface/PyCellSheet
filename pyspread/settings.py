@@ -123,8 +123,6 @@ class Settings:
 
     print_zoom = None
 
-    """If `True` then frozen cell background is striped"""
-
     find_dialog_state = None
     """Find dialog state - needs to be stored when dialog is closed"""
 

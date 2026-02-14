@@ -441,88 +441,6 @@ class TestGrid:
             assert grid.zoom == 1.0
         main_window._last_focused_grid = self.grid
 
-    def test_refresh_frozen_cell(self):
-        """Unit test for _refresh_frozen_cell"""
-
-        self.grid.current = 1, 0, 0
-        self.grid.model.code_array[1, 0, 0] = "23"
-        self.grid.on_freeze_pressed(True)
-        self.grid.model.code_array[1, 0, 0] = "'Test'"
-        assert self.grid.model.code_array.frozen_cache == {'(1, 0, 0)': 23}
-        assert self.grid.model.code_array[1, 0, 0] == 23
-
-        self.grid._refresh_frozen_cell((1, 0, 0))
-        assert self.grid.model.code_array[1, 0, 0] == "Test"
-
-        self.grid.on_freeze_pressed(False)
-
-    def test_refresh_frozen_cells(self):
-        """Unit test for refresh_frozen_cells"""
-
-        self.grid.current = 1, 0, 0
-        self.grid.model.code_array[1, 0, 0] = "23"
-        self.grid.on_freeze_pressed(True)
-        self.grid.current = 2, 0, 0
-        self.grid.model.code_array[2, 0, 0] = "24"
-        self.grid.on_freeze_pressed(True)
-
-        assert self.grid.model.code_array[1, 0, 0] == 23
-        assert self.grid.model.code_array[2, 0, 0] == 24
-
-        self.grid.model.code_array[1, 0, 0] = "'Test1'"
-        self.grid.model.code_array[2, 0, 0] = "'Test2'"
-
-        assert self.grid.model.code_array[1, 0, 0] == 23
-        assert self.grid.model.code_array[2, 0, 0] == 24
-
-        self.grid.refresh_frozen_cells()
-
-        assert self.grid.model.code_array[1, 0, 0] == "Test1"
-        assert self.grid.model.code_array[2, 0, 0] == "Test2"
-
-        self.grid.current = 1, 0, 0
-        self.grid.on_freeze_pressed(False)
-        self.grid.current = 2, 0, 0
-        self.grid.on_freeze_pressed(False)
-
-    def test_refresh_selected_frozen_cells(self):
-        """Unit test for refresh_selected_frozen_cells"""
-
-        self.grid.current = 1, 0, 0
-        self.grid.model.code_array[1, 0, 0] = "23"
-        self.grid.on_freeze_pressed(True)
-        self.grid.current = 2, 0, 0
-        self.grid.model.code_array[2, 0, 0] = "24"
-        self.grid.on_freeze_pressed(True)
-
-        assert self.grid.model.code_array[1, 0, 0] == 23
-        assert self.grid.model.code_array[2, 0, 0] == 24
-
-        self.grid.model.code_array[1, 0, 0] = "'Test1'"
-        self.grid.model.code_array[2, 0, 0] = "'Test2'"
-
-        assert self.grid.model.code_array[1, 0, 0] == 23
-        assert self.grid.model.code_array[2, 0, 0] == 24
-
-        self.grid.selectRow(1)
-        self.grid.refresh_selected_frozen_cells()
-
-        assert self.grid.model.code_array[1, 0, 0] == "Test1"
-        assert self.grid.model.code_array[2, 0, 0] == 24
-
-        self.grid.current = 1, 0, 0
-        self.grid.on_freeze_pressed(False)
-        self.grid.current = 2, 0, 0
-        self.grid.on_freeze_pressed(False)
-
-    def test_on_show_frozen_pressed(self):
-        """Unit test for on_show_frozen_pressed"""
-
-        self.grid.on_show_frozen_pressed(True)
-        assert main_window.settings.show_frozen
-        self.grid.on_show_frozen_pressed(False)
-        assert not main_window.settings.show_frozen
-
     def test_on_font_size(self):
         """Unit test for on_font_size"""
 
@@ -864,18 +782,6 @@ class TestGrid:
         self.grid.update_index_widgets()
         assert not self.grid.widget_indices
 
-    def test_on_freeze_pressed(self):
-        """Unit test for on_freeze_pressed"""
-
-        self.grid.current = 1, 0, 0
-        self.grid.model.code_array[1, 0, 0] = "23"
-        self.grid.on_freeze_pressed(False)
-        assert not self.cell_attributes[self.grid.current]["frozen"]
-        self.grid.on_freeze_pressed(True)
-        assert self.cell_attributes[self.grid.current]["frozen"]
-        self.grid.on_freeze_pressed(False)
-        assert not self.cell_attributes[self.grid.current]["frozen"]
-
     def test_on_merge_pressed(self):
         """Unit test for on_merge_pressed"""
 
@@ -1186,7 +1092,6 @@ class TestGridTableModel:
         assert not self.model.code_array.row_heights
         assert not self.model.code_array.col_widths
         assert not self.model.code_array.macros
-        assert not self.model.code_array.result_cache
 
 
 class TestGridCellDelegate:
