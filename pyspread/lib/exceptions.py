@@ -43,14 +43,22 @@ class CircularRefError(PyCellSheetError):
 
         Parameters
         ----------
-        cycle: list of tuples
-            List of cell keys (row, col, table) that form the cycle.
-            The first and last elements should be the same cell.
+        cycle: list of tuples or str
+            List of cell keys (row, col, table) that form the cycle,
+            or a string message (when unpickling).
 
         """
 
-        self.cycle = cycle
-        super().__init__(self._format_message())
+        # Handle both list (normal creation) and str (unpickling)
+        if isinstance(cycle, str):
+            # Called during unpickling with the formatted message
+            # We can't recover the cycle list, so store empty list
+            self.cycle = []
+            super().__init__(cycle)
+        else:
+            # Normal creation with cycle list
+            self.cycle = cycle if isinstance(cycle, list) else list(cycle)
+            super().__init__(self._format_message())
 
     def _format_message(self):
         """Format the error message showing the cycle path"""
@@ -67,3 +75,7 @@ class CircularRefError(PyCellSheetError):
         # Format cycle as: A1 → A2 → A3 → A1
         cycle_str = " → ".join(str(cell) for cell in self.cycle)
         return f"Circular reference: {cycle_str}"
+
+    def __reduce__(self):
+        """Custom pickle support to preserve cycle list"""
+        return (self.__class__, (self.cycle,))
