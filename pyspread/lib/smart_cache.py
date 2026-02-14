@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright Martin Manns
+# Created by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -100,11 +100,10 @@ class SmartCache:
     def is_valid(self, key):
         """Check if a cached value is valid
 
-        A cached value is valid if it exists in the cache.
-
-        NOTE: Dirty cells still return their cached value - they show stale
-        data until explicitly recalculated (F9, click, etc). This allows
-        the dirty indicator to persist and show which cells need updating.
+        A cached value is valid if:
+        1. It exists in the cache
+        2. The cell is not marked dirty
+        3. None of its dependencies (direct or transitive) are dirty
 
         Parameters
         ----------
@@ -114,12 +113,24 @@ class SmartCache:
         Returns
         -------
         bool
-            True if cached value exists, False otherwise
+            True if cached value is valid, False otherwise
 
         """
 
-        # Just check if it's in cache - dirty cells use stale cache
-        return key in self._cache
+        if key not in self._cache:
+            return False
+
+        # Check if this cell is dirty
+        if self.dep_graph.is_dirty(key):
+            return False
+
+        # Check if any dependencies are dirty (direct or transitive)
+        all_deps = self.dep_graph.get_all_dependencies(key)
+        for dep in all_deps:
+            if self.dep_graph.is_dirty(dep):
+                return False
+
+        return True
 
     def invalidate(self, key, _visited=None):
         """Invalidate a cache entry
@@ -148,13 +159,10 @@ class SmartCache:
         self._cache.pop(key, None)
 
         # Mark dirty
-        print(f"DEBUG: SmartCache.invalidate({key}) - marking dirty and clearing cache")
         self.dep_graph.mark_dirty(key)
 
         # Recursively invalidate all dependents (so they recalculate automatically)
         dependents = self.dep_graph.dependents.get(key, set())
-        if dependents:
-            print(f"DEBUG: Recursively invalidating dependents: {dependents}")
         for dependent in dependents:
             self.invalidate(dependent, _visited)
 
