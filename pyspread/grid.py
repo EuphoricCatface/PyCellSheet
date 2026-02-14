@@ -2699,8 +2699,12 @@ class TableChoice(QTabBar):
             # Insert
             for i in range(self.count(), value):
                 # Get sheet name from code_array if available
-                code_array = self.main_window.grid.model.code_array
-                sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+                grid = getattr(self.main_window, "grid", None)
+                if grid is None:
+                    sheet_names = None
+                else:
+                    code_array = grid.model.code_array
+                    sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
                 tab_label = sheet_names[i] if sheet_names and i < len(sheet_names) else f"Sheet {i}"
                 self.addTab(tab_label)
 
