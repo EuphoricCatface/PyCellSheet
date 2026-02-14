@@ -1617,6 +1617,41 @@ class Grid(QTableView):
                                        description)
         self.main_window.undo_stack.push(command)
 
+    def on_rename_sheet(self):
+        """Rename sheet event handler"""
+
+        from PyQt6.QtWidgets import QInputDialog
+
+        code_array = self.model.code_array
+        sheet_names = code_array.dict_grid.sheet_names
+        current_name = sheet_names[self.table]
+
+        new_name, ok = QInputDialog.getText(
+            self.main_window,
+            "Rename Sheet",
+            "Enter new sheet name:",
+            text=current_name
+        )
+
+        if ok and new_name:
+            # Validate: not empty, not duplicate
+            if new_name.strip() == "":
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self.main_window, "Invalid Name",
+                                  "Sheet name cannot be empty.")
+                return
+
+            if new_name in sheet_names and new_name != current_name:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self.main_window, "Duplicate Name",
+                                  f"Sheet '{new_name}' already exists.")
+                return
+
+            # Update sheet name
+            sheet_names[self.table] = new_name
+            # Update tab label
+            self.main_window.table_choice.setTabText(self.table, new_name)
+
 
 class GridHeaderView(QHeaderView):
     """QHeaderView with zoom support"""
