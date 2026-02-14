@@ -45,6 +45,39 @@ Cell Contents -> Expression Parser -> Reference Parser -> Python Evaluator -> (F
 
 ## Key Source Files
 
+## Import Pattern
+
+**CRITICAL**: Always use try/except pattern for imports to support both development and installed modes:
+
+```python
+try:
+    from pyspread.lib.module import Class
+except ImportError:
+    from lib.module import Class
+```
+
+**NEVER** import inline in methods. All imports must be in the try/except block at the top of the file.
+
+**Example violation**:
+```python
+def some_method(self):
+    from pyspread.icons import Icon  # ❌ WRONG - inline import
+    ...
+```
+
+**Correct pattern**:
+```python
+# At top of file
+try:
+    from pyspread.icons import Icon
+except ImportError:
+    from icons import Icon
+
+def some_method(self):
+    # Use Icon here ✅
+    ...
+```
+
 ### PyCellSheet additions (where most development happens)
 - `pyspread/lib/pycellsheet.py` - Core types and parsers: `Empty`/`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`, `ExpressionParser`, `ReferenceParser`, `PythonEvaluator`, `Formatter`, `HelpText`, `CELL_META_GENERATOR`, `flatten_args()`
 - `pyspread/lib/spreadsheet/` - Spreadsheet function library (UPPERCASE functions). `math.py` (~60 functions), `engineering.py`, `filter.py`, `info.py`, `logical.py` are largely implemented. `statistical.py` has basic functions (AVERAGE, COUNT, MAX, MIN, MEDIAN, etc.) but ~60 stubs remain. Other modules (financial, text, etc.) are mostly stubs.
@@ -70,7 +103,7 @@ Four-layer model (inherited from pyspread, modified):
 - **Layer 0 - KeyValueStore**: `dict` with default `None` for missing keys
 - **Layer 1 - DictGrid**: Stores cell contents as `{(row, col, table): str}`. Also holds `cell_attributes`, `macros` (list of init script strings per sheet), `exp_parser_code`, row/col sizes.
 - **Layer 2 - DataArray**: Adds slicing, insertion/deletion. Holds non-persisted state: `macros_draft`, `sheet_globals_copyable`, `sheet_globals_uncopyable`, `exp_parser` instance.
-- **Layer 3 - CodeArray**: Evaluates cells on access via `__getitem__` -> `_eval_cell()`. Maintains `result_cache` and `frozen_cache`.
+- **Layer 3 - CodeArray**: Evaluates cells on access via `__getitem__` -> `_eval_cell()`. Uses `SmartCache` for dependency-aware caching.
 
 The grid is currently a 3D dict keyed by `(row, col, table)`. A later goal is to replace this with an array of 2D matrices.
 
