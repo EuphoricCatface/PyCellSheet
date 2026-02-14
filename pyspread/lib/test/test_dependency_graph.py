@@ -99,9 +99,13 @@ def test_remove_cell_with_dependents(graph):
     # Remove A1 (which A2 and A3 depend on)
     graph.remove_cell((0, 0, 0))
 
-    # A2 should still have A1 in dependencies (orphaned reference)
-    # But A1 should not have A2 in dependents
-    assert len(graph.dependents.get((0, 0, 0), set())) == 0
+    # A2 and A3 should still have A1 in dependencies
+    assert (0, 0, 0) in graph.dependencies[(0, 1, 0)]
+    assert (0, 0, 0) in graph.dependencies[(0, 2, 0)]
+
+    # A1 should still have A2 and A3 in dependents (preserved for invalidation)
+    assert (0, 1, 0) in graph.dependents.get((0, 0, 0), set())
+    assert (0, 2, 0) in graph.dependents.get((0, 0, 0), set())
 
 
 def test_remove_nonexistent_cell(graph):

@@ -1415,8 +1415,8 @@ class CodeArray(DataArray):
             # so invalidate() can propagate to dependents
             self.smart_cache.invalidate(key)
             # Remove dependencies for this cell (will be re-tracked on next eval)
-            # Keep reverse edges (what depends on this cell) for cycle detection
-            self.dep_graph.remove_cell(key, remove_reverse_edges=False)
+            # Reverse edges are preserved by default for cycle detection
+            self.dep_graph.remove_cell(key)
 
     def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]]) -> Any:
@@ -1591,6 +1591,8 @@ class CodeArray(DataArray):
         """
 
         # Invalidate cache and remove dependencies
+        # Reverse edges are preserved by default to allow proper invalidation
+        # when the cell is re-added
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
 
