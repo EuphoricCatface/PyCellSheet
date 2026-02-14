@@ -487,7 +487,8 @@ class DictGrid(KeyValueStore):
 
         # PerSheetInitScripts as string list
         self.macros: list[str] = [u"" for _ in range(shape[2])]
-        # later this will be dict. sheets will have string names
+        # Sheet names corresponding to table indices
+        self.sheet_names: list[str] = [f"Sheet {i}" for i in range(shape[2])]
         self.exp_parser_code = u""
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
@@ -737,6 +738,31 @@ class DataArray:
 
         # Set dict_grid shape attribute
         self.dict_grid.shape = shape
+
+        # Adjust sheet-specific lists to match new table count
+        old_tables = old_shape[2]
+        new_tables = shape[2]
+        if new_tables < old_tables:
+            # Trim lists
+            self.macros = self.macros[:new_tables]
+            self.macros_draft = self.macros_draft[:new_tables]
+            self.sheet_globals_copyable = self.sheet_globals_copyable[:new_tables]
+            self.sheet_globals_uncopyable = self.sheet_globals_uncopyable[:new_tables]
+            self.dict_grid.sheet_names = self.dict_grid.sheet_names[:new_tables]
+        elif new_tables > old_tables:
+            # Extend lists
+            for i in range(old_tables, new_tables):
+                self.macros.append(u"")
+                self.macros_draft.append(None)
+                self.sheet_globals_copyable.append(dict())
+                self.sheet_globals_uncopyable.append(dict())
+                # Generate unique sheet name
+                new_name = f"Sheet {i}"
+                counter = 1
+                while new_name in self.dict_grid.sheet_names:
+                    new_name = f"Sheet {i}_{counter}"
+                    counter += 1
+                self.dict_grid.sheet_names.append(new_name)
 
         self._adjust_rowcol(0, 0, 0)
         self._adjust_cell_attributes(0, 0, 0)
@@ -1245,11 +1271,18 @@ class DataArray:
         self._adjust_cell_attributes(insertion_point, no_to_insert, axis, tab)
 
         if axis == 2:
-            for _ in range(no_to_insert):
+            for i in range(no_to_insert):
                 self.macros.insert(insertion_point, u"")
                 self.macros_draft.insert(insertion_point, None)
                 self.sheet_globals_copyable.insert(insertion_point, dict())
                 self.sheet_globals_uncopyable.insert(insertion_point, dict())
+                # Generate unique sheet name
+                new_name = f"Sheet {insertion_point + i}"
+                counter = 1
+                while new_name in self.dict_grid.sheet_names:
+                    new_name = f"Sheet {insertion_point + i}_{counter}"
+                    counter += 1
+                self.dict_grid.sheet_names.insert(insertion_point, new_name)
 
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
@@ -1296,10 +1329,16 @@ class DataArray:
 
         if axis == 2:
             for _ in range(no_to_delete):
-                self.macros.insert(deletion_point, u"")
-                self.macros_draft.insert(deletion_point, None)
-                self.sheet_globals_copyable.insert(deletion_point, dict())
-                self.sheet_globals_uncopyable.insert(deletion_point, dict())
+                if deletion_point < len(self.macros):
+                    self.macros.pop(deletion_point)
+                if deletion_point < len(self.macros_draft):
+                    self.macros_draft.pop(deletion_point)
+                if deletion_point < len(self.sheet_globals_copyable):
+                    self.sheet_globals_copyable.pop(deletion_point)
+                if deletion_point < len(self.sheet_globals_uncopyable):
+                    self.sheet_globals_uncopyable.pop(deletion_point)
+                if deletion_point < len(self.dict_grid.sheet_names):
+                    self.dict_grid.sheet_names.pop(deletion_point)
 
         # Now re-insert moved keys
 

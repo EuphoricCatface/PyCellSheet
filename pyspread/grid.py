@@ -2681,7 +2681,11 @@ class TableChoice(QTabBar):
         if value > self.count():
             # Insert
             for i in range(self.count(), value):
-                self.addTab(str(i))
+                # Get sheet name from code_array if available
+                code_array = self.main_window.grid.model.code_array
+                sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+                tab_label = sheet_names[i] if sheet_names and i < len(sheet_names) else f"Sheet {i}"
+                self.addTab(tab_label)
 
         elif value < self.count():
             # Remove
@@ -2750,3 +2754,13 @@ class TableChoice(QTabBar):
         self.main_window.macro_panel.update_current_table(current)
 
         self.last = current
+
+    def update_tab_labels(self):
+        """Updates all tab labels to match current sheet names"""
+
+        code_array = self.main_window.grid.model.code_array
+        sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+
+        if sheet_names:
+            for i in range(min(self.count(), len(sheet_names))):
+                self.setTabText(i, sheet_names[i])
