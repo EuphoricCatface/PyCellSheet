@@ -1428,14 +1428,19 @@ class CodeArray(DataArray):
 
         code = self(key)
 
-        if code is None:
-            return EmptyCell
-
-        # Smart cache handling
+        # Smart cache handling (check even for empty cells)
         cached = self.smart_cache.get(key)
         if cached is not SmartCache.INVALID:
             # Cache hit! Return deepcopied value (cache stores original)
             return deepcopy(cached)
+
+        # Empty cells still need to be cached and have dirty flag cleared
+        if code is None:
+            # Store EmptyCell in cache
+            self.smart_cache.set(key, EmptyCell)
+            # Clear dirty flag
+            self.dep_graph.clear_dirty(key)
+            return EmptyCell
 
         if not any(isinstance(k, slice) for k in key):
             # Button cell handling
