@@ -118,6 +118,7 @@ class PycsReader:
         self._section2reader = {
             "[PyCellSheet save file version]\n": self._pycs_version,
             "[shape]\n": self._pycs2shape,
+            "[sheet_names]\n": self._pycs2sheet_names,
             "[macros]\n": self._pycs2macros,
             "[grid]\n": self._pycs2code,
             "[attributes]\n": self._pycs2attributes,
@@ -217,6 +218,23 @@ class PycsReader:
             msg = "Code array has invalid shape {shape}."
             raise ValueError(msg.format(shape=shape))
         self.code_array.shape = shape
+
+    def _pycs2sheet_names(self, line: str):
+        """Updates sheet names in code_array
+
+        :param line: Pycs file line to be parsed (one sheet name per line)
+
+        """
+
+        sheet_name = line.rstrip('\n')
+        # Initialize sheet_names list if first call in this section
+        if not hasattr(self, '_sheet_names_initialized'):
+            if hasattr(self.code_array.dict_grid, 'sheet_names'):
+                self.code_array.dict_grid.sheet_names = []
+            self._sheet_names_initialized = True
+        # Append to sheet_names list (order matters)
+        if hasattr(self.code_array.dict_grid, 'sheet_names'):
+            self.code_array.dict_grid.sheet_names.append(sheet_name)
 
     def _pycs2code(self, line: str):
         """Updates code in pycs code_array
@@ -364,20 +382,32 @@ class PycsReader:
             self.current_macro_remaining -= 1
             return
 
-        sheet_number_str = ""  # later we will use string names
+        sheet_identifier = ""
         if not line.startswith("(macro:"):
             raise ValueError("The save file does not follow the macro name conventions")
         for i in iter(line[7:]):
             if i == ")":
                 break
-            sheet_number_str += i
-        new_sheet_number = int(sheet_number_str)
-        if self.current_macro + 1 != new_sheet_number:
-            raise ValueError("The save file does not follow the macro name conventions")
+            sheet_identifier += i
+
+        # Try to parse as integer (old format), otherwise treat as sheet name
+        try:
+            new_sheet_number = int(sheet_identifier)
+            if self.current_macro + 1 != new_sheet_number:
+                raise ValueError("The save file does not follow the macro name conventions")
+        except ValueError:
+            # Sheet identifier is a name, not a number - look it up
+            sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+            if sheet_names and sheet_identifier in sheet_names:
+                new_sheet_number = sheet_names.index(sheet_identifier)
+            else:
+                # Fall back to sequential indexing
+                new_sheet_number = self.current_macro + 1
+
         self.current_macro = new_sheet_number
 
         line_count_str = ""
-        for i in iter(line[9 + len(sheet_number_str)]):
+        for i in iter(line[9 + len(sheet_identifier)]):
             line_count_str += i
         self.current_macro_remaining = int(line_count_str)
 
@@ -401,6 +431,7 @@ class PycsWriter(object):
         self._section2writer = OrderedDict([
             ("[PyCellSheet save file version]\n", self._version2pycs),
             ("[shape]\n", self._shape2pycs),
+            ("[sheet_names]\n", self._sheet_names2pycs),
             ("[macros]\n", self._macros2pycs),
             ("[grid]\n", self._code2pycs),
             ("[attributes]\n", self._attributes2pycs),
@@ -445,6 +476,17 @@ class PycsWriter(object):
         """
 
         yield u"\t".join(map(str, self.code_array.shape)) + u"\n"
+
+    def _sheet_names2pycs(self) -> Iterable[str]:
+        """Returns sheet names in pycs format
+
+        Format: one sheet name per line
+
+        """
+
+        if hasattr(self.code_array.dict_grid, 'sheet_names'):
+            for name in self.code_array.dict_grid.sheet_names:
+                yield name + u"\n"
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format
@@ -537,9 +579,12 @@ class PycsWriter(object):
         """
 
         macros = self.code_array.dict_grid.macros
+        sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
         for i, macro in enumerate(macros):
+            # Use sheet name if available, otherwise fall back to index
+            sheet_identifier = sheet_names[i] if sheet_names and i < len(sheet_names) else str(i)
             macro_list = [
-                f"(macro:{i}) {macro.count('\n') + 1}",
+                f"(macro:{sheet_identifier}) {macro.count('\n') + 1}",
                 macro,
                 ""  # To append a linebreak at the end
             ]

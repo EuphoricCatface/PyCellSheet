@@ -311,6 +311,10 @@ class MainWindowActions(AttrDict):
                                    icon=Icon.delete_table,
                                    statustip='Delete current table')
 
+        self.rename_sheet = Action(self.parent, "Rename sheet",
+                                   self.parent.grid.on_rename_sheet,
+                                   statustip='Rename the current sheet')
+
         self.resize_grid = Action(self.parent, "Resize grid",
                                   self.parent.workflows.edit_resize,
                                   icon=Icon.resize_grid,

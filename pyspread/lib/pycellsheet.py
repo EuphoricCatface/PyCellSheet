@@ -271,7 +271,17 @@ class ReferenceParser:
         def __init__(self, sheet_name: str, code_array):
             self.code_array = code_array
 
-            self.sheet_idx = ReferenceParser.sheet_name_to_idx(sheet_name)
+            # Try to parse as integer first (old format), then lookup by name
+            try:
+                self.sheet_idx = int(sheet_name)
+            except ValueError:
+                # Look up sheet name in sheet_names list
+                sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+                if sheet_names and sheet_name in sheet_names:
+                    self.sheet_idx = sheet_names.index(sheet_name)
+                else:
+                    raise ValueError(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
+
             self.sheet_global_var = copy.deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
             self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
 

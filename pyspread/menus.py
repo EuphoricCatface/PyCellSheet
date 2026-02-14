@@ -501,6 +501,8 @@ class TableChoiceContextMenu(QMenu):
 
         self.addAction(actions.insert_table)
         self.addAction(actions.delete_table)
+        self.addSeparator()
+        self.addAction(actions.rename_sheet)
 
 
 class ToolbarManagerMenu(QMenu):
