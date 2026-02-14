@@ -66,11 +66,11 @@ def test_simple_dependency_tracked(code_array):
     assert code_array[0, 0, 0] == 10
 
     # A2 = C("A1") + 5
-    code_array[0, 1, 0] = 'C("A1") + 5'
-    assert code_array[0, 1, 0] == 15
+    code_array[1, 0, 0] = 'C("A1") + 5'
+    assert code_array[1, 0, 0] == 15
 
     # Check dependency was recorded
-    deps = code_array.dep_graph.dependencies[(0, 1, 0)]
+    deps = code_array.dep_graph.dependencies[(1, 0, 0)]
     assert (0, 0, 0) in deps
 
 
@@ -79,16 +79,16 @@ def test_multiple_dependencies_tracked(code_array):
 
     # A1 = 10, B1 = 20
     code_array[0, 0, 0] = "10"
-    code_array[1, 0, 0] = "20"
+    code_array[0, 1, 0] = "20"
 
     # A2 = C("A1") + C("B1")
-    code_array[0, 1, 0] = 'C("A1") + C("B1")'
-    assert code_array[0, 1, 0] == 30
+    code_array[1, 0, 0] = 'C("A1") + C("B1")'
+    assert code_array[1, 0, 0] == 30
 
     # Check both dependencies were recorded
-    deps = code_array.dep_graph.dependencies[(0, 1, 0)]
+    deps = code_array.dep_graph.dependencies[(1, 0, 0)]
     assert (0, 0, 0) in deps
-    assert (1, 0, 0) in deps
+    assert (0, 1, 0) in deps
 
 
 def test_range_dependencies_tracked(code_array):
@@ -100,19 +100,19 @@ def test_range_dependencies_tracked(code_array):
 
     # A1=1, A2=2, A3=3
     code_array[0, 0, 0] = "1"
-    code_array[0, 1, 0] = "2"
-    code_array[0, 2, 0] = "3"
+    code_array[1, 0, 0] = "2"
+    code_array[2, 0, 0] = "3"
 
     # A4 = SUM(R("A1", "A3"))
-    code_array[0, 3, 0] = 'SUM(R("A1", "A3"))'
-    result = code_array[0, 3, 0]
+    code_array[3, 0, 0] = 'SUM(R("A1", "A3"))'
+    result = code_array[3, 0, 0]
     assert result == 6
 
     # Check all three cells are dependencies
-    deps = code_array.dep_graph.dependencies[(0, 3, 0)]
+    deps = code_array.dep_graph.dependencies[(3, 0, 0)]
     assert (0, 0, 0) in deps
-    assert (0, 1, 0) in deps
-    assert (0, 2, 0) in deps
+    assert (1, 0, 0) in deps
+    assert (2, 0, 0) in deps
 
 
 def test_cross_sheet_dependency_tracked(code_array):
@@ -139,14 +139,14 @@ def test_smart_cache_invalidation_simple(code_array):
     code_array[0, 0, 0] = "10"
 
     # A2 = C("A1") + 5
-    code_array[0, 1, 0] = 'C("A1") + 5'
-    assert code_array[0, 1, 0] == 15
+    code_array[1, 0, 0] = 'C("A1") + 5'
+    assert code_array[1, 0, 0] == 15
 
     # Edit A1
     code_array[0, 0, 0] = "20"
 
     # A2 should be recalculated (not cached old value)
-    assert code_array[0, 1, 0] == 25
+    assert code_array[1, 0, 0] == 25
 
 
 def test_smart_cache_invalidation_chain(code_array):
@@ -156,25 +156,25 @@ def test_smart_cache_invalidation_chain(code_array):
     code_array[0, 0, 0] = "1"
 
     # A2 = C("A1") + 1
-    code_array[0, 1, 0] = 'C("A1") + 1'
-    assert code_array[0, 1, 0] == 2
+    code_array[1, 0, 0] = 'C("A1") + 1'
+    assert code_array[1, 0, 0] == 2
 
     # A3 = C("A2") + 1
-    code_array[0, 2, 0] = 'C("A2") + 1'
-    assert code_array[0, 2, 0] == 3
+    code_array[2, 0, 0] = 'C("A2") + 1'
+    assert code_array[2, 0, 0] == 3
 
     # A4 = C("A3") + 1
-    code_array[0, 3, 0] = 'C("A3") + 1'
-    assert code_array[0, 3, 0] == 4
+    code_array[3, 0, 0] = 'C("A3") + 1'
+    assert code_array[3, 0, 0] == 4
 
     # Edit A1 - should invalidate entire chain
     code_array[0, 0, 0] = "10"
 
     # Check that all dependent cells are recalculated
     assert code_array[0, 0, 0] == 10
-    assert code_array[0, 1, 0] == 11
-    assert code_array[0, 2, 0] == 12
-    assert code_array[0, 3, 0] == 13
+    assert code_array[1, 0, 0] == 11
+    assert code_array[2, 0, 0] == 12
+    assert code_array[3, 0, 0] == 13
 
 
 def test_smart_cache_unrelated_cells_not_invalidated(code_array):
@@ -184,21 +184,21 @@ def test_smart_cache_unrelated_cells_not_invalidated(code_array):
     code_array[0, 0, 0] = "100"
 
     # B1 = 200
-    code_array[1, 0, 0] = "200"
+    code_array[0, 1, 0] = "200"
 
     # A2 = C("A1") * 2
-    code_array[0, 1, 0] = 'C("A1") * 2'
-    assert code_array[0, 1, 0] == 200
+    code_array[1, 0, 0] = 'C("A1") * 2'
+    assert code_array[1, 0, 0] == 200
 
     # Cache A2's result
-    code_array.smart_cache.set((0, 1, 0), 200)
+    code_array.smart_cache.set((1, 0, 0), 200)
 
     # Edit B1 (unrelated to A2)
-    code_array[1, 0, 0] = "999"
+    code_array[0, 1, 0] = "999"
 
     # A2's cache should still be valid
-    assert code_array.smart_cache.is_valid((0, 1, 0))
-    cached = code_array.smart_cache.get((0, 1, 0))
+    assert code_array.smart_cache.is_valid((1, 0, 0))
+    cached = code_array.smart_cache.get((1, 0, 0))
     assert cached == 200
 
 
@@ -209,24 +209,24 @@ def test_smart_cache_diamond_pattern(code_array):
     code_array[0, 0, 0] = "1"
 
     # A2 = C("A1") + 1
-    code_array[0, 1, 0] = 'C("A1") + 1'
-    assert code_array[0, 1, 0] == 2
+    code_array[1, 0, 0] = 'C("A1") + 1'
+    assert code_array[1, 0, 0] == 2
 
     # A3 = C("A1") + 2
-    code_array[0, 2, 0] = 'C("A1") + 2'
-    assert code_array[0, 2, 0] == 3
+    code_array[2, 0, 0] = 'C("A1") + 2'
+    assert code_array[2, 0, 0] == 3
 
     # A4 = C("A2") + C("A3")  (depends on both A2 and A3)
-    code_array[0, 3, 0] = 'C("A2") + C("A3")'
-    assert code_array[0, 3, 0] == 5
+    code_array[3, 0, 0] = 'C("A2") + C("A3")'
+    assert code_array[3, 0, 0] == 5
 
     # Edit A1 - should invalidate A2, A3, and A4
     code_array[0, 0, 0] = "10"
 
     assert code_array[0, 0, 0] == 10
-    assert code_array[0, 1, 0] == 11  # A2 recalculated
-    assert code_array[0, 2, 0] == 12  # A3 recalculated
-    assert code_array[0, 3, 0] == 23  # A4 recalculated
+    assert code_array[1, 0, 0] == 11  # A2 recalculated
+    assert code_array[2, 0, 0] == 12  # A3 recalculated
+    assert code_array[3, 0, 0] == 23  # A4 recalculated
 
 
 # --- Circular Reference Detection Tests ---
@@ -250,11 +250,11 @@ def test_circular_reference_two_cells(code_array):
     code_array[0, 0, 0] = 'C("A2") + 1'
 
     # A2 = C("A1") + 1  (creates cycle)
-    code_array[0, 1, 0] = 'C("A1") + 1'
+    code_array[1, 0, 0] = 'C("A1") + 1'
 
     # Both cells should detect the cycle
     result1 = code_array[0, 0, 0]
-    result2 = code_array[0, 1, 0]
+    result2 = code_array[1, 0, 0]
 
     assert isinstance(result1, CircularRefError) or isinstance(result2, CircularRefError)
 
@@ -266,12 +266,12 @@ def test_circular_reference_complex(code_array):
     code_array[0, 0, 0] = "1"
 
     # A2 = C("A1") + 1
-    code_array[0, 1, 0] = 'C("A1") + 1'
-    assert code_array[0, 1, 0] == 2
+    code_array[1, 0, 0] = 'C("A1") + 1'
+    assert code_array[1, 0, 0] == 2
 
     # A3 = C("A2") + 1
-    code_array[0, 2, 0] = 'C("A2") + 1'
-    assert code_array[0, 2, 0] == 3
+    code_array[2, 0, 0] = 'C("A2") + 1'
+    assert code_array[2, 0, 0] == 3
 
     # A1 = C("A3") + 1  (creates cycle: A1 -> A2 -> A3 -> A1)
     code_array[0, 0, 0] = 'C("A3") + 1'
@@ -290,12 +290,12 @@ def test_cache_hit_avoids_recomputation(code_array):
     code_array[0, 0, 0] = "10"
 
     # A2 = C("A1") * 2
-    code_array[0, 1, 0] = 'C("A1") * 2'
-    first_result = code_array[0, 1, 0]
+    code_array[1, 0, 0] = 'C("A1") * 2'
+    first_result = code_array[1, 0, 0]
     assert first_result == 20
 
     # Access A2 again - should be cached
-    second_result = code_array[0, 1, 0]
+    second_result = code_array[1, 0, 0]
     assert second_result == 20
 
     # Verify cache was used (both results should be same value)
@@ -307,22 +307,22 @@ def test_dependency_removal_on_edit(code_array):
 
     # A1 = 10, B1 = 20
     code_array[0, 0, 0] = "10"
-    code_array[1, 0, 0] = "20"
+    code_array[0, 1, 0] = "20"
 
     # A2 = C("A1") + 5
-    code_array[0, 1, 0] = 'C("A1") + 5'
-    assert code_array[0, 1, 0] == 15
+    code_array[1, 0, 0] = 'C("A1") + 5'
+    assert code_array[1, 0, 0] == 15
 
     # Check A2 depends on A1
-    assert (0, 0, 0) in code_array.dep_graph.dependencies[(0, 1, 0)]
+    assert (0, 0, 0) in code_array.dep_graph.dependencies[(1, 0, 0)]
 
     # Edit A2 to depend on B1 instead
-    code_array[0, 1, 0] = 'C("B1") + 5'
-    assert code_array[0, 1, 0] == 25
+    code_array[1, 0, 0] = 'C("B1") + 5'
+    assert code_array[1, 0, 0] == 25
 
     # Check A2 now depends on B1, not A1
-    deps = code_array.dep_graph.dependencies[(0, 1, 0)]
-    assert (1, 0, 0) in deps
+    deps = code_array.dep_graph.dependencies[(1, 0, 0)]
+    assert (0, 1, 0) in deps
     # Old dependency on A1 should be gone
     assert (0, 0, 0) not in deps
 
@@ -334,10 +334,10 @@ def test_empty_cell_dependency(code_array):
 
     # A1 is empty
     # A2 = C("A1") + 1
-    code_array[0, 1, 0] = 'C("A1") + 1'
+    code_array[1, 0, 0] = 'C("A1") + 1'
 
     # Should handle EmptyCell (which acts as 0)
-    result = code_array[0, 1, 0]
+    result = code_array[1, 0, 0]
     assert result == 1
 
 

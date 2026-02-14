@@ -330,8 +330,7 @@ class ReferenceParser:
         def cell_single_ref(self, addr: str):
             # Get the cell coordinates
             row, col = spreadsheet_ref_to_coord(addr)
-            # CodeArray keys are (col, row, table), not (row, col, table)
-            dependency_key = (col, row, self.sheet_idx)
+            dependency_key = (row, col, self.sheet_idx)
 
             # Record dependency if we're currently evaluating a cell
             current_cell = DependencyTracker.get_current_cell()
@@ -343,7 +342,7 @@ class ReferenceParser:
                 self.code_array.dep_graph.check_for_cycles(current_cell)
                 # If check_for_cycles raises CircularRefError, it will propagate
 
-            return copy.deepcopy(self.code_array[col, row, self.sheet_idx])
+            return copy.deepcopy(self.code_array[row, col, self.sheet_idx])
 
         def cell_range_ref(self, addr1: str, addr2: str) -> Range:
             coord1 = spreadsheet_ref_to_coord(addr1)
@@ -358,8 +357,7 @@ class ReferenceParser:
             rtn = Range(topleft, width)
             for row in range(topleft[0], botright[0] + 1):
                 for col in range(topleft[1], botright[1] + 1):
-                    # CodeArray keys are (col, row, table), not (row, col, table)
-                    dependency_key = (col, row, self.sheet_idx)
+                    dependency_key = (row, col, self.sheet_idx)
 
                     # Record dependency for each cell in range
                     if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
@@ -370,7 +368,7 @@ class ReferenceParser:
                         self.code_array.dep_graph.check_for_cycles(current_cell)
                         # If check_for_cycles raises CircularRefError, it will propagate
 
-                    rtn.append(copy.deepcopy(self.code_array[col, row, self.sheet_idx]))
+                    rtn.append(copy.deepcopy(self.code_array[row, col, self.sheet_idx]))
 
             return rtn
 
