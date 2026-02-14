@@ -1411,9 +1411,12 @@ class CodeArray(DataArray):
 
         if not unchanged:
             # Invalidate cache for this cell and its dependents
-            # Remove dependencies for this cell (will be re-tracked on next eval)
-            self.dep_graph.remove_cell(key)
+            # IMPORTANT: Invalidate BEFORE removing from dep graph,
+            # so invalidate() can propagate to dependents
             self.smart_cache.invalidate(key)
+            # Remove dependencies for this cell (will be re-tracked on next eval)
+            # Keep reverse edges (what depends on this cell) for cycle detection
+            self.dep_graph.remove_cell(key, remove_reverse_edges=False)
 
     def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]]) -> Any:

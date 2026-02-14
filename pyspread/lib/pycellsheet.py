@@ -37,6 +37,8 @@ class DependencyTracker:
     def track(cls, key):
         """Context manager for tracking cell evaluation
 
+        Saves and restores the previous context to support nested evaluation.
+
         Usage:
             with DependencyTracker.track((row, col, table)):
                 # Evaluate cell code
@@ -44,11 +46,14 @@ class DependencyTracker:
         """
         class TrackingContext:
             def __enter__(self):
+                # Save previous context before setting new one
+                self.previous = cls.get_current_cell()
                 cls.set_current_cell(key)
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                cls.clear_current_cell()
+                # Restore previous context instead of clearing to None
+                cls.set_current_cell(self.previous)
                 return False
 
         return TrackingContext()
@@ -325,14 +330,20 @@ class ReferenceParser:
         def cell_single_ref(self, addr: str):
             # Get the cell coordinates
             row, col = spreadsheet_ref_to_coord(addr)
-            dependency_key = (row, col, self.sheet_idx)
+            # CodeArray keys are (col, row, table), not (row, col, table)
+            dependency_key = (col, row, self.sheet_idx)
 
             # Record dependency if we're currently evaluating a cell
             current_cell = DependencyTracker.get_current_cell()
             if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
                 self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
 
-            return copy.deepcopy(self.code_array[row, col, self.sheet_idx])
+                # Check for circular reference after adding dependency
+                from lib.exceptions import CircularRefError
+                self.code_array.dep_graph.check_for_cycles(current_cell)
+                # If check_for_cycles raises CircularRefError, it will propagate
+
+            return copy.deepcopy(self.code_array[col, row, self.sheet_idx])
 
         def cell_range_ref(self, addr1: str, addr2: str) -> Range:
             coord1 = spreadsheet_ref_to_coord(addr1)
@@ -347,13 +358,19 @@ class ReferenceParser:
             rtn = Range(topleft, width)
             for row in range(topleft[0], botright[0] + 1):
                 for col in range(topleft[1], botright[1] + 1):
-                    dependency_key = (row, col, self.sheet_idx)
+                    # CodeArray keys are (col, row, table), not (row, col, table)
+                    dependency_key = (col, row, self.sheet_idx)
 
                     # Record dependency for each cell in range
                     if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
                         self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
 
-                    rtn.append(copy.deepcopy(self.code_array[row, col, self.sheet_idx]))
+                        # Check for circular reference after adding dependency
+                        from lib.exceptions import CircularRefError
+                        self.code_array.dep_graph.check_for_cycles(current_cell)
+                        # If check_for_cycles raises CircularRefError, it will propagate
+
+                    rtn.append(copy.deepcopy(self.code_array[col, row, self.sheet_idx]))
 
             return rtn
 

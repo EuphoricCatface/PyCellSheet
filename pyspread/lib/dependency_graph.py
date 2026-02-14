@@ -76,16 +76,18 @@ class DependencyGraph:
         self.dependencies[dependent].add(dependency)
         self.dependents[dependency].add(dependent)
 
-    def remove_cell(self, key):
-        """Remove all dependency relationships for a cell
-
-        Removes both forward edges (what this cell depends on) and
-        reverse edges (what depends on this cell).
+    def remove_cell(self, key, remove_reverse_edges=True):
+        """Remove dependency relationships for a cell
 
         Parameters
         ----------
         key: tuple
             Cell key (row, col, table) to remove
+        remove_reverse_edges: bool
+            If True, removes both forward and reverse edges (full removal).
+            If False, only removes forward edges (what this cell depends on),
+            keeping reverse edges (what depends on this cell) intact.
+            Use False when editing a cell to preserve dependencies from other cells.
 
         """
 
@@ -96,7 +98,7 @@ class DependencyGraph:
             del self.dependencies[key]
 
         # Remove reverse edges: nothing depends on this cell anymore
-        if key in self.dependents:
+        if remove_reverse_edges and key in self.dependents:
             for dependent in self.dependents[key]:
                 self.dependencies[dependent].discard(key)
             del self.dependents[key]

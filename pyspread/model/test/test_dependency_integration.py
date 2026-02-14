@@ -40,6 +40,7 @@ sys.path.insert(0, pyspread_path)
 from model.model import CodeArray
 from lib.exceptions import CircularRefError
 from lib.smart_cache import SmartCache
+from lib.spreadsheet.math import SUM
 
 sys.path.pop(0)
 
@@ -93,13 +94,17 @@ def test_multiple_dependencies_tracked(code_array):
 def test_range_dependencies_tracked(code_array):
     """Test that R() calls record dependencies for all cells in range"""
 
+    # Set up init script to import SUM
+    code_array.macros[0] = "from lib.spreadsheet.math import SUM"
+    code_array.execute_macros(0)  # Execute for table 0
+
     # A1=1, A2=2, A3=3
     code_array[0, 0, 0] = "1"
     code_array[0, 1, 0] = "2"
     code_array[0, 2, 0] = "3"
 
-    # A4 = sum(R("A1", "A3"))
-    code_array[0, 3, 0] = 'sum(R("A1", "A3"))'
+    # A4 = SUM(R("A1", "A3"))
+    code_array[0, 3, 0] = 'SUM(R("A1", "A3"))'
     result = code_array[0, 3, 0]
     assert result == 6
 
