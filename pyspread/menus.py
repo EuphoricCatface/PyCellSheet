@@ -178,6 +178,8 @@ class ViewMenu(QMenu):
 
         self.addAction(actions.fullscreen)
         self.addSeparator()
+        self.addAction(actions.recalculate)
+        self.addSeparator()
 
         self.toolbar_submenu = self.addMenu('Toolbars')
         self.toolbar_submenu.addAction(actions.toggle_main_toolbar)
@@ -196,10 +198,7 @@ class ViewMenu(QMenu):
         self.addAction(actions.zoom_out)
         self.addAction(actions.zoom_1)
         self.addSeparator()
-        self.addAction(actions.refresh_cells)
-        self.addAction(actions.toggle_periodic_updates)
         self.addSeparator()
-        self.addAction(actions.show_frozen)
 
 
 class FormatMenu(QMenu):
@@ -231,7 +230,6 @@ class FormatMenu(QMenu):
         if matplotlib_figure is not None:
             self.renderer_submenu.addAction(actions.matplotlib)
 
-        self.addAction(actions.freeze_cell)
         self.addAction(actions.lock_cell)
         self.addAction(actions.button_cell)
 

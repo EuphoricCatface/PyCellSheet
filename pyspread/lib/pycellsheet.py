@@ -5,6 +5,58 @@ import warnings
 import re
 import ast
 import collections
+import threading
+
+
+# Dependency tracking context manager
+class DependencyTracker:
+    """Thread-local storage for tracking currently evaluating cell
+
+    Used to record dependencies during cell evaluation.
+    When cell A is being evaluated and calls C("B1"), we record that A depends on B1.
+    """
+
+    _local = threading.local()
+
+    @classmethod
+    def get_current_cell(cls):
+        """Get the currently evaluating cell key, or None if not tracking"""
+        return getattr(cls._local, 'current_cell', None)
+
+    @classmethod
+    def set_current_cell(cls, key):
+        """Set the currently evaluating cell key"""
+        cls._local.current_cell = key
+
+    @classmethod
+    def clear_current_cell(cls):
+        """Clear the currently evaluating cell key"""
+        cls._local.current_cell = None
+
+    @classmethod
+    def track(cls, key):
+        """Context manager for tracking cell evaluation
+
+        Saves and restores the previous context to support nested evaluation.
+
+        Usage:
+            with DependencyTracker.track((row, col, table)):
+                # Evaluate cell code
+                # Any C()/R()/Sh() calls will record dependencies
+        """
+        class TrackingContext:
+            def __enter__(self):
+                # Save previous context before setting new one
+                self.previous = cls.get_current_cell()
+                cls.set_current_cell(key)
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                # Restore previous context instead of clearing to None
+                cls.set_current_cell(self.previous)
+                return False
+
+        return TrackingContext()
 
 
 class Empty:
@@ -198,7 +250,7 @@ class ExpressionParser:
         ),
         "Reverse Mixed": (
             "# Inspired by the python shell prompt `>>>`\n"
-            "if cell.startswith(">"):\n"
+            "if cell.startswith('>'):\n"
             "    return PythonCode(cell[1:])\n"
             "if cell.startswith('\\''):\n"
             "    cell = cell[1:]\n"
@@ -286,7 +338,21 @@ class ReferenceParser:
             self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
 
         def cell_single_ref(self, addr: str):
-            return copy.deepcopy(self.code_array[*spreadsheet_ref_to_coord(addr), self.sheet_idx])
+            # Get the cell coordinates
+            row, col = spreadsheet_ref_to_coord(addr)
+            dependency_key = (row, col, self.sheet_idx)
+
+            # Record dependency if we're currently evaluating a cell
+            current_cell = DependencyTracker.get_current_cell()
+            if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
+                self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
+
+                # Check for circular reference after adding dependency
+                from lib.exceptions import CircularRefError
+                self.code_array.dep_graph.check_for_cycles(current_cell)
+                # If check_for_cycles raises CircularRefError, it will propagate
+
+            return copy.deepcopy(self.code_array[row, col, self.sheet_idx])
 
         def cell_range_ref(self, addr1: str, addr2: str) -> Range:
             coord1 = spreadsheet_ref_to_coord(addr1)
@@ -295,9 +361,23 @@ class ReferenceParser:
             botright = max(coord1[0], coord2[0]), max(coord1[1], coord2[1])
             width = botright[1] - topleft[1] + 1
 
+            # Get current cell for dependency tracking
+            current_cell = DependencyTracker.get_current_cell()
+
             rtn = Range(topleft, width)
             for row in range(topleft[0], botright[0] + 1):
                 for col in range(topleft[1], botright[1] + 1):
+                    dependency_key = (row, col, self.sheet_idx)
+
+                    # Record dependency for each cell in range
+                    if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
+                        self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
+
+                        # Check for circular reference after adding dependency
+                        from lib.exceptions import CircularRefError
+                        self.code_array.dep_graph.check_for_cycles(current_cell)
+                        # If check_for_cycles raises CircularRefError, it will propagate
+
                     rtn.append(copy.deepcopy(self.code_array[row, col, self.sheet_idx]))
 
             return rtn
@@ -595,11 +675,9 @@ class CELL_META_GENERATOR:
     __INSTANCE = None
 
     def __init__(self, code_array):
-        assert self.__class__.__INSTANCE is None, "CELL_META should not be instantiated directly!"
-
+        # Allow re-instantiation for testing (pytest fixtures)
         self.key = None
         self.code_array = code_array
-
         self.__class__.__INSTANCE = self
 
     class CELL_META:

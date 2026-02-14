@@ -545,17 +545,14 @@ class PreferencesDialog(DataEntryDialog):
 
         title = "Preferences"
         groupbox_title = "Global settings"
-        labels = ["Signature key for files", "Cell calculation timeout [ms]",
-                  "Frozen cell refresh period [ms]", "Number of recent files",
-                  "Show sum in statusbar"]
-        self.keys = ["signature_key", "timeout", "refresh_timeout",
-                     "max_file_history", "show_statusbar_sum"]
-        self.mappers = [str, int, int, int, bool]
+        labels = ["Signature key for files", "Number of recent files", "Show sum in statusbar"]
+        self.keys = ["signature_key", "max_file_history", "show_statusbar_sum"]
+        self.mappers = [str, int, bool]
 
         int_validator = QIntValidator()
         int_validator.setBottom(0)  # Do not allow negative values
 
-        validators = [None, int_validator, int_validator, int_validator, bool]
+        validators = [None, int_validator, bool]
         if moneyed is not None:
             currencies = map(str, moneyed.list_all_currencies())
             tuple_validator = TupleValidator(*currencies)

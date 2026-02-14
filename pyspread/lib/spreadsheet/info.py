@@ -153,7 +153,7 @@ def NA():
     """
     NA() => returns the #N/A error value.
     """
-    return errors.SpreadsheetErrorNa
+    return errors.SpreadsheetErrorNa()
 
 
 def TYPE(value) -> int:

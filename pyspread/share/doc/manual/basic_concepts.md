@@ -119,20 +119,16 @@ may lock up or even crash with a memory error if the grid size is too large.
 
 ## How cells are evaluated
 
-Pyspread differs from traditional spreadsheets in its way to evaluate its cells. The approach is difficult for Python because side-effects must be taken into account. Even though there may be ways to achieve proper dependency tracking in Python, we have not found a way that is sufficiently fast for acceptable spreadsheet usage. Instead, pyspread employs a caching strategy.
+Pyspread differs from traditional spreadsheets in its way to evaluate its cells. The approach is difficult for Python because side-effects must be taken into account. Pyspread employs a dependency-tracking and smart caching strategy.
 
-The following behavior applies to cells that are not frozen:
+Pyspread evaluates the macro editor code and the code of all visible cells. Whenever a cell that has not been evaluated before becomes visible, it is evaluated on the fly. Each evaluated cell result is stored in a smart cache. When a cell is evaluated again, the cached result is used if the cell and its dependencies haven't changed. This also applies for cells that are called from other cell codes with code such as `S[1,2,3]`.
 
-Pyspread evaluates the macro editor code and the code of all visible cells. Whenever a cell that has not been evaluated before becomes visible, it is evaluated on the fly. Each evaluated cell result is stored in a result cache. When a cell is evaluated again, the cached result is used, and the cell is not re-evaluated. This also applies for cells that are called from other cell codes with code such as `S[1,2,3]`. 
+Cell caches are invalidated when:
+  * macro editor changes have been applied
+  * a cell code has been changed
+  * any of the cell's dependencies have been changed
 
-The result cache is cleared when
-  * macro editor changes have been applied or
-  * a cell code has been changed.
-Furthermore, certain actions such as `Freeze cell` may empty the cache.
-
-Frozen cells are handled differently:
-
-When a cell is frozen, it is directly evaluated. Its result is not stored inside but outside of the result cache. Macro or cell changes do not lead to a re-evaluation of frozen cells. Instead, the action `Refresh selected cells` updates a frozen cell that is selected. Furthermore when `Toggle periodic updates` is activated, all frozen cells are re-evaluated after a time period that is specified in the preferences dialog.
+The dependency graph automatically tracks which cells depend on other cells, ensuring that cached values are only used when they are still valid.
 
 ## Everything is accessible
 
