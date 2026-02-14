@@ -53,18 +53,3 @@ Reset the grid zoom level to 100%.
 
 ----------
 
-## View → Refresh selected cells
-
-Executes code of cells that are selected and frozen and updates their cell results in the grid. If no cell is selected then the current cell is refreshed. The shortcut for is `<F5>`.
-
-This action has only effects on cells that are frozen.
-
-## View → Toggle periodic updates
-
-Periodically executes code of cells that are frozen and updates their cell results in the grid. The period can be adjusted in the [Preferences dialog](file_menu.html#--preferences): Set the desired period as “Frozen cells refresh period” in milliseconds.
-
-----------
-
-## View → Show frozen
-
-Toggles display of a diagonal blue stripe pattern on the background of each frozen cell.

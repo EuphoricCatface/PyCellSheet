@@ -131,8 +131,6 @@ After pressing o.k., a second dialog window displays the print preview.
 The preferences dialog allows changing:
 
 - **Signature key for files**: The private key that is used for signing the `.pys` and `.pysu` files
-- **Cell calculation timeout**: If calculations for a cell exceed the time in seconds given here then calculation is aborted. This does not work for Python functions that are C code, so e.g. `2**99999999999999999` is not aborted.
-- **Frozen cell refresh period**: If **`View → Toggle`** periodic updates is activated then all frozen cells are updated after a specified amount of time. This interval in milliseconds is set here. The change takes effect the next time that **`View → Toggle`** periodic updates is activated. Too small values may lock up the application.
 - **Number of recent files**: The maximum number of files that is displayed in the list of recent files. Changes come into effect after the next restart of *pyspread*.
 
 ![Preferences dialog 2](images/screenshot_preferences_dialog.png)
