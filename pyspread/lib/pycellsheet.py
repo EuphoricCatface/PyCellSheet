@@ -496,7 +496,8 @@ class ReferenceParser:
         split_lines = code_inspect.splitlines()
         line_lengths = [0]
         for line in split_lines:
-            line_lengths.append(line_lengths[-1] + len(line))
+            # +1 accounting for newline
+            line_lengths.append(line_lengths[-1] + len(line) + 1)
         for node in ast.walk(parsed):
             if not isinstance(node, ast.Name):
                 continue
