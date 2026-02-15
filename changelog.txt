@@ -1,0 +1,45 @@
+PyCellSheet Changelog
+=====================
+
+Base upstream: pyspread 2.3.1 at commit `01500b4` (2024-11-23)
+
+v0.1.0 Release Candidate
+------------------------
+
+Range: `a7eda84..fb37c89` (2024-12-29 to 2026-02-15)
+
+Summary:
+- 53 files changed, 6057 insertions, 1507 deletions
+
+Highlights:
+- Added dependency-aware recalculation core with `DependencyGraph` and `SmartCache`.
+- Added circular reference detection and new PyCellSheet exceptions.
+- Added dirty-state UI integration and refresh icon rendering in cells.
+- Added named sheet support and sheet rename functionality.
+- Expanded spreadsheet function coverage across math/statistical/filter/info/engineering modules.
+- Added/updated tests for dependency graph, smart cache, reference parsing, and integration flows.
+- Removed frozen-cell and evaluation-timeout features from core, UI, and settings.
+- Refined evaluation/runtime behavior (globals isolation, parser fixes, cache correctness, coordinate-order fixes).
+- UI/UX cleanup: recalculate actions moved under a new Tools menu; "Macro panel" renamed to "Sheet Script".
+- Logging cleanup and additional debug logging around dependency/caching operations.
+
+v0.0.5 Proof-of-Concept
+-----------------------
+
+Range: `01500b4..a7eda84` (2024-11-23 to 2024-12-29)
+
+Summary:
+- 35 files changed, 3607 insertions, 1106 deletions
+
+Highlights:
+- Forked from pyspread 2.3.1 and established PyCellSheet direction.
+- Implemented copy-priority semantics with core types (`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`).
+- Introduced expression parsing modes and initial reference parser implementation.
+- Implemented per-sheet init scripts and `.pycs` file-format workflow.
+- Added spreadsheet helper functions (`C`, `R`, `Sh`, `CR`, `G`) and `HelpText`.
+- Built initial spreadsheet-function library structure and early implementations.
+- Added design documentation and initial UI wiring for sheet script editing.
+
+Notes:
+- `v0.0.5` corresponds to commit `a7eda84`.
+- Current branch tip `fb37c89` is treated as the `v0.1.0` release candidate.
