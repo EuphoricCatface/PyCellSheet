@@ -66,7 +66,7 @@ try:
                                   PrintAreaDialog, PrintPreviewDialog)
     from pyspread.installer import DependenciesDialog
     from pyspread.interfaces.pycs import qt62qt5_fontweights
-    from pyspread.panels import MacroPanel
+    from pyspread.panels import SheetScriptPanel
     from pyspread.lib.hashing import genkey
     from pyspread.model.model import CellAttributes
 except ImportError:
@@ -85,7 +85,7 @@ except ImportError:
                          TutorialDialog, PrintAreaDialog, PrintPreviewDialog)
     from installer import DependenciesDialog
     from interfaces.pycs import qt62qt5_fontweights
-    from panels import MacroPanel
+    from panels import SheetScriptPanel
     from lib.hashing import genkey
     from model.model import CellAttributes
 
@@ -235,7 +235,7 @@ class MainWindow(QMainWindow):
 
         self.grids = [self.grid, self.grid_2, self.grid_3, self.grid_4]
 
-        self.macro_panel = MacroPanel(self, self.grid.model.code_array)
+        self.sheet_script_panel = SheetScriptPanel(self, self.grid.model.code_array)
 
         self.main_panel = QWidget(self)
 
@@ -247,17 +247,17 @@ class MainWindow(QMainWindow):
         self.resizeDocks([self.entry_line_dock], [10],
                          Qt.Orientation.Horizontal)
 
-        self.macro_dock = QDockWidget("Macros", self)
-        self.macro_dock.setObjectName("Macro Panel")
-        self.macro_dock.setWidget(self.macro_panel)
+        self.sheet_script_dock = QDockWidget("Sheet Script", self)
+        self.sheet_script_dock.setObjectName("Sheet Script Panel")
+        self.sheet_script_dock.setWidget(self.sheet_script_panel)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,
-                           self.macro_dock)
+                           self.sheet_script_dock)
 
         self.central_layout = QVBoxLayout(self.main_panel)
         self._layout()
 
         self.entry_line_dock.installEventFilter(self)
-        self.macro_dock.installEventFilter(self)
+        self.sheet_script_dock.installEventFilter(self)
 
         QApplication.instance().focusChanged.connect(self.on_focus_changed)
         self.gui_update.connect(self.on_gui_update)
@@ -306,8 +306,8 @@ class MainWindow(QMainWindow):
 
         if event.type() == QEvent.Type.Close and isinstance(source,
                                                             QDockWidget):
-            if source.windowTitle() == "Macros":
-                self.main_window_actions.toggle_macro_dock.setChecked(False)
+            if source.windowTitle() == "Sheet Script":
+                self.main_window_actions.toggle_sheet_script_dock.setChecked(False)
             elif source.windowTitle() == "Entry Line":
                 self.main_window_actions.toggle_entry_line_dock.setChecked(
                     False)
@@ -348,8 +348,8 @@ class MainWindow(QMainWindow):
         entryline_visible = self.entry_line_dock.isVisibleTo(self)
         actions.toggle_entry_line_dock.setChecked(entryline_visible)
 
-        macrodock_visible = self.macro_dock.isVisibleTo(self)
-        actions.toggle_macro_dock.setChecked(macrodock_visible)
+        sheet_script_dock_visible = self.sheet_script_dock.isVisibleTo(self)
+        actions.toggle_sheet_script_dock.setChecked(sheet_script_dock_visible)
 
         actions.toggle_auto_recalculate.setChecked(
             self.settings.recalc_mode == "auto"
@@ -400,7 +400,7 @@ class MainWindow(QMainWindow):
             # Disable approval menu entry
             self.main_window_actions.approve.setEnabled(False)
             # Execute macros
-            self.macro_panel.on_apply()
+            self.sheet_script_panel.on_apply()
 
     def on_print(self):
         """Print event handler"""
@@ -707,14 +707,15 @@ class MainWindow(QMainWindow):
         self._toggle_widget(self.entry_line_dock, "toggle_entry_line_dock",
                             toggled)
 
-    def on_toggle_macro_dock(self, toggled: bool):
-        """Macro panel toggle event handler
+    def on_toggle_sheet_script_dock(self, toggled: bool):
+        """Sheet script panel toggle event handler
 
         :param toggled: Toggle state
 
         """
 
-        self._toggle_widget(self.macro_dock, "toggle_macro_dock", toggled)
+        self._toggle_widget(self.sheet_script_dock, "toggle_sheet_script_dock",
+                            toggled)
 
     def on_manual(self):
         """Show manual browser"""

@@ -212,7 +212,7 @@ class ViewMenu(QMenu):
         self.toolbar_submenu.addAction(actions.toggle_find_toolbar)
 
         self.addAction(actions.toggle_entry_line_dock)
-        self.addAction(actions.toggle_macro_dock)
+        self.addAction(actions.toggle_sheet_script_dock)
         self.addSeparator()
         self.addAction(actions.goto_cell)
         self.addSeparator()

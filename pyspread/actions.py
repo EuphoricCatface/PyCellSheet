@@ -359,10 +359,10 @@ class MainWindowActions(AttrDict):
             self.parent, "Entry line", self.parent.on_toggle_entry_line_dock,
             checkable=True, statustip='Show/hide the entry line')
 
-        self.toggle_macro_dock = Action(
-            self.parent, "Macro panel", self.parent.on_toggle_macro_dock,
+        self.toggle_sheet_script_dock = Action(
+            self.parent, "Sheet Script", self.parent.on_toggle_sheet_script_dock,
             checkable=True, shortcut='F4' if self.shortcuts else "",
-            statustip='Show/hide the macro panel')
+            statustip='Show/hide the sheet script panel')
 
         self.goto_cell = Action(self.parent, "Go to cell",
                                 self.parent.workflows.view_goto_cell,
