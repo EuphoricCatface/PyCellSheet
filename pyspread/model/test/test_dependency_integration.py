@@ -48,6 +48,7 @@ sys.path.pop(0)
 class Settings:
     """Simulates settings class"""
     timeout = 1000
+    recalc_mode = "auto"
 
 
 @pytest.fixture
