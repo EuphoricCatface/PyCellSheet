@@ -7,6 +7,14 @@ import ast
 import collections
 import threading
 
+try:
+    from pyspread.lib.exceptions import CircularRefError
+except ImportError:
+    try:
+        from lib.exceptions import CircularRefError
+    except ImportError:
+        from .exceptions import CircularRefError
+
 
 # Dependency tracking context manager
 class DependencyTracker:
@@ -315,8 +323,16 @@ class ReferenceParser:
         self.code_array = code_array
 
     @staticmethod
-    def sheet_name_to_idx(sheet_name):
-        return int(sheet_name)
+    def sheet_name_to_idx(sheet_name: str, code_array=None):
+        try:
+            return int(sheet_name)
+        except ValueError:
+            if code_array is None:
+                raise ValueError(f"Sheet '{sheet_name}' is not numeric and no code_array was provided.")
+            sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+            if sheet_names and sheet_name in sheet_names:
+                return sheet_names.index(sheet_name)
+            raise ValueError(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
 
     # NYI: cache sheet, and invalidate the cache if the sheet gets modified
     class Sheet:
@@ -348,7 +364,6 @@ class ReferenceParser:
                 self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
 
                 # Check for circular reference after adding dependency
-                from lib.exceptions import CircularRefError
                 self.code_array.dep_graph.check_for_cycles(current_cell)
                 # If check_for_cycles raises CircularRefError, it will propagate
 
@@ -374,7 +389,6 @@ class ReferenceParser:
                         self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
 
                         # Check for circular reference after adding dependency
-                        from lib.exceptions import CircularRefError
                         self.code_array.dep_graph.check_for_cycles(current_cell)
                         # If check_for_cycles raises CircularRefError, it will propagate
 
@@ -717,7 +731,7 @@ class CELL_META_GENERATOR:
         non_sheet = cell_ref
         exc_index = cell_ref.find("!")
         if exc_index != -1:
-            sheet_index = ReferenceParser.sheet_name_to_idx(cell_ref[:exc_index])
+            sheet_index = ReferenceParser.sheet_name_to_idx(cell_ref[:exc_index].strip('"'), self.code_array)
             non_sheet = cell_ref[exc_index + 1:]
         cell_coord = spreadsheet_ref_to_coord(non_sheet)
 
