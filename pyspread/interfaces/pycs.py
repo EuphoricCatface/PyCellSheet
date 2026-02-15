@@ -586,8 +586,9 @@ class PycsWriter(object):
         for i, macro in enumerate(macros):
             # Use sheet name if available, otherwise fall back to index
             sheet_identifier = sheet_names[i] if sheet_names and i < len(sheet_names) else str(i)
+            macro_count = macro.count('\n') + 1
             macro_list = [
-                f"(macro:{sheet_identifier!r}) {macro.count('\n') + 1}",
+                f"(macro:{sheet_identifier!r}) {macro_count}",
                 macro,
                 ""  # To append a linebreak at the end
             ]
