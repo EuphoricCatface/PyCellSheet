@@ -53,7 +53,7 @@ from builtins import range
 import ast
 from collections import defaultdict
 from copy import copy, deepcopy
-from inspect import getmembers, isfunction, isgenerator
+from inspect import isgenerator
 import io
 from itertools import product
 import re
@@ -75,25 +75,6 @@ try:
     from matplotlib.figure import Figure
 except ImportError:
     Figure = None
-
-try:
-    import pycel
-    import pycel.excellib
-    import pycel.lib.date_time
-    import pycel.lib.engineering
-    import pycel.lib.information
-    import pycel.lib.logical
-    import pycel.lib.lookup
-    import pycel.lib.stats
-    import pycel.lib.text
-
-except ImportError:
-    pycel = None
-
-try:
-    from openpyxl.worksheet.cell_range import CellRange
-except ImportError:
-    CellRange = None
 
 try:
     from moneyed import Money
@@ -155,64 +136,12 @@ except ImportError:
 class_format_functions = {}
 
 
-def update_xl_list():
-    """Updates list of pycel modules to be accessible from within cells"""
+def _get_isolated_builtins() -> dict[str, Any]:
+    """Returns a per-evaluation builtins mapping that is detached from runtime globals."""
 
-    if pycel is not None:
-        try:
-            xl_members = getmembers(pycel.excellib)
-            xl_members += getmembers(pycel.lib.date_time)
-            xl_members += getmembers(pycel.lib.engineering)
-            xl_members += getmembers(pycel.lib.information)
-            xl_members += getmembers(pycel.lib.logical)
-            xl_members += getmembers(pycel.lib.lookup)
-            xl_members += getmembers(pycel.lib.stats)
-            xl_members += getmembers(pycel.lib.text)
-
-            for name, fun in xl_members:
-                globals()[name] = fun
-
-        except UnboundLocalError:
-            return  # openpyxl is not installed
-
-
-def _table_from_address(addr: str) -> int:
-    """Convert xlsx sheetname to table
-
-    :param sheetname: Name if Excel sheet as in global sheetnames
-    :return: Table index
-
-    """
-
-    if "!" in addr:
-        sheetname = addr.split("!")[0]
-        return _sheetnames.index(sheetname)
-        # Works because _sheetnames is global
-    return Z  # Works in cells because Z is global
-
-
-def _R_(addr: str) -> Any:
-    """Helper for pycel references in xlsx code
-
-    TODO: Move to separate lib module
-
-    """
-
-    l, t, r, b = CellRange(addr).bounds
-    table = _table_from_address(addr)
-    return S[t-1:b, l-1:r, table]  # Works in cells because S is global
-
-
-def _C_(addr: str) -> Any:
-    """Helper for pycel references in xlsx code
-
-    TODO: Move to separate lib module
-
-    """
-
-    l, t, _, _ = CellRange(addr).bounds
-    table = _table_from_address(addr)
-    return S[t-1, l-1, table]  # Works in cells because S is global
+    if isinstance(__builtins__, dict):
+        return dict(__builtins__)
+    return dict(__builtins__.__dict__)
 
 
 class DefaultCellAttributeDict(AttrDict):
@@ -1530,21 +1459,6 @@ class CodeArray(DataArray):
 
         return res
 
-    def _get_updated_environment(self, env_dict: dict = None) -> dict:
-        """Returns globals environment with 'magic' variable
-
-        :param env_dict: Maps global variable name to value, None: {'S': self}
-
-        """
-
-        if env_dict is None:
-            env_dict = {'S': self}
-
-        env = globals().copy()
-        env.update(env_dict)
-
-        return env
-
     def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
         """Evaluates one cell and returns its result
 
@@ -1591,6 +1505,8 @@ class CodeArray(DataArray):
         #  --- PythonEval START ---  #
         env = deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
+        # Keep eval globals isolated from module/runtime globals.
+        env["__builtins__"] = _get_isolated_builtins()
         cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
         self.cell_meta_gen.set_context(key)
         local = {
@@ -1761,11 +1677,6 @@ class CodeArray(DataArray):
         keys = self._filter_recalc_keys(list(self.dict_grid.keys()))
         return self._recalculate_keys(keys)
 
-    def get_globals(self) -> dict:
-        """Returns globals dict"""
-
-        return globals()
-
     def execute_macros(self, current_table) -> Tuple[str, str]:
         """Executes all macros and returns result string and error string
 
@@ -1783,14 +1694,6 @@ class CodeArray(DataArray):
         # Windows exec does not like Windows newline
         self.macros[current_table] = self.macros[current_table].replace('\r\n', '\n')
 
-        # # Set up environment for evaluation
-        # globals().update(self._get_updated_environment())
-        # for var in "XYZRCT":
-        #     try:
-        #         del globals()[var]
-        #     except KeyError:
-        #         pass
-
         # Create file-like string to capture output
         code_out = io.StringIO()
         code_err = io.StringIO()
@@ -1800,7 +1703,7 @@ class CodeArray(DataArray):
         sys.stdout = code_out
         sys.stderr = code_err
 
-        sheet_globals = {}
+        sheet_globals = {"__builtins__": _get_isolated_builtins()}
         try:
             exec(self.macros[current_table], sheet_globals)
 
