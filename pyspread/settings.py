@@ -109,12 +109,6 @@ class Settings:
     border_choice = "All borders"
     """The state of the border choice button"""
 
-    timeout = 1000
-    """Timeout for cell calculations in milliseconds"""
-
-    refresh_timeout = 1000
-    """Timeout for frozen cell updates in milliseconds"""
-
     signature_key = None
     """Key for signing save files"""
 
@@ -128,9 +122,6 @@ class Settings:
                    1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0)
 
     print_zoom = None
-
-    show_frozen = False
-    """If `True` then frozen cell background is striped"""
 
     find_dialog_state = None
     """Find dialog state - needs to be stored when dialog is closed"""
@@ -169,6 +160,9 @@ class Settings:
 
     # Status bar cell result summation
     show_statusbar_sum = True
+
+    recalc_mode = "auto"
+    """Recalculation mode: auto or manual"""
 
     def __init__(self, parent: QWidget, reset_settings: bool = False):
         """
@@ -240,10 +234,9 @@ class Settings:
         settings.value("file_history", [], 'QStringList')
         if self.file_history:
             settings.setValue("file_history", self.file_history)
-        settings.setValue("timeout", self.timeout)
-        settings.setValue("refresh_timeout", self.refresh_timeout)
         settings.setValue("signature_key", self.signature_key)
         settings.setValue("show_statusbar_sum", self.show_statusbar_sum)
+        settings.setValue("recalc_mode", self.recalc_mode)
 
         # GUI state
         for widget_name in self.widget_names:
@@ -316,10 +309,11 @@ class Settings:
         setting2attr("last_file_export_path")
         setting2attr("max_file_history", mapper=int)
         setting2attr("file_history")
-        setting2attr("timeout", mapper=int)
-        setting2attr("refresh_timeout", mapper=int)
         setting2attr("signature_key")
         setting2attr("show_statusbar_sum", mapper=qt_bool)
+        setting2attr("recalc_mode")
+        if self.recalc_mode not in ("auto", "manual"):
+            self.recalc_mode = Settings.recalc_mode
 
         # GUI state
 

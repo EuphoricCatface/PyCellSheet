@@ -1,3 +1,11 @@
+import cmath
+import math
+
+try:
+    from pyspread.lib.pycellsheet import flatten_args
+except ImportError:
+    from lib.pycellsheet import flatten_args
+
 _ENGINEERING_FUNCTIONS = [
     'BIN2DEC', 'BIN2HEX', 'BIN2OCT', 'BITAND', 'BITLSHIFT', 'BITOR', 'BITRSHIFT', 'BITXOR',
     'COMPLEX', 'DEC2BIN', 'DEC2HEX', 'DEC2OCT', 'DELTA', 'ERF', 'GESTEP', 'HEX2BIN',
@@ -9,190 +17,192 @@ _ENGINEERING_FUNCTIONS = [
 __all__ = _ENGINEERING_FUNCTIONS + ["_ENGINEERING_FUNCTIONS"]
 
 
-def BIN2DEC(a, b):
-    raise NotImplementedError("BIN2DEC() not implemented yet")
+def BIN2DEC(x):
+    return int(x, 2)
 
 
-def BIN2HEX(a, b):
-    raise NotImplementedError("BIN2HEX() not implemented yet")
+def BIN2HEX(x):
+    return hex(int(x, 2))
 
 
-def BIN2OCT(a, b):
-    raise NotImplementedError("BIN2OCT() not implemented yet")
+def BIN2OCT(x):
+    return oct(int(x, 2))
 
 
 def BITAND(a, b):
-    raise NotImplementedError("BITAND() not implemented yet")
+    return a & b
 
 
 def BITLSHIFT(a, b):
-    raise NotImplementedError("BITLSHIFT() not implemented yet")
+    return a << b
 
 
 def BITOR(a, b):
-    raise NotImplementedError("BITOR() not implemented yet")
+    return a | b
 
 
 def BITRSHIFT(a, b):
-    raise NotImplementedError("BITRSHIFT() not implemented yet")
+    return a >> b
 
 
 def BITXOR(a, b):
-    raise NotImplementedError("BITXOR() not implemented yet")
+    return a ^ b
 
 
 def COMPLEX(a, b):
-    raise NotImplementedError("COMPLEX() not implemented yet")
+    return complex(a, b)
 
 
-def DEC2BIN(a, b):
-    raise NotImplementedError("DEC2BIN() not implemented yet")
+def DEC2BIN(x):
+    return bin(x)
 
 
-def DEC2HEX(a, b):
-    raise NotImplementedError("DEC2HEX() not implemented yet")
+def DEC2HEX(x):
+    return hex(x)
 
 
-def DEC2OCT(a, b):
-    raise NotImplementedError("DEC2OCT() not implemented yet")
+def DEC2OCT(x):
+    return oct(x)
 
 
-def DELTA(a, b):
-    raise NotImplementedError("DELTA() not implemented yet")
+def DELTA(a, b=0):
+    return int(a==b)
 
 
 class ERF:
-    def __new__(cls, a, b):
-        raise NotImplementedError("ERF() not implemented yet")
+    def __new__(cls, lower_limit, upper_limit=None):
+        return cls.PRECISE(lower_limit, upper_limit)
 
     @staticmethod
-    def PRECISE(a, b):
-        raise NotImplementedError("ERF.PRECISE() not implemented yet")
+    def PRECISE(lower_limit, upper_limit=None):
+        if upper_limit is None:
+            return math.erf(lower_limit)
+        return math.erf(upper_limit) - math.erf(lower_limit)
 
 
-def GESTEP(a, b):
-    raise NotImplementedError("GESTEP() not implemented yet")
+def GESTEP(x, step=0):
+    return 1 if x >= step else 0
 
 
-def HEX2BIN(a, b):
-    raise NotImplementedError("HEX2BIN() not implemented yet")
+def HEX2BIN(x):
+    return bin(int(x, 16))
 
 
-def HEX2DEC(a, b):
-    raise NotImplementedError("HEX2DEC() not implemented yet")
+def HEX2DEC(x):
+    return int(x, 16)
 
 
-def HEX2OCT(a, b):
-    raise NotImplementedError("HEX2OCT() not implemented yet")
+def HEX2OCT(x):
+    return oct(int(x, 16))
 
 
-def IMABS(a, b):
-    raise NotImplementedError("IMABS() not implemented yet")
+def IMABS(z):
+    return abs(z)
 
 
-def IMAGINARY(a, b):
-    raise NotImplementedError("IMAGINARY() not implemented yet")
+def IMAGINARY(z: complex):
+    return z.imag
 
 
-def IMARGUMENT(a, b):
-    raise NotImplementedError("IMARGUMENT() not implemented yet")
+def IMARGUMENT(z: complex):
+    return cmath.phase(z)
 
 
-def IMCONJUGATE(a, b):
-    raise NotImplementedError("IMCONJUGATE() not implemented yet")
+def IMCONJUGATE(z: complex):
+    return complex(z.real, -z.imag)
 
 
-def IMCOS(a, b):
-    raise NotImplementedError("IMCOS() not implemented yet")
+def IMCOS(z):
+    return cmath.cos(z)
 
 
-def IMCOSH(a, b):
-    raise NotImplementedError("IMCOSH() not implemented yet")
+def IMCOSH(z):
+    return cmath.cosh(z)
 
 
-def IMCOT(a, b):
-    raise NotImplementedError("IMCOT() not implemented yet")
+def IMCOT(z):
+    return 1/cmath.tan(z)
 
 
-def IMCOTH(a, b):
-    raise NotImplementedError("IMCOTH() not implemented yet")
+def IMCOTH(z):
+    return 1/cmath.tanh(z)
 
 
-def IMCSC(a, b):
-    raise NotImplementedError("IMCSC() not implemented yet")
+def IMCSC(z):
+    return 1/cmath.sin(z)
 
 
-def IMCSCH(a, b):
-    raise NotImplementedError("IMCSCH() not implemented yet")
+def IMCSCH(z):
+    return 1/cmath.sinh(z)
 
 
 def IMDIV(a, b):
-    raise NotImplementedError("IMDIV() not implemented yet")
+    return a / b
 
 
-def IMEXP(a, b):
-    raise NotImplementedError("IMEXP() not implemented yet")
+def IMEXP(z):
+    return math.e ** z
 
 
-def IMLOG(a, b):
-    raise NotImplementedError("IMLOG() not implemented yet")
+def IMLOG(value, base):
+    return cmath.log(value, base)
 
 
-def IMLOG10(a, b):
-    raise NotImplementedError("IMLOG10() not implemented yet")
+def IMLOG10(value):
+    return cmath.log(value, 10)
 
 
-def IMLOG2(a, b):
-    raise NotImplementedError("IMLOG2() not implemented yet")
+def IMLOG2(value):
+    return cmath.log(value, 2)
 
 
 def IMPRODUCT(a, b):
-    raise NotImplementedError("IMPRODUCT() not implemented yet")
+    return a * b
 
 
-def IMREAL(a, b):
-    raise NotImplementedError("IMREAL() not implemented yet")
+def IMREAL(z: complex):
+    return z.real
 
 
-def IMSEC(a, b):
-    raise NotImplementedError("IMSEC() not implemented yet")
+def IMSEC(z):
+    return 1/cmath.cos(z)
 
 
-def IMSECH(a, b):
-    raise NotImplementedError("IMSECH() not implemented yet")
+def IMSECH(z):
+    return 1/cmath.cosh(z)
 
 
-def IMSIN(a, b):
-    raise NotImplementedError("IMSIN() not implemented yet")
+def IMSIN(z):
+    return cmath.sin(z)
 
 
-def IMSINH(a, b):
-    raise NotImplementedError("IMSINH() not implemented yet")
+def IMSINH(z):
+    return cmath.sinh(z)
 
 
 def IMSUB(a, b):
-    raise NotImplementedError("IMSUB() not implemented yet")
+    return a - b
 
 
-def IMSUM(a, b):
-    raise NotImplementedError("IMSUM() not implemented yet")
+def IMSUM(*args):
+    return sum(flatten_args(*args))
 
 
-def IMTAN(a, b):
-    raise NotImplementedError("IMTAN() not implemented yet")
+def IMTAN(z):
+    return cmath.tan(z)
 
 
-def IMTANH(a, b):
-    raise NotImplementedError("IMTANH() not implemented yet")
+def IMTANH(z):
+    return cmath.tanh(z)
 
 
-def OCT2BIN(a, b):
-    raise NotImplementedError("OCT2BIN() not implemented yet")
+def OCT2BIN(x):
+    return bin(int(x, 8))
 
 
-def OCT2DEC(a, b):
-    raise NotImplementedError("OCT2DEC() not implemented yet")
+def OCT2DEC(x):
+    return int(x, 8)
 
 
-def OCT2HEX(a, b):
-    raise NotImplementedError("OCT2HEX() not implemented yet")
+def OCT2HEX(x):
+    return hex(int(x, 8))

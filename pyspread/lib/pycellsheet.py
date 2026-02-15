@@ -5,6 +5,66 @@ import warnings
 import re
 import ast
 import collections
+import threading
+
+try:
+    from pyspread.lib.exceptions import CircularRefError
+except ImportError:
+    try:
+        from lib.exceptions import CircularRefError
+    except ImportError:
+        from .exceptions import CircularRefError
+
+
+# Dependency tracking context manager
+class DependencyTracker:
+    """Thread-local storage for tracking currently evaluating cell
+
+    Used to record dependencies during cell evaluation.
+    When cell A is being evaluated and calls C("B1"), we record that A depends on B1.
+    """
+
+    _local = threading.local()
+
+    @classmethod
+    def get_current_cell(cls):
+        """Get the currently evaluating cell key, or None if not tracking"""
+        return getattr(cls._local, 'current_cell', None)
+
+    @classmethod
+    def set_current_cell(cls, key):
+        """Set the currently evaluating cell key"""
+        cls._local.current_cell = key
+
+    @classmethod
+    def clear_current_cell(cls):
+        """Clear the currently evaluating cell key"""
+        cls._local.current_cell = None
+
+    @classmethod
+    def track(cls, key):
+        """Context manager for tracking cell evaluation
+
+        Saves and restores the previous context to support nested evaluation.
+
+        Usage:
+            with DependencyTracker.track((row, col, table)):
+                # Evaluate cell code
+                # Any C()/R()/Sh() calls will record dependencies
+        """
+        class TrackingContext:
+            def __enter__(self):
+                # Save previous context before setting new one
+                self.previous = cls.get_current_cell()
+                cls.set_current_cell(key)
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                # Restore previous context instead of clearing to None
+                cls.set_current_cell(self.previous)
+                return False
+
+        return TrackingContext()
 
 
 class Empty:
@@ -34,7 +94,7 @@ class Empty:
         return NotImplemented
 
     def __radd__(self, other):
-        self.__add__(other)
+        return self.__add__(other)
 
     def __sub__(self, other):
         if isinstance(other, (int, float)):
@@ -53,6 +113,12 @@ class Empty:
     def __rmul__(self, other):
         return self.__mul__(other)
 
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, _):
+        return self
+
 EmptyCell = Empty()
 
 
@@ -65,32 +131,40 @@ class HelpText:
         if len(query) == 0:
             self.query = "help()"
         elif len(query) == 1:
-            self.query = f"help({query[0]})"
+            try:
+                self.query = f"help({query[0].__name__})"
+            except Exception:
+                self.query = f"help({str(query[0])})"
         else:
             self.query = f"help{query}"
         self.contents = contents
 
 
 def coord_to_spreadsheet_ref(coord: tuple[int, int]) -> str:
-    """Calculate a coordinate from spreadsheet-like address string"""
+    """Calculate a spreadsheet reference from coordinate tuple
+
+    Uses bijective base-26 numeral system for column letters.
+    Examples: 0 -> A, 25 -> Z, 26 -> AA, 701 -> ZZ
+    """
     row, col = coord
 
-    if col == 0:
-        col_str = "A"
-    else:
-        col_inter = []
-        while col:
-            col_inter.append(col % 26)
-            col = col // 26
-        col_inter = list(map(lambda a: chr(a + ord("A")), col_inter))
-        col_inter.reverse()
-        col_str = str.join("", col_inter)
+    # Convert column number to bijective base-26 (A-Z, AA-ZZ, etc.)
+    col += 1  # Convert from 0-based to 1-based
+    col_str = ""
+    while col > 0:
+        col -= 1
+        col_str = chr(ord('A') + col % 26) + col_str
+        col //= 26
 
     return col_str + str(row + 1)
 
 
 def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
-    """Calculate a coordinate from spreadsheet-like address string"""
+    """Calculate coordinate tuple from spreadsheet reference string
+
+    Uses bijective base-26 numeral system for column letters.
+    Examples: A -> 0, Z -> 25, AA -> 26, ZZ -> 701
+    """
     col_str = None
     row_str = None
     for i, ch in enumerate(addr):
@@ -108,13 +182,14 @@ def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
     except ValueError:
         raise ValueError(f"Malformed spreadsheet-type address {addr=}")
 
+    # Convert column letters from bijective base-26 to 0-based index
     col_str = col_str.upper()
     col_num = 0
     for ch in col_str:
         col_num *= 26
-        col_num += ord(ch) - ord('A')
+        col_num += ord(ch) - ord('A') + 1  # +1 for bijective base-26
 
-    return row_num, col_num
+    return row_num, col_num - 1  # Convert from 1-based to 0-based
 
 
 class RangeBase:
@@ -165,9 +240,9 @@ class RangeOutput(RangeBase):
         return cls(r.width, r.lst)
 
     class OFFSET:
-        def __init__(self, x, y):
-            self.x = x
-            self.y = y
+        def __init__(self, row_offset, column_offset):
+            self.ro = row_offset
+            self.co = column_offset
 
 
 class ExpressionParser:
@@ -183,7 +258,7 @@ class ExpressionParser:
         ),
         "Reverse Mixed": (
             "# Inspired by the python shell prompt `>>>`\n"
-            "if cell.startswith(">"):\n"
+            "if cell.startswith('>'):\n"
             "    return PythonCode(cell[1:])\n"
             "if cell.startswith('\\''):\n"
             "    cell = cell[1:]\n"
@@ -248,20 +323,51 @@ class ReferenceParser:
         self.code_array = code_array
 
     @staticmethod
-    def sheet_name_to_idx(sheet_name):
-        return int(sheet_name)
+    def sheet_name_to_idx(sheet_name: str, code_array=None):
+        try:
+            return int(sheet_name)
+        except ValueError:
+            if code_array is None:
+                raise ValueError(f"Sheet '{sheet_name}' is not numeric and no code_array was provided.")
+            sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+            if sheet_names and sheet_name in sheet_names:
+                return sheet_names.index(sheet_name)
+            raise ValueError(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
 
     # NYI: cache sheet, and invalidate the cache if the sheet gets modified
     class Sheet:
         def __init__(self, sheet_name: str, code_array):
             self.code_array = code_array
 
-            self.sheet_idx = ReferenceParser.sheet_name_to_idx(sheet_name)
+            # Try to parse as integer first (old format), then lookup by name
+            try:
+                self.sheet_idx = int(sheet_name)
+            except ValueError:
+                # Look up sheet name in sheet_names list
+                sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+                if sheet_names and sheet_name in sheet_names:
+                    self.sheet_idx = sheet_names.index(sheet_name)
+                else:
+                    raise ValueError(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
+
             self.sheet_global_var = copy.deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
             self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
 
         def cell_single_ref(self, addr: str):
-            return copy.deepcopy(self.code_array[*spreadsheet_ref_to_coord(addr), self.sheet_idx])
+            # Get the cell coordinates
+            row, col = spreadsheet_ref_to_coord(addr)
+            dependency_key = (row, col, self.sheet_idx)
+
+            # Record dependency if we're currently evaluating a cell
+            current_cell = DependencyTracker.get_current_cell()
+            if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
+                self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
+
+                # Check for circular reference after adding dependency
+                self.code_array.dep_graph.check_for_cycles(current_cell)
+                # If check_for_cycles raises CircularRefError, it will propagate
+
+            return copy.deepcopy(self.code_array[row, col, self.sheet_idx])
 
         def cell_range_ref(self, addr1: str, addr2: str) -> Range:
             coord1 = spreadsheet_ref_to_coord(addr1)
@@ -270,9 +376,22 @@ class ReferenceParser:
             botright = max(coord1[0], coord2[0]), max(coord1[1], coord2[1])
             width = botright[1] - topleft[1] + 1
 
+            # Get current cell for dependency tracking
+            current_cell = DependencyTracker.get_current_cell()
+
             rtn = Range(topleft, width)
             for row in range(topleft[0], botright[0] + 1):
                 for col in range(topleft[1], botright[1] + 1):
+                    dependency_key = (row, col, self.sheet_idx)
+
+                    # Record dependency for each cell in range
+                    if current_cell is not None and hasattr(self.code_array, 'dep_graph'):
+                        self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
+
+                        # Check for circular reference after adding dependency
+                        self.code_array.dep_graph.check_for_cycles(current_cell)
+                        # If check_for_cycles raises CircularRefError, it will propagate
+
                     rtn.append(copy.deepcopy(self.code_array[row, col, self.sheet_idx]))
 
             return rtn
@@ -290,13 +409,11 @@ class ReferenceParser:
 
     def cell_ref(self, spreadsheet_ref_notation: str, current_sheet: "ReferenceParser.Sheet"):
         target_sheet: "ReferenceParser.Sheet" = current_sheet
-        exc_index = -1
         non_sheet = spreadsheet_ref_notation
         if "!" in spreadsheet_ref_notation:
             exc_index = spreadsheet_ref_notation.index("!")
-            sheet_name = spreadsheet_ref_notation[:exc_index]
-            sheet_name.strip('"')
-            target_sheet = self.sheet_ref(spreadsheet_ref_notation[:exc_index])
+            sheet_name = spreadsheet_ref_notation[:exc_index].strip('"')
+            target_sheet = self.sheet_ref(sheet_name)
             non_sheet = spreadsheet_ref_notation[exc_index + 1:]
         if ":" in non_sheet:
             col_index = non_sheet.index(":")
@@ -307,7 +424,7 @@ class ReferenceParser:
         elif self.COMPILED_CELL_RE.fullmatch(non_sheet):
             return target_sheet.cell_single_ref(non_sheet)
         else:
-            target_sheet.global_var(non_sheet)
+            return target_sheet.global_var(non_sheet)
     CR = cell_ref
 
     def parser(self, code: PythonCode):
@@ -371,7 +488,7 @@ class ReferenceParser:
         replacements_col = collections.deque()
         iters = re.finditer(self.COMPILED_RANGE_RE, code)
         for match in iters:
-            if len(code) < match.end(0) and code[match.end(0) + 1] == ':':
+            if len(code) > match.end(0) and code[match.end(0)] == ':':
                 continue
             colon_pos = code.find(':', match.start(0), match.end(0))
             replacements_col.append(colon_pos)
@@ -391,7 +508,8 @@ class ReferenceParser:
         split_lines = code_inspect.splitlines()
         line_lengths = [0]
         for line in split_lines:
-            line_lengths.append(line_lengths[-1] + len(line))
+            # +1 accounting for newline
+            line_lengths.append(line_lengths[-1] + len(line) + 1)
         for node in ast.walk(parsed):
             if not isinstance(node, ast.Name):
                 continue
@@ -431,9 +549,11 @@ class ReferenceParser:
             while True:
                 if not single_cell_indices:
                     break
-                s_index = single_cell_indices.popleft()
-                if s_index[0] > end:
+                s_index = single_cell_indices[0]
+                # Name spans are [start, end), so start==end belongs to the next chunk.
+                if s_index[0] >= end:
                     break
+                single_cell_indices.popleft()
                 s_str = f"C(\"{single_cell_idx_name.pop(s_index)}\")"
                 names_idx_replacement_str[s_index] = s_str
 
@@ -474,9 +594,12 @@ class ReferenceParser:
         # Step 8: Finally, assemble the code with the replacements
         last_end = 0
         parsed_code_list = []
-        for (start, end), replacements in names_idx_replacement_str.items():
+        for (start, end), replacements in sorted(names_idx_replacement_str.items(), key=lambda item: item[0][0]):
             parsed_code_list.append(code[last_end:start])
-            parsed_code_list.extend(replacements)
+            if isinstance(replacements, list):
+                parsed_code_list.extend(replacements)
+            else:
+                parsed_code_list.append(replacements)
             last_end = end
         parsed_code_list.append(code[last_end:])
 
@@ -513,27 +636,110 @@ class PythonEvaluator:
 
     @staticmethod
     def range_output_handler(code_array, range_output: RangeOutput, current_key):
-        x1, y1, current_table = current_key
-        for xo in range(range_output.height):
-            for yo in range(range_output.width):
-                if xo == 0 and yo == 0:
+        r1, c1, current_table = current_key
+        for ro in range(range_output.height):
+            for co in range(range_output.width):
+                if ro == 0 and co == 0:
                     continue
-                if code_array((x1 + xo, y1 + yo, current_table)) == f"RangeOutput.OFFSET({xo}, {yo})":
-                    code_array[x1 + xo, y1 + yo, current_table] = ""
-                if code_array[x1 + xo, y1 + yo, current_table] != EmptyCell:
-                    print(x1 + xo, y1 + yo, code_array[x1 + xo, y1 + yo, current_table], )
+                if code_array((r1 + ro, c1 + co, current_table)) == f"RangeOutput.OFFSET({ro}, {co})":
+                    code_array[r1 + ro, c1 + co, current_table] = ""
+                if code_array[r1 + ro, c1 + co, current_table] != EmptyCell:
                     raise ValueError("Cannot expand RangeOutput")
-        for xo in range(range_output.height):
-            for yo in range(range_output.width):
-                if xo == 0 and yo == 0:
+        for ro in range(range_output.height):
+            for co in range(range_output.width):
+                if ro == 0 and co == 0:
                     continue
-                code_array[x1 + xo, y1 + yo, current_table] = \
-                    f"RangeOutput.OFFSET({xo}, {yo})"
+                code_array[r1 + ro, c1 + co, current_table] = \
+                    f"RangeOutput.OFFSET({ro}, {co})"
 
     @staticmethod
     def range_offset_handler(code_array, range_offset: RangeOutput.OFFSET, current_key):
-        x, y, table = current_key
-        xo = range_offset.x
-        yo = range_offset.y
-        return code_array[x-xo, y-yo, table][xo][yo]
+        r, c, table = current_key
+        roff = range_offset.ro
+        coff = range_offset.co
+        ro = code_array[r-roff, c-coff, table]
+        if not isinstance(ro, RangeOutput) or \
+                (ro.width <= coff or ro.height <= roff):
+            code_array[r, c, table] = None
+            return EmptyCell
+        return ro[roff][coff]
 
+
+class Formatter:
+    @staticmethod
+    def display_formatter(value):
+        if isinstance(value, RangeOutput):
+            value = value.lst[0] if value.lst else "EMPTY_RANGEOUTPUT"
+
+        if isinstance(value, Exception):
+            return value.__class__.__name__
+        if isinstance(value, HelpText):
+            return value.query
+        return value
+
+    @staticmethod
+    def tooltip_formatter(value):
+        if isinstance(value, Exception):
+            output = str(value)
+        elif isinstance(value, HelpText):
+            output = value.contents
+        else:
+            output = value.__class__.__name__
+        return output
+
+
+class CELL_META_GENERATOR:
+    # NYI: use partial
+    __INSTANCE = None
+
+    def __init__(self, code_array):
+        # Allow re-instantiation for testing (pytest fixtures)
+        self.key = None
+        self.code_array = code_array
+        self.__class__.__INSTANCE = self
+
+    class CELL_META:
+        def __init__(self, key, code_array):
+            self.key = key
+            self.__code_array = code_array
+
+        @property
+        def code(self):
+            return self.__code_array(self.key)
+
+        @property
+        def attributes(self):
+            return self.__code_array.cell_attributes(self.key)
+
+    @classmethod
+    def get_instance(cls, code_array=None):
+        if cls.__INSTANCE is None:
+            assert code_array is not None, "CELL_META_GENERATOR initialization, code_array is not supplied"
+            cls(code_array)
+        else:
+            assert code_array is None, "CELL_META_GENERATOR non-initialization, code_array is supplied"
+        return cls.__INSTANCE
+
+    def set_context(self, key):
+        self.key = key
+
+    def cell_meta(self, cell_ref: str = None):
+        if cell_ref is None:
+            return self.get_cell_meta_key()
+
+        sheet_index = self.key[2]
+        non_sheet = cell_ref
+        exc_index = cell_ref.find("!")
+        if exc_index != -1:
+            sheet_index = ReferenceParser.sheet_name_to_idx(cell_ref[:exc_index].strip('"'), self.code_array)
+            non_sheet = cell_ref[exc_index + 1:]
+        cell_coord = spreadsheet_ref_to_coord(non_sheet)
+
+        return self.get_cell_meta_key((*cell_coord, sheet_index))
+
+    def get_cell_meta_key(self, key=None):
+        if key is None:
+            key = self.key
+        return CELL_META_GENERATOR.CELL_META(key, self.code_array)
+
+    CM=cell_meta

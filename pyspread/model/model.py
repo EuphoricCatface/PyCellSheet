@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -52,11 +53,10 @@ from builtins import range
 import ast
 from collections import defaultdict
 from copy import copy, deepcopy
-from inspect import getmembers, isfunction, isgenerator
+from inspect import isgenerator
 import io
 from itertools import product
 import re
-import signal
 import sys
 from traceback import print_exception
 from typing import (
@@ -77,25 +77,6 @@ except ImportError:
     Figure = None
 
 try:
-    import pycel
-    import pycel.excellib
-    import pycel.lib.date_time
-    import pycel.lib.engineering
-    import pycel.lib.information
-    import pycel.lib.logical
-    import pycel.lib.lookup
-    import pycel.lib.stats
-    import pycel.lib.text
-
-except ImportError:
-    pycel = None
-
-try:
-    from openpyxl.worksheet.cell_range import CellRange
-except ImportError:
-    CellRange = None
-
-try:
     from moneyed import Money
 except ImportError:
     Money = None
@@ -109,7 +90,13 @@ try:
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
     from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+
+    # Dependency tracking and smart caching
+    from pyspread.lib.dependency_graph import DependencyGraph
+    from pyspread.lib.smart_cache import SmartCache
+    from pyspread.lib.exceptions import CircularRefError
+
 except ImportError:
     from settings import Settings
     from lib.attrdict import AttrDict
@@ -119,7 +106,12 @@ except ImportError:
     from lib.selection import Selection
     from lib.string_helpers import ZEN
     from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+
+    # Dependency tracking and smart caching
+    from lib.dependency_graph import DependencyGraph
+    from lib.smart_cache import SmartCache
+    from lib.exceptions import CircularRefError
 
 
 INITSCRIPT_DEFAULT = """
@@ -144,64 +136,12 @@ except ImportError:
 class_format_functions = {}
 
 
-def update_xl_list():
-    """Updates list of pycel modules to be accessible from within cells"""
+def _get_isolated_builtins() -> dict[str, Any]:
+    """Returns a per-evaluation builtins mapping that is detached from runtime globals."""
 
-    if pycel is not None:
-        try:
-            xl_members = getmembers(pycel.excellib)
-            xl_members += getmembers(pycel.lib.date_time)
-            xl_members += getmembers(pycel.lib.engineering)
-            xl_members += getmembers(pycel.lib.information)
-            xl_members += getmembers(pycel.lib.logical)
-            xl_members += getmembers(pycel.lib.lookup)
-            xl_members += getmembers(pycel.lib.stats)
-            xl_members += getmembers(pycel.lib.text)
-
-            for name, fun in xl_members:
-                globals()[name] = fun
-
-        except UnboundLocalError:
-            return  # openpyxl is not installed
-
-
-def _table_from_address(addr: str) -> int:
-    """Convert xlsx sheetname to table
-
-    :param sheetname: Name if Excel sheet as in global sheetnames
-    :return: Table index
-
-    """
-
-    if "!" in addr:
-        sheetname = addr.split("!")[0]
-        return _sheetnames.index(sheetname)
-        # Works because _sheetnames is global
-    return Z  # Works in cells because Z is global
-
-
-def _R_(addr: str) -> Any:
-    """Helper for pycel references in xlsx code
-
-    TODO: Move to separate lib module
-
-    """
-
-    l, t, r, b = CellRange(addr).bounds
-    table = _table_from_address(addr)
-    return S[t-1:b, l-1:r, table]  # Works in cells because S is global
-
-
-def _C_(addr: str) -> Any:
-    """Helper for pycel references in xlsx code
-
-    TODO: Move to separate lib module
-
-    """
-
-    l, t, _, _ = CellRange(addr).bounds
-    table = _table_from_address(addr)
-    return S[t-1, l-1, table]  # Works in cells because S is global
+    if isinstance(__builtins__, dict):
+        return dict(__builtins__)
+    return dict(__builtins__.__dict__)
 
 
 class DefaultCellAttributeDict(AttrDict):
@@ -212,8 +152,8 @@ class DefaultCellAttributeDict(AttrDict):
 
         self.borderwidth_bottom = 1
         self.borderwidth_right = 1
-        self.bordercolor_bottom = None
-        self.bordercolor_right = None
+        self.bordercolor_bottom = 220, 220, 220
+        self.bordercolor_right = 220, 220, 220
         self.bgcolor = 255, 255, 255  # Do not use theme
         self.textfont = None
         self.pointsize = 10
@@ -226,7 +166,6 @@ class DefaultCellAttributeDict(AttrDict):
         self.angle = 0.0
         self.vertical_align = "align_top"
         self.justification = "justify_left"
-        self.frozen = False
         self.merge_area = None
         self.renderer = "text"
         self.button_cell = False
@@ -487,7 +426,8 @@ class DictGrid(KeyValueStore):
 
         # PerSheetInitScripts as string list
         self.macros: list[str] = [u"" for _ in range(shape[2])]
-        # later this will be dict. sheets will have string names
+        # Sheet names corresponding to table indices
+        self.sheet_names: list[str] = [f"Sheet {i}" for i in range(shape[2])]
         self.exp_parser_code = u""
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
@@ -737,6 +677,31 @@ class DataArray:
 
         # Set dict_grid shape attribute
         self.dict_grid.shape = shape
+
+        # Adjust sheet-specific lists to match new table count
+        old_tables = old_shape[2]
+        new_tables = shape[2]
+        if new_tables < old_tables:
+            # Trim lists
+            self.macros = self.macros[:new_tables]
+            self.macros_draft = self.macros_draft[:new_tables]
+            self.sheet_globals_copyable = self.sheet_globals_copyable[:new_tables]
+            self.sheet_globals_uncopyable = self.sheet_globals_uncopyable[:new_tables]
+            self.dict_grid.sheet_names = self.dict_grid.sheet_names[:new_tables]
+        elif new_tables > old_tables:
+            # Extend lists
+            for i in range(old_tables, new_tables):
+                self.macros.append(u"")
+                self.macros_draft.append(None)
+                self.sheet_globals_copyable.append(dict())
+                self.sheet_globals_uncopyable.append(dict())
+                # Generate unique sheet name
+                new_name = f"Sheet {i}"
+                counter = 1
+                while new_name in self.dict_grid.sheet_names:
+                    new_name = f"Sheet {i}_{counter}"
+                    counter += 1
+                self.dict_grid.sheet_names.append(new_name)
 
         self._adjust_rowcol(0, 0, 0)
         self._adjust_cell_attributes(0, 0, 0)
@@ -1245,11 +1210,18 @@ class DataArray:
         self._adjust_cell_attributes(insertion_point, no_to_insert, axis, tab)
 
         if axis == 2:
-            for _ in range(no_to_insert):
+            for i in range(no_to_insert):
                 self.macros.insert(insertion_point, u"")
                 self.macros_draft.insert(insertion_point, None)
                 self.sheet_globals_copyable.insert(insertion_point, dict())
                 self.sheet_globals_uncopyable.insert(insertion_point, dict())
+                # Generate unique sheet name
+                new_name = f"Sheet {insertion_point + i}"
+                counter = 1
+                while new_name in self.dict_grid.sheet_names:
+                    new_name = f"Sheet {insertion_point + i}_{counter}"
+                    counter += 1
+                self.dict_grid.sheet_names.insert(insertion_point, new_name)
 
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
@@ -1296,10 +1268,16 @@ class DataArray:
 
         if axis == 2:
             for _ in range(no_to_delete):
-                self.macros.insert(deletion_point, u"")
-                self.macros_draft.insert(deletion_point, None)
-                self.sheet_globals_copyable.insert(deletion_point, dict())
-                self.sheet_globals_uncopyable.insert(deletion_point, dict())
+                if deletion_point < len(self.macros):
+                    self.macros.pop(deletion_point)
+                if deletion_point < len(self.macros_draft):
+                    self.macros_draft.pop(deletion_point)
+                if deletion_point < len(self.sheet_globals_copyable):
+                    self.sheet_globals_copyable.pop(deletion_point)
+                if deletion_point < len(self.sheet_globals_uncopyable):
+                    self.sheet_globals_uncopyable.pop(deletion_point)
+                if deletion_point < len(self.dict_grid.sheet_names):
+                    self.dict_grid.sheet_names.pop(deletion_point)
 
         # Now re-insert moved keys
 
@@ -1362,12 +1340,6 @@ class CodeArray(DataArray):
 
     """
 
-    # Cache for results from __getitem__ calls
-    result_cache = {}
-
-    # Cache for frozen objects
-    frozen_cache = {}
-
     # Safe mode: If True then Whether pyspread is operating in safe_mode
     # In safe_mode, cells are not evaluated but its code is returned instead.
     safe_mode = False
@@ -1376,6 +1348,10 @@ class CodeArray(DataArray):
         super().__init__(*args, **kwargs)
 
         self.ref_parser = ReferenceParser(self)
+        self.cell_meta_gen = CELL_META_GENERATOR(self)
+
+        self.dep_graph = DependencyGraph()
+        self.smart_cache = SmartCache(self.dep_graph)
 
     def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]], value: str):
@@ -1392,20 +1368,29 @@ class CodeArray(DataArray):
         except AttributeError:
             numpy.set_string_function(lambda s: repr(s.tolist() if hasattr(s, "tolist") else s))
 
-        # Prevent unchanged cells from being recalculated on cursor movement
-
-        repr_key = repr(key)
-
-        unchanged = (repr_key in self.result_cache and
-                     value == self(key)) or \
-                    ((value is None or value == "") and
-                     repr_key not in self.result_cache)
+        # Prevent unchanged cells from being recalculated on cursor movement.
+        # Compare against stored code, not cache state.
+        old_value = self(key)
+        old_empty = old_value in (None, "")
+        new_empty = value in (None, "")
+        unchanged = (old_value == value) or (old_empty and new_empty)
 
         super().__setitem__(key, value)
 
         if not unchanged:
-            # Reset result cache
-            self.result_cache = {}
+            # Invalidate cache for this cell and its dependents
+            # IMPORTANT: Invalidate BEFORE removing from dep graph,
+            # so invalidate() can propagate to dependents
+            preserve_dependents_cache = (
+                self.settings.recalc_mode == "manual"
+            )
+            self.smart_cache.invalidate(
+                key,
+                preserve_dependents_cache=preserve_dependents_cache,
+            )
+            # Remove dependencies for this cell (will be re-tracked on next eval)
+            # Reverse edges are preserved by default for cycle detection
+            self.dep_graph.remove_cell(key)
 
     def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
                                      Union[int, slice]]) -> Any:
@@ -1417,33 +1402,39 @@ class CodeArray(DataArray):
 
         code = self(key)
 
+        if self.settings.recalc_mode == "manual" \
+           and self.dep_graph.is_dirty(key):
+            cached = self.smart_cache.get_raw(key)
+            if cached is not SmartCache.INVALID:
+                return deepcopy(cached)
+
+        # Smart cache handling (check even for empty cells)
+        cached = self.smart_cache.get(key)
+        if cached is not SmartCache.INVALID:
+            # Cache hit! Return deepcopied value (cache stores original)
+            return deepcopy(cached)
+
+        # Empty cells still need to be cached and have dirty flag cleared
         if code is None:
+            # Store EmptyCell in cache
+            self.smart_cache.set(key, EmptyCell)
+            # Clear dirty flag
+            self.dep_graph.clear_dirty(key)
             return EmptyCell
-
-        # Cached cell handling
-
-        if repr(key) in self.result_cache:
-            return self.result_cache[repr(key)]
 
         if not any(isinstance(k, slice) for k in key):
             # Button cell handling
             if self.cell_attributes[key].button_cell is not False:
                 return
-            # Frozen cell handling
-            frozen_res = self.cell_attributes[key].frozen
-            if frozen_res:
-                if repr(key) in self.frozen_cache:
-                    return self.frozen_cache[repr(key)]
-                # Frozen cache is empty.
-                # Maybe we have a reload without the frozen cache
-                result = self._eval_cell(key, code)
-                self.frozen_cache[repr(key)] = result
-                return result
 
-        # Normal cell handling
-
+        # Normal cell handling - evaluate the cell
         result = self._eval_cell(key, code)
-        self.result_cache[repr(key)] = result
+
+        # Store in smart cache
+        self.smart_cache.set(key, result)
+
+        # Clear dirty flag after successful evaluation
+        self.dep_graph.clear_dirty(key)
 
         return result
 
@@ -1467,21 +1458,6 @@ class CodeArray(DataArray):
                 res.append(ele)
 
         return res
-
-    def _get_updated_environment(self, env_dict: dict = None) -> dict:
-        """Returns globals environment with 'magic' variable
-
-        :param env_dict: Maps global variable name to value, None: {'S': self}
-
-        """
-
-        if env_dict is None:
-            env_dict = {'S': self}
-
-        env = globals().copy()
-        env.update(env_dict)
-
-        return env
 
     def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
         """Evaluates one cell and returns its result
@@ -1513,20 +1489,30 @@ class CodeArray(DataArray):
             return exp_parsed
         #  --- ExpParser END ---  #
 
-        try:
-            signal.signal(signal.SIGALRM, self.handler)
-            signal.alarm(self.settings.timeout)
-        except AttributeError:
-            # No Unix system
-            pass
-
         #  --- RefParser ---  #
-        ref_parsed = self.ref_parser.parser(exp_parsed)
+        try:
+            ref_parsed = self.ref_parser.parser(exp_parsed)
+        except Exception as err:
+            return err
+
+        # Rebuild this cell's forward dependency set on each evaluation.
+        # Keep reverse edges so dependents of this cell remain known.
+        self.dep_graph.remove_cell(key)
+
+        #  --- Dependency Tracking & Cycle Detection START ---  #
+        # Check for circular references before evaluating
+        try:
+            self.dep_graph.check_for_cycles(key)
+        except CircularRefError as err:
+            return err
 
         #  --- PythonEval START ---  #
         env = deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
+        # Keep eval globals isolated from module/runtime globals.
+        env["__builtins__"] = _get_isolated_builtins()
         cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
+        self.cell_meta_gen.set_context(key)
         local = {
             "help": help,
             "cell_single_ref": cur_sheet.cell_single_ref,   "C": cur_sheet.C,
@@ -1535,15 +1521,22 @@ class CodeArray(DataArray):
             "sheet_ref": self.ref_parser.sheet_ref,         "Sh": self.ref_parser.Sh,
             "cell_ref": lambda exp: self.ref_parser.cell_ref(exp, cur_sheet),
                                                             "CR": lambda exp: self.ref_parser.CR(exp, cur_sheet),
+            "cell_meta": self.cell_meta_gen.cell_meta,      "CM":  self.cell_meta_gen.CM,
             "RangeOutput": RangeOutput  # Needed for RangeOutput.OFFSET evaluation
         }
         try:
-            # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-            result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
-            if isinstance(result, RangeOutput):
-                PythonEvaluator.range_output_handler(self, result, key)
-            if isinstance(result, RangeOutput.OFFSET):
-                result = PythonEvaluator.range_offset_handler(self, result, key)
+            # Track dependencies during evaluation
+            with DependencyTracker.track(key):
+                # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
+                result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
+                if isinstance(result, RangeOutput):
+                    PythonEvaluator.range_output_handler(self, result, key)
+                if isinstance(result, RangeOutput.OFFSET):
+                    result = PythonEvaluator.range_offset_handler(self, result, key)
+
+        except CircularRefError as err:
+            # Circular reference detected during evaluation
+            result = err
 
         except AttributeError as err:
             # Attribute Error includes RunTimeError
@@ -1555,13 +1548,6 @@ class CodeArray(DataArray):
         except Exception as err:
             result = err
         #  --- PythonEval END ---  #
-
-        finally:
-            try:
-                signal.alarm(0)
-            except AttributeError:
-                # No POSIX system
-                pass
 
         # Change back cell value for evaluation from other cells
         # self.dict_grid[key] = _old_code
@@ -1575,18 +1561,125 @@ class CodeArray(DataArray):
 
         """
 
-        try:
-            self.result_cache.pop(repr(key))
-
-        except KeyError:
-            pass
+        # Invalidate cache and remove dependencies
+        # Reverse edges are preserved by default to allow proper invalidation
+        # when the cell is re-added
+        self.dep_graph.remove_cell(key)
+        self.smart_cache.invalidate(key)
 
         return super().pop(key)
 
-    def get_globals(self) -> dict:
-        """Returns globals dict"""
+    def recalculate_dirty(self) -> int:
+        """Force recalculation of all dirty cells
 
-        return globals()
+        Returns the number of cells recalculated
+
+        """
+
+        dirty_cells = list(self.dep_graph.get_all_dirty())
+
+        if not dirty_cells:
+            return 0
+
+        # Force recalculation by accessing each dirty cell
+        # This will evaluate and cache, clearing dirty flags
+        for key in dirty_cells:
+            try:
+                self.smart_cache.drop(key)
+                # Access the cell - this triggers evaluation
+                _ = self[key]
+            except Exception:
+                # Ignore errors during recalculation
+                pass
+
+        return len(dirty_cells)
+
+    def _filter_recalc_keys(self, keys) -> list[Tuple[int, int, int]]:
+        """Return a unique list of valid cell keys"""
+
+        rows, columns, tables = self.shape
+        seen = set()
+        filtered = []
+        for key in keys:
+            if not isinstance(key, tuple) or len(key) != 3:
+                continue
+            row, column, table = key
+            if any(not isinstance(ele, int) for ele in key):
+                continue
+            if not (0 <= row < rows and 0 <= column < columns
+                    and 0 <= table < tables):
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            filtered.append(key)
+        return filtered
+
+    def _recalculate_keys(self, keys) -> int:
+        """Recalculate a set of cells, ignoring evaluation errors"""
+
+        recalculated = 0
+        for key in keys:
+            try:
+                self.smart_cache.drop(key)
+                _ = self[key]
+                recalculated += 1
+            except Exception:
+                pass
+        return recalculated
+
+    def recalculate_cell_only(self, key: Tuple[int, int, int]) -> int:
+        """Recalculate a single cell and mark dependents dirty if it changed"""
+
+        keys = self._filter_recalc_keys([key])
+        if not keys:
+            return 0
+        key = keys[0]
+
+        old = self.smart_cache.get_raw(key)
+        changed = old is SmartCache.INVALID
+
+        try:
+            self.smart_cache.drop(key)
+            new = self[key]
+            if old is not SmartCache.INVALID:
+                try:
+                    changed = (new != old)
+                except Exception:
+                    changed = True
+        except Exception:
+            changed = True
+
+        if changed:
+            direct_dependents = self.dep_graph.dependents.get(key, set())
+            if self.settings.recalc_mode == "auto":
+                for dependent in direct_dependents:
+                    self.smart_cache.invalidate(dependent)
+            else:
+                for dependent in direct_dependents:
+                    self.dep_graph.mark_dirty(dependent)
+
+        return 1
+
+    def recalculate_ancestors(self, key: Tuple[int, int, int]) -> int:
+        """Recalculate a cell and all transitive dependencies"""
+
+        deps = self.dep_graph.get_all_dependencies(key)
+        keys = self._filter_recalc_keys(list(deps) + [key])
+        return self._recalculate_keys(keys)
+
+    def recalculate_children(self, key: Tuple[int, int, int]) -> int:
+        """Recalculate a cell and all transitive dependents"""
+
+        dependents = self.dep_graph.get_all_dependents(key)
+        keys = self._filter_recalc_keys([key] + list(dependents))
+        return self._recalculate_keys(keys)
+
+    def recalculate_all(self) -> int:
+        """Recalculate all cells in the workspace"""
+
+        keys = self._filter_recalc_keys(list(self.dict_grid.keys()))
+        return self._recalculate_keys(keys)
 
     def execute_macros(self, current_table) -> Tuple[str, str]:
         """Executes all macros and returns result string and error string
@@ -1605,14 +1698,6 @@ class CodeArray(DataArray):
         # Windows exec does not like Windows newline
         self.macros[current_table] = self.macros[current_table].replace('\r\n', '\n')
 
-        # # Set up environment for evaluation
-        # globals().update(self._get_updated_environment())
-        # for var in "XYZRCT":
-        #     try:
-        #         del globals()[var]
-        #     except KeyError:
-        #         pass
-
         # Create file-like string to capture output
         code_out = io.StringIO()
         code_err = io.StringIO()
@@ -1622,21 +1707,9 @@ class CodeArray(DataArray):
         sys.stdout = code_out
         sys.stderr = code_err
 
-        try:
-            signal.signal(signal.SIGALRM, self.handler)
-            signal.alarm(self.settings.timeout)
-        except AttributeError:
-            # No POSIX system
-            pass
-
-        sheet_globals = {}
+        sheet_globals = {"__builtins__": _get_isolated_builtins()}
         try:
             exec(self.macros[current_table], sheet_globals)
-            try:
-                signal.alarm(0)
-            except AttributeError:
-                # No POSIX system
-                pass
 
         except Exception:
             exc_info = sys.exc_info()
@@ -1652,8 +1725,8 @@ class CodeArray(DataArray):
         code_out.close()
         code_err.close()
 
-        # Reset result cache
-        self.result_cache.clear()
+        # Reset cache - clear all since init scripts affect globals
+        self.smart_cache.clear()
         self.sheet_globals_copyable[current_table] = dict()
         self.sheet_globals_uncopyable[current_table] = dict()
 
@@ -1776,15 +1849,5 @@ class CodeArray(DataArray):
             except Exception:
                 # re errors are cryptical: sre_constants,...
                 pass
-
-    def handler(self, signum: Any, frame: Any):
-        """Signal handler for timeout
-
-        :param signum: Ignored
-        :param frame: Ignored
-
-        """
-
-        raise RuntimeError("Timeout after {} s.".format(self.settings.timeout))
 
 # End of class CodeArray

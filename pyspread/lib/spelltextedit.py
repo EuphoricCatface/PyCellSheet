@@ -307,6 +307,12 @@ class SpellTextEdit(QPlainTextEdit):
         if rect.contains(self.viewport().rect()):
             self.update_line_number_area_width()
 
+    def showEvent(self, event: QEvent):
+        """Overrides QPlainTextEdit.showEvent to update line number area"""
+
+        super().showEvent(event)
+        self.update_line_number_area_width()
+
     def resizeEvent(self, event: QEvent):
         """Overides QPlainTextEdit.resizeEvent for handling line_number_area"""
 

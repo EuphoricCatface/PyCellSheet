@@ -84,7 +84,7 @@ def BASE(value, base, minimum_length=0):
 class CEILING:
     def __new__(cls, value, factor=1):
         # Proper implementation is NYI
-        CEILING.PRECISE(value, factor)
+        return CEILING.PRECISE(value, factor)
 
     @staticmethod
     def MATH(value, significance=1, mode=0):
@@ -133,21 +133,42 @@ def COUNTBLANK(r: Range):
     return len(r.lst) - len(r.flatten())
 
 
-def COUNTIF(r: Range, criterion: typing.Callable[[typing.Any], bool]):
-    len(list(filter(criterion, r.flatten())))
+def COUNTIF(range_: Range, criterion_func):
+    """
+    COUNTIF(range_, lambda):
+      Counts how many items pass criterion_func.
+    """
+    vals = range_.flatten()
+    return sum(1 for v in vals if criterion_func(v))
 
 
-def COUNTIFS(*args):
-    if len(args) % 2:
-        raise ValueError("Number of arguments has to be even")
-    current_range: Range
-    filtered = []
-    for i, arg in enumerate(args):
-        if i % 2 == 0:
-            current_range = arg
-            continue
-        filtered.extend(list(filter(arg, current_range.flatten())))
-    return len(filtered)
+def COUNTIFS(*range_crit_pairs):
+    """
+    COUNTIFS((range1, crit1), (range2, crit2), ...)
+      Returns the count of items that pass all criteria in their respective ranges.
+      We assume all ranges have the same length.
+    """
+    if not range_crit_pairs:
+        raise ValueError("COUNTIFS: no criteria provided")
+    # Start with None => uninitialized set of valid indices
+    valid_indices = None
+    lengths_checked = None
+
+    # Process each (range_, crit)
+    for (rng, crit) in range_crit_pairs:
+        r_vals = rng.lst
+        if lengths_checked is None:
+            lengths_checked = len(r_vals)
+            valid_indices = set(range(lengths_checked))
+        else:
+            if len(r_vals) != lengths_checked:
+                raise ValueError("COUNTIFS: ranges differ in length")
+
+        local_indices = {i for i, v in enumerate(r_vals) if crit(v)}
+        valid_indices &= local_indices
+        if not valid_indices:
+            return 0
+    return len(valid_indices) if valid_indices is not None else 0
 
 
 def COUNTUNIQUE(r: Range):
@@ -172,19 +193,19 @@ def DEGREES(x):
 
 class ERFC:
     def __new__(cls, x):
-        math.erfc(x)
+        return math.erfc(x)
 
     @staticmethod
     def PRECISE(x):
-        return ERFC(x)
+        return math.erfc(x)
 
 
 def EVEN(x):
-    raise NotImplemented("EVEN() not implemented yet")
+    raise NotImplementedError("EVEN() not implemented yet")
 
 
-def EXP(x, y):
-    return x ** y
+def EXP(x):
+    return math.exp(x)
 
 
 def FACT(x):
@@ -204,7 +225,7 @@ def FACTDOUBLE(x):
 class FLOOR:
     def __new__(cls, value, factor=1):
         # Proper implementation is NYI
-        FLOOR.PRECISE(value, factor)
+        return FLOOR.PRECISE(value, factor)
 
     @staticmethod
     def MATH(value, significance=1, mode=0):
@@ -226,13 +247,12 @@ class FLOOR:
 
 
 class GAMMALN:
-    @staticmethod
     def __new__(cls, value):
-        raise NotImplemented("GAMMALN() not implemented yet")
+        raise NotImplementedError("GAMMALN() not implemented yet")
 
     @staticmethod
     def PRECISE(value):
-        raise NotImplemented("GAMMALN.PRECISE() not implemented yet")
+        raise NotImplementedError("GAMMALN.PRECISE() not implemented yet")
 
 
 def GCD(*integers):
@@ -240,15 +260,15 @@ def GCD(*integers):
 
 
 def IMLN(value):
-    raise NotImplemented("IMLN() not implemented yet")
+    raise NotImplementedError("IMLN() not implemented yet")
 
 
 def IMPOWER(complex_base, exponent):
-    raise NotImplemented("IMPOWER() not implemented yet")
+    raise NotImplementedError("IMPOWER() not implemented yet")
 
 
 def IMSQRT(complex_number):
-    raise NotImplemented("IMSQRT() not implemented yet")
+    raise NotImplementedError("IMSQRT() not implemented yet")
 
 
 def INT(x):
@@ -290,19 +310,19 @@ def MOD(x, y):
 
 
 def MROUND(x, y):
-    raise NotImplemented("MROUND() not implemented yet")
+    raise NotImplementedError("MROUND() not implemented yet")
 
 
 def MULTINOMIAL(x, y):
-    raise NotImplemented("MULTINOMIAL() not implemented yet")
+    raise NotImplementedError("MULTINOMIAL() not implemented yet")
 
 
 def MUNIT(x, y):
-    raise NotImplemented("MUNIT() not implemented yet")
+    raise NotImplementedError("MUNIT() not implemented yet")
 
 
 def ODD(x, y):
-    raise NotImplemented("ODD() not implemented yet")
+    raise NotImplementedError("ODD() not implemented yet")
 
 
 def PI():
@@ -310,19 +330,27 @@ def PI():
 
 
 def POWER(x, y):
+    """
+    Raises 'base' to the given 'exponent'.
+    """
     return x ** y
 
 
 def PRODUCT(*args):
-    rtn = 1
     lst = flatten_args(*args)
-    for v in lst:
-        rtn *= v
-    return rtn
+    if not lst:
+        return 0
+    return math.prod(lst)
 
 
-def QUOTIENT(x, y):
-    raise NotImplemented("QUOTIENT() not implemented yet")
+def QUOTIENT(numerator, denominator):
+    """
+    Returns the integer portion of the division numerator / denominator.
+    Typically equivalent to trunc(numerator / denominator).
+    Some spreadsheets do floor for positive and negative differently,
+    so watch for sign behavior. We'll do 'trunc' here.
+    """
+    return math.trunc(numerator / denominator)
 
 
 def RADIANS(x):
@@ -333,12 +361,12 @@ def RAND():
     return random.random()
 
 
-def RANDARRAY(x, y):
+def RANDARRAY(row, column):
     rangeoutput_lst = []
-    for i in range(x):
-        for j in range(y):
+    for i in range(row):
+        for j in range(column):
             rangeoutput_lst.append(random.random())
-    rtn = RangeOutput(x, rangeoutput_lst)
+    rtn = RangeOutput(column, rangeoutput_lst)
     return rtn
 
 
@@ -346,16 +374,42 @@ def RANDBETWEEN(x, y):
     return x + (y-x) * random.random()
 
 
-def ROUND(x, y):
-    raise NotImplemented("ROUND() not implemented yet")
+def ROUND(value, decimals):
+    """
+    ROUND(value, decimals) rounds 'value' to 'decimals' decimal places.
+    In Python, we can use built-in round().
+    Note that Python's round uses "Banker's Rounding" for .5 cases,
+    while Excel/LibreOffice typically use "round half away from zero."
+    If you want to emulate the spreadsheet's rounding more precisely,
+    you'd implement a custom approach.
+    """
+    # Simple approach using built-in round():
+    return round(value, decimals)
 
 
-def ROUNDDOWN(x, y):
-    raise NotImplemented("ROUNDDOWN() not implemented yet")
+def ROUNDDOWN(value, decimals):
+    """
+    ROUNDDOWN(value, decimals) truncates (towards zero) the number at 'decimals' places.
+    In many spreadsheets, "Round Down" means floor for positive, but for negative
+    values, it effectively moves toward zero. So we emulate that logic here.
+    """
+    multiplier = 10 ** decimals
+    if value >= 0:
+        return math.floor(value * multiplier) / multiplier
+    else:
+        return math.ceil(value * multiplier) / multiplier
 
 
-def ROUNDUP(x, y):
-    raise NotImplemented("ROUNDUP() not implemented yet")
+def ROUNDUP(value, decimals):
+    """
+    ROUNDUP(value, decimals) rounds away from zero at 'decimals' places.
+    For positive values, it's math.ceil; for negative, math.floor.
+    """
+    multiplier = 10 ** decimals
+    if value >= 0:
+        return math.ceil(value * multiplier) / multiplier
+    else:
+        return math.floor(value * multiplier) / multiplier
 
 
 def SEC(x):
@@ -367,11 +421,11 @@ def SECH(x):
 
 
 def SEQUENCE(x, y):
-    raise NotImplemented("SEQUENCE() not implemented yet")
+    raise NotImplementedError("SEQUENCE() not implemented yet")
 
 
 def SERIESSUM(x, y):
-    raise NotImplemented("SERIESSUM() not implemented yet")
+    raise NotImplementedError("SERIESSUM() not implemented yet")
 
 
 def SIGN(x):
@@ -397,7 +451,7 @@ def SQRTPI(x):
 
 
 def SUBTOTAL(x, y):
-    raise NotImplemented("SUBTOTAL() not implemented yet")
+    raise NotImplementedError("SUBTOTAL() not implemented yet")
 
 
 def SUM(*args):
@@ -422,23 +476,25 @@ def SUMIF(r: Range, criterion, sum_range: Range | None = None):
 
 
 def SUMIFS(x, y):
-    raise NotImplemented("SUMIFS() not implemented yet")
+    raise NotImplementedError("SUMIFS() not implemented yet")
 
 
 def SUMSQ(*args):
-    sum_ = 0
-    for arg in args:
-        if arg == EmptyCell:
-            continue
-        sum_ += arg * arg
-    return sum_
+    """
+    SUMSQ(...) = sum of squares of all numeric values in args.
+    Example:
+      =SUMSQ(A1:A3, B1:B3)
+    If flatten_args returns [1, 2, 3], result = 1^2 + 2^2 + 3^2 = 14.
+    """
+    vals = flatten_args(*args)
+    return sum(x * x for x in vals)
 
 
 def TAN(x):
     return math.tan(x)
 
 
-def TANH(x, y):
+def TANH(x):
     return math.tanh(x)
 
 

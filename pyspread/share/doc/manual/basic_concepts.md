@@ -9,13 +9,27 @@ title: Basic Concepts
 
 ## Python code as cell language
 
-*pyspread* executes Python code in each cell. This is similar to typing into the Python shell. Normal cells are only executed when required e.g. for displaying results. **Execution order between cells is not guaranteed to be stable** and may differ for different versions of Python.
+PyCellSheet executes Python code in each cell. This is similar to typing in the
+Python shell. Normal cells are only executed when required, for example for
+displaying results. **Execution order between cells is not guaranteed to be
+stable** and may differ across Python versions.
 
-Normally, only one line of code that contains a [Python expression](https://docs.python.org/3.7/reference/expressions.html) is entered in each cell. However, a cell can contain additional lines of arbitrary Python code that preceed the final expression. The object that the cell returns when addressed is always the result of **the last line's expression**. Note that only the last line **must** be an expression. (The described behavior describes pyspread >v1.99. Previous versions supported only one expression per cell.)
+Normally, one line of code containing a [Python expression](https://docs.python.org/3.7/reference/expressions.html)
+is entered in each cell. However, a cell can contain additional lines of
+arbitrary Python code that precede the final expression. The object returned by
+the cell is always the result of **the last line's expression**. Note that only
+the last line **must** be an expression.
 
 In order to enter a new line in one cell, press `<Shift> + <Enter>`. Only pressing `<Enter>` accepts the entered code and switches to the next cell.
 
-While editing cell code in the entry line (not in a cell editor), pressing `<Insert>` switches the grid to selection mode, which is indicated by an icon in the statusbar. In selection mode, you may select cells in the grid, for which a relative reference is generated in the entry line. Pressing `<Meta>` while clicking instead results in absolute reference. You can exit seelction mode by selecting the entry line, by focusing the entry line and pressing `<Insert>` again or by presing `<Escape>` while inside the grid. Note that you cannot edit cell code in cell editors while in selection mode.
+While editing cell code in the entry line (not in a cell editor), pressing
+`<Insert>` switches the grid to selection mode, indicated by an icon in the
+status bar. In selection mode, selecting cells in the grid generates relative
+references in the entry line. Pressing `<Meta>` while clicking generates
+absolute references instead. You can exit selection mode by selecting the entry
+line, by focusing the entry line and pressing `<Insert>` again, or by pressing
+`<Escape>` while inside the grid. Note that you cannot edit cell code in cell
+editors while in selection mode.
 
 ### Example
 
@@ -27,7 +41,7 @@ After pressing `<Enter>`, the cell displays
 ```python
 2
 ```
-as expected. List comprehensions are also valid expessions.
+as expected. List comprehensions are also valid expressions.
 ```python
 [i ** 2 for i in range(100) if i % 3]
 ```
@@ -46,9 +60,11 @@ is valid. Note that multi-line cells have been added to make some 3rd party modu
 
 ## Module import
 
-Modules should be imported via the macro editor. If the panel is hidden press `<F4>`. Enter the code in the editor and press the `Apply` button. If errors are raised, they are displayed in the message box below the editor.
+Modules should be imported via the Sheet Script panel. If the panel is hidden,
+open it from `View -> Sheet Script`. Enter code in the editor and press
+`Apply`. If errors are raised, they are displayed in the message area below the editor.
 
-While it is now possible to import modules from within a cell, there drawbacks:
+While it is possible to import modules from within a cell, there are drawbacks:
  * The module is not imported until the cell is executed, which is not guaranteed in any way.
  * A spreadsheet may quickly become hard to understand when importing from cells.
 
@@ -58,13 +74,18 @@ Besides Python expressions, one variable assignment is accepted within the last 
 
 For example `a = 5 + 3` assigns `8` to the global variable `a`.
 
-`b = c = 4`, `+=`, `-=` etc. are not valid in the last line of a pyspread cell. In preceeding lines, such code is valid. However, variables assigned there stay in the local scope of the cell while the assigment in the last line gets into the global scope of pyspread.
+`b = c = 4`, `+=`, `-=` etc. are not valid in the last line of a cell. In
+preceding lines, such code is valid. However, variables assigned there stay in
+the local scope of the cell, while assignment in the last line enters the
+global scope.
 
 Since evaluation order of cells is not guaranteed, assigning a variable twice may result in unpredictable behaviour of the spreadsheet.
 
 ## Displaying results in the grid
 
-Result objects from the cells are interpreted by the cell renderer. Therefore two renderers may display the same object in different ways. Cell renderers may be changed in the `Format` menu's sub-menu  `Cell renderer`. At the moment, pyspread provides four different renderers:
+Result objects from cells are interpreted by the cell renderer. Therefore, two
+renderers may display the same object differently. Cell renderers can be
+changed in `Format -> Cell renderer`. PyCellSheet provides four renderers:
 
 1. The `Text renderer` is selected by default. It displays the string representation of the object as plain text. The exception is the object `None`, which is displayed as empty cell. This behavior allows empty cells returning `None` without the grid appearing cluttered.
 
@@ -74,11 +95,14 @@ Result objects from the cells are interpreted by the cell renderer. Therefore tw
 
 4. The `Matplotlib chart renderer` renders a [matplotlib Figure object](https://matplotlib.org/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure).
 
-Note that the concept of different cell renderers has been introduced with pyspread v1.99.0.0.
+Note that the concept of different cell renderers was introduced in upstream
+pyspread and retained in PyCellSheet.
 
 ## Absolute cell access
 
-The result objects, for which string representations are displayed in the grid, can be accessed from other cells (and from macros as well) via the getitem method of the grid, where the grid object is globally accessible via the name `S`. For example
+The result objects, for which string representations are displayed in the
+grid, can be accessed from other cells via the grid getitem method. The grid
+object is globally accessible via the name `S`. For example
 ```python
 S[3, 2, 1]
 ```
@@ -109,7 +133,8 @@ The returned object is a numpy object array of the result objects. This object a
 ```python
 numpy.sum(S[1:10, 2:4, 0])
 ```
-sums up the results of all cells from 1, 2, 0 to 9, 3, 0 instead of summing each row, which Pythons sum function does.
+sums up the results of all cells from 1, 2, 0 to 9, 3, 0 instead of summing
+each row, which Python's `sum` function does.
 
 One disadvantage of this approach is that slicing results are not sparse as the grid itself and therefore consume memory for each cell. Therefore,
 ```python
@@ -119,24 +144,28 @@ may lock up or even crash with a memory error if the grid size is too large.
 
 ## How cells are evaluated
 
-Pyspread differs from traditional spreadsheets in its way to evaluate its cells. The approach is difficult for Python because side-effects must be taken into account. Even though there may be ways to achieve proper dependency tracking in Python, we have not found a way that is sufficiently fast for acceptable spreadsheet usage. Instead, pyspread employs a caching strategy.
+PyCellSheet differs from traditional spreadsheets in how it evaluates cells.
+The approach is difficult for Python because side-effects must be taken into
+account. PyCellSheet employs dependency tracking and smart caching.
 
-The following behavior applies to cells that are not frozen:
+PyCellSheet evaluates applied sheet script code and visible cell code.
+Whenever a cell that has not been evaluated before becomes visible, it is
+evaluated on the fly. Each evaluated cell result is stored in smart cache.
+When a cell is evaluated again, the cached result is used if the cell and its
+dependencies have not changed. This also applies for cells addressed from other
+cells (for example through helper references).
 
-Pyspread evaluates the macro editor code and the code of all visible cells. Whenever a cell that has not been evaluated before becomes visible, it is evaluated on the fly. Each evaluated cell result is stored in a result cache. When a cell is evaluated again, the cached result is used, and the cell is not re-evaluated. This also applies for cells that are called from other cell codes with code such as `S[1,2,3]`. 
+Cell caches are invalidated when:
+  * sheet script changes have been applied
+  * a cell code has been changed
+  * any of the cell's dependencies have been changed
 
-The result cache is cleared when
-  * macro editor changes have been applied or
-  * a cell code has been changed.
-Furthermore, certain actions such as `Freeze cell` may empty the cache.
-
-Frozen cells are handled differently:
-
-When a cell is frozen, it is directly evaluated. Its result is not stored inside but outside of the result cache. Macro or cell changes do not lead to a re-evaluation of frozen cells. Instead, the action `Refresh selected cells` updates a frozen cell that is selected. Furthermore when `Toggle periodic updates` is activated, all frozen cells are re-evaluated after a time period that is specified in the preferences dialog.
+The dependency graph automatically tracks which cells depend on other cells, ensuring that cached values are only used when they are still valid.
 
 ## Everything is accessible
 
-All parts of *pyspread* are written in Python, therefore all objects can be accessed from within each cell. This is also the case for external modules.
+All parts of PyCellSheet are written in Python, therefore all objects can be
+accessed from within each cell. This is also the case for external modules.
 
 There are five convenient “magical” objects, which are merely syntactic sugar: `S`, `X`, `Y`, `Z` and `nn`.
 
@@ -144,20 +173,38 @@ There are five convenient “magical” objects, which are merely syntactic suga
 
 `X`, `Y` and `Z` represent the current cell coordinates. When copied to another cell, these coordinates change accordingly. This approach allows relative addressing by adding the relative coordinates to X, Y or Z. Therefore, no special relative addressing methods are needed.
 
-`nn` is a function that flattens a numpy array and removes all objects that are None. This function makes special casing None for operations such as sum unnecessary. `nn` is provided in pyspread >v.0.3.0.
+`nn` is a function that flattens a NumPy array and removes all `None` objects.
+This function makes special-casing `None` for operations such as `sum`
+unnecessary.
 
 ## Security
 
-Since Python expressions are evaluated in *pyspread*, a *pyspread* spreadsheet is as powerful as any program. It could harm the system or even send confidential data to third persons over the Internet.
+Since Python expressions are evaluated in PyCellSheet, a spreadsheet is as
+powerful as any program. It could harm the system or even send confidential
+data to third parties over the Internet.
 
-The risk is the the same that all office applications poese, which is why many provide precautions. The concept in *pyspread* is that you - the user - are trustworthy and no-one else. When starting *pyspread* the first time, a secret key is generated that is stored in the local configuration file (`~/.config/pyspread/pyspread.conf` on many Linux systems). You can manually edit the secret key in the Preferences Dialog (select `Preferences...` in the `File` menu).
+The risk is similar to other office applications, which is why precautions are
+provided. The model is that you, the user, are trusted and outside files are
+not. When starting PyCellSheet for the first time, a secret key is generated
+and stored in `~/.config/pyspread/pyspread.conf` (on many Linux systems). You
+can edit this key in the Preferences dialog (`File -> Preferences...`).
 
-If you save a file then a signature is saved with it (suffix `.pys.sig`). Only if the signature is valid for the stored secret key, you can re-open the file directly. Otherwise, e.g. if anyone else opens the file, it is displayed in `Safe mode`, i.e. each cell displays the cell code and no cell code is evaluated. The user can approve the file by selecting `Approve file` in the `File` menu. Afterwards, cell code is evaluated. When the user then saves the file, it is newly signed. Then it can be re-opened without safe mode.
+If you save a file then a signature is saved with it (suffix `.sig` for
+`.pycs`/`.pycsu` files). Only if the signature is valid for the stored secret
+key, you can re-open the file directly. Otherwise, e.g. if anyone else opens
+the file, it is displayed in `Safe mode`, i.e. each cell displays the cell
+code and no cell code is evaluated. The user can approve the file by selecting
+`Approve file` in the `File` menu. Afterwards, cell code is evaluated. When the
+user then saves the file, it is newly signed.
 
-Never approve foreign pys-files unless you have thoroughly checked each cell. Each cell may delete valuable files. Malicious cells are likely to be hidden in the middle of a million rows. If unsure, inspect the pysu / pys-file. pysu files are plain text files. pys files are bzip2-ed text files. Both are easy to read and understand. It may also be a good idea to run pyspread (and any other office application) with a special user or sandbox that has restricted privileges.
+Never approve foreign spreadsheet files unless you have thoroughly checked each
+cell. Each cell may delete valuable files. Malicious cells are likely to be
+hidden in large sheets. If unsure, inspect the `.pycsu`/`.pycs` file contents
+first. It may also be a good idea to run PyCellSheet with a restricted user or
+sandbox.
 
 ## Current Limitations
 
-* Execution of certain operations cannot be interrupted or terminated if slow. An example is creating very large integers. A counter-example is a for loop. Such long running code may block *pyspread*. This may look like pyspread had crashed.
-* Maximum recursion depth is limited. Its value is a trade off between handling complex cell dependencies and time until stopping when cyclic dependencies are present. The former may lead to Exceptions. The latter may slow down *pyspread*.
-* Python2 code from pyspread <=1.1.3 is not automatically converted to Python3 code when opening the pys/pysu file.
+* Execution of certain operations cannot be interrupted or terminated if slow. An example is creating very large integers. Such long-running code may block PyCellSheet.
+* Maximum recursion depth is limited. Its value is a tradeoff between handling complex cell dependencies and time until stopping when cyclic dependencies are present.
+* Legacy Python2 code from older pyspread files is not automatically converted when opening old save files.

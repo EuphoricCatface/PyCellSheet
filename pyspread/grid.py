@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -38,6 +39,7 @@ from ast import literal_eval
 from contextlib import contextmanager
 from datetime import datetime, date, time
 from io import BytesIO
+import logging
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy
@@ -45,7 +47,7 @@ import numpy
 from PyQt6.QtWidgets \
     import (QTableView, QStyledItemDelegate, QTabBar, QWidget, QMainWindow,
             QStyleOptionViewItem, QApplication, QStyle, QAbstractItemDelegate,
-            QHeaderView, QFontDialog, QInputDialog, QLineEdit,
+            QHeaderView, QFontDialog, QInputDialog, QLineEdit, QMessageBox,
             QAbstractItemView)
 from PyQt6.QtGui \
     import (QColor, QBrush, QFont, QPainter, QPalette, QImage, QKeyEvent,
@@ -69,10 +71,13 @@ try:
 except ImportError:
     Money = None
 
+logger = logging.getLogger(__name__)
+
 try:
     from pyspread import commands
     from pyspread.dialogs import DiscardDataDialog
     from pyspread.grid_renderer import (painter_save, CellRenderer,
+                                        CellEdgeRenderer,
                                         QColorCache, BorderWidthBottomCache,
                                         BorderWidthRightCache,
                                         EdgeBordersCache,
@@ -92,14 +97,14 @@ try:
                                 HorizontalHeaderContextMenu,
                                 VerticalHeaderContextMenu)
     from pyspread.widgets import CellButton
-    from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput
+    from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput, Formatter
 except ImportError:
     import commands
     from dialogs import DiscardDataDialog
-    from grid_renderer import (painter_save, CellRenderer, QColorCache,
-                               BorderWidthBottomCache, BorderWidthRightCache,
-                               EdgeBordersCache, BorderColorRightCache,
-                               BorderColorBottomCache)
+    from grid_renderer import (painter_save, CellRenderer, CellEdgeRenderer,
+                               QColorCache, BorderWidthBottomCache,
+                               BorderWidthRightCache, EdgeBordersCache,
+                               BorderColorRightCache, BorderColorBottomCache)
     from model.model import (CodeArray, CellAttribute, DefaultCellAttributeDict,
                             class_format_functions)
     from lib.attrdict import AttrDict
@@ -111,7 +116,7 @@ except ImportError:
     from menus import (GridContextMenu, TableChoiceContextMenu,
                        HorizontalHeaderContextMenu, VerticalHeaderContextMenu)
     from widgets import CellButton
-    from lib.pycellsheet import EmptyCell, HelpText, RangeOutput
+    from lib.pycellsheet import EmptyCell, HelpText, RangeOutput, Formatter
 
 FONTSTYLES = (QFont.Style.StyleNormal,
               QFont.Style.StyleItalic,
@@ -167,8 +172,8 @@ class Grid(QTableView):
         self.horizontalHeader().setDefaultSectionSize(
             self.main_window.settings.default_column_width)
 
-        self.verticalHeader().setMinimumSectionSize(0)
-        self.horizontalHeader().setMinimumSectionSize(0)
+        self.verticalHeader().setMinimumSectionSize(10)
+        self.horizontalHeader().setMinimumSectionSize(10)
 
         # Palette adjustment for cases in  which the Base color is not white
         palette = self.palette()
@@ -578,6 +583,7 @@ class Grid(QTableView):
     def update_zoom(self):
         """Updates the zoom level visualization to the current zoom factor"""
 
+        CellEdgeRenderer.intersection_cache.clear()
         self.verticalHeader().update_zoom()
         self.horizontalHeader().update_zoom()
 
@@ -757,51 +763,9 @@ class Grid(QTableView):
         grid = self.main_window.focused_grid
         grid.zoom = 1.0
 
-    def _refresh_frozen_cell(self, key: Tuple[int, int, int]):
-        """Refreshes the frozen cell key
 
-        Does neither emit dataChanged nor clear _attr_cache or _table_cache.
+        self.model.emit_data_changed_all()
 
-        :param key: Key of cell to be refreshed
-
-        """
-
-        if self.model.code_array.cell_attributes[key].frozen:
-            code = self.model.code_array(key)
-            result = self.model.code_array._eval_cell(key, code)
-            self.model.code_array.frozen_cache[repr(key)] = result
-
-    def refresh_frozen_cells(self):
-        """Refreshes all frozen cells"""
-
-        frozen_cache = self.model.code_array.frozen_cache
-        cell_attributes = self.model.code_array.cell_attributes
-
-        for repr_key in frozen_cache:
-            key = literal_eval(repr_key)
-            self._refresh_frozen_cell(key)
-
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
-
-    def refresh_selected_frozen_cells(self):
-        """Refreshes selected frozen cells"""
-
-        for idx in self.selected_idx:
-            self._refresh_frozen_cell((idx.row(), idx.column(), self.table))
-
-        self.model.code_array.cell_attributes._attr_cache.clear()
-        self.model.code_array.cell_attributes._table_cache.clear()
-        self.model.code_array.result_cache.clear()
-        self.model.dataChanged.emit(QModelIndex(), QModelIndex())
-
-    def on_show_frozen_pressed(self, toggled: bool):
-        """Show frozen cells event handler
-
-        :param toggled: Toggle state
-
-        """
-
-        self.main_window.settings.show_frozen = toggled
 
     def on_font_dialog(self):
         """Font dialog event handler"""
@@ -1281,30 +1245,6 @@ class Grid(QTableView):
                 self.setIndexWidget(index, button)
                 self.widget_indices.append(index)
 
-    def on_freeze_pressed(self, toggled: bool):
-        """Freeze cell event handler
-
-        :param toggled: Toggle state
-
-        """
-
-        grid = self.main_window.focused_grid
-
-        current_attr = self.model.code_array.cell_attributes[grid.current]
-        if current_attr.frozen == toggled:
-            return  # Something is wrong with the GUI update
-
-        cells = list(self.selection.cell_generator(shape=self.model.shape,
-                                                   table=self.table))
-        if toggled:
-            # We have an non-frozen cell that has to be frozen
-            description = f"Freeze cells {cells}"
-            command = commands.FreezeCell(self.model, cells, description)
-        else:
-            # We have an frozen cell that has to be unfrozen
-            description = f"Thaw cells {cells}"
-            command = commands.ThawCell(self.model, cells, description)
-        self.main_window.undo_stack.push(command)
 
     def on_button_cell_pressed(self, toggled: bool):
         """Button cell event handler
@@ -1615,6 +1555,48 @@ class Grid(QTableView):
                                        description)
         self.main_window.undo_stack.push(command)
 
+    def on_rename_sheet(self):
+        """Rename sheet event handler"""
+
+        code_array = self.model.code_array
+        sheet_names = code_array.dict_grid.sheet_names
+        current_name = sheet_names[self.table]
+
+        new_name, ok = QInputDialog.getText(
+            self.main_window,
+            "Rename Sheet",
+            "Enter new sheet name:",
+            text=current_name
+        )
+
+        if ok and new_name:
+            # Validate: not empty, not duplicate
+            if new_name.strip() == "":
+                QMessageBox.warning(self.main_window, "Invalid Name",
+                                  "Sheet name cannot be empty.")
+                return
+
+            if new_name in sheet_names and new_name != current_name:
+                QMessageBox.warning(self.main_window, "Duplicate Name",
+                                  f"Sheet '{new_name}' already exists.")
+                return
+
+            description = f"Rename sheet '{current_name}' to '{new_name}'"
+            command = commands.RenameSheet(
+                self,
+                self.table,
+                current_name,
+                new_name,
+                description,
+            )
+            self.main_window.undo_stack.push(command)
+
+            if not self.main_window.settings.changed_since_save:
+                self.main_window.settings.changed_since_save = True
+                self.main_window.setWindowTitle(
+                    "* " + self.main_window.windowTitle()
+                )
+
 
 class GridHeaderView(QHeaderView):
     """QHeaderView with zoom support"""
@@ -1731,6 +1713,18 @@ class GridTableModel(QAbstractTableModel):
         self.beginResetModel()
         yield
         self.endResetModel()
+
+    def emit_data_changed_all(self):
+        """Emit dataChanged signal for the entire visible grid.
+
+        This properly signals that all cell data may have changed,
+        using valid indices instead of invalid QModelIndex() instances.
+        """
+        if self.rowCount() > 0 and self.columnCount() > 0:
+            top_left = self.index(0, 0)
+            bottom_right = self.index(self.rowCount() - 1,
+                                     self.columnCount() - 1)
+            self.dataChanged.emit(top_left, bottom_right)
 
     @contextmanager
     def inserting_rows(self, index: QModelIndex, first: int, last: int):
@@ -1976,26 +1970,16 @@ class GridTableModel(QAbstractTableModel):
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
                 return ""
-            if isinstance(value, RangeOutput):
-                value = value.lst[0]
-
-            if isinstance(value, Exception):
-                return value.__class__.__name__
-            if isinstance(value, HelpText):
-                return value.query
+            value = Formatter.display_formatter(value)
             return safe_str(value)
 
         if role == Qt.ItemDataRole.ToolTipRole:
             value = self.code_array[key]
-            if isinstance(value, Exception):
-                output = str(value)
-            elif isinstance(value, HelpText):
-                output = value.contents
-            else:
-                output = value.__class__.__name__
+            output = Formatter.tooltip_formatter(value)
             return wrap_text(safe_str(output))
 
         if role == Qt.ItemDataRole.DecorationRole:
+            # Handle image rendering (dirty icon is painted separately in paint_)
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
                 value = self.code_array[key]
@@ -2008,16 +1992,11 @@ class GridTableModel(QAbstractTableModel):
                     return value
 
         if role == Qt.ItemDataRole.BackgroundRole:
-            if self.main_window.settings.show_frozen \
-               and self.code_array.cell_attributes[key].frozen:
-                pattern_rgb = self.grid.palette().highlight().color()
-                bg_color = QBrush(pattern_rgb, Qt.BrushStyle.BDiagPattern)
+            bg_color_rgb = self.code_array.cell_attributes[key].bgcolor
+            if bg_color_rgb is None:
+                bg_color = QColor(255, 255, 255)
             else:
-                bg_color_rgb = self.code_array.cell_attributes[key].bgcolor
-                if bg_color_rgb is None:
-                    bg_color = QColor(255, 255, 255)
-                else:
-                    bg_color = QColor(*bg_color_rgb)
+                bg_color = QColor(*bg_color_rgb)
             return bg_color
 
         if role == Qt.ItemDataRole.ForegroundRole:
@@ -2079,7 +2058,16 @@ class GridTableModel(QAbstractTableModel):
                 self.code_array[key] = f"{value}"
 
             if not self.main_window.prevent_updates:
+                # Emit dataChanged for the edited cell
                 self.dataChanged.emit(index, index)
+
+                # Also emit dataChanged for all dirty dependents (so they repaint)
+                if hasattr(self.code_array, 'dep_graph'):
+                    for dependent_key in self.code_array.dep_graph.dirty:
+                        if dependent_key != key and dependent_key[2] == table:  # Same sheet
+                            dep_row, dep_col, _ = dependent_key
+                            dep_index = self.index(dep_row, dep_col)
+                            self.dataChanged.emit(dep_index, dep_index)
 
             return True
 
@@ -2145,10 +2133,6 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.dict_grid.macros_draft = dict()
             self.code_array.dict_grid.sheet_globals_uncopyable = {i: dict() for i in range(self.shape[2])}
             self.code_array.dict_grid.sheet_globals_copyable = {i: dict() for i in range(self.shape[2])}
-
-            # Clear caches
-            # self.main_window.undo_stack.clear()
-            self.code_array.result_cache.clear()
 
 
 class GridCellDelegate(QStyledItemDelegate):
@@ -2505,6 +2489,34 @@ class GridCellDelegate(QStyledItemDelegate):
 
         self._render_svg(painter, rect, index, svg_str=svg_str)
 
+    def _render_dirty_icon(self, painter: QPainter, rect: QRectF,
+                          index: QModelIndex):
+        """Renders refresh icon on the right side for dirty cells
+
+        :param painter: Painter with which icon is rendered
+        :param rect: Cell rect of the cell to be painted
+        :param index: Index of cell for which icon is rendered
+
+        """
+        try:
+            from pyspread.icons import Icon
+        except ImportError:
+            from icons import Icon
+
+        # Icon size (16x16 pixels, or scaled by zoom)
+        icon_size = 16 * self.grid.zoom
+        padding = 4 * self.grid.zoom  # Padding from right edge
+
+        # Position icon on the right side
+        icon_x = rect.right() - icon_size - padding
+        icon_y = rect.center().y() - icon_size / 2  # Vertically centered
+
+        # Create icon rect
+        icon_rect = QRectF(icon_x, icon_y, icon_size, icon_size)
+
+        # Render the icon
+        Icon.refresh.paint(painter, icon_rect.toRect(), Qt.AlignmentFlag.AlignCenter)
+
     def paint_(self, painter: QPainter, rect: QRectF,
                option: QStyleOptionViewItem, index: QModelIndex):
         """Calls the overloaded paint function or creates html delegate
@@ -2544,6 +2556,12 @@ class GridCellDelegate(QStyledItemDelegate):
 
         elif renderer == "matplotlib":
             self._render_matplotlib(painter, rect, index)
+
+        # Paint dirty indicator icon on the right side
+        is_dirty = self.code_array.dep_graph.is_dirty(key)
+        if is_dirty:
+            logger.debug("paint_() rendering icon for dirty cell %s", key)
+            self._render_dirty_icon(painter, rect, index)
 
         option.rect = old_rect
 
@@ -2690,7 +2708,15 @@ class TableChoice(QTabBar):
         if value > self.count():
             # Insert
             for i in range(self.count(), value):
-                self.addTab(str(i))
+                # Get sheet name from code_array if available
+                grid = getattr(self.main_window, "grid", None)
+                if grid is None:
+                    sheet_names = None
+                else:
+                    code_array = grid.model.code_array
+                    sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+                tab_label = sheet_names[i] if sheet_names and i < len(sheet_names) else f"Sheet {i}"
+                self.addTab(tab_label)
 
         elif value < self.count():
             # Remove
@@ -2756,6 +2782,16 @@ class TableChoice(QTabBar):
             grid.verticalScrollBar().setValue(v_pos)
             grid.horizontalScrollBar().setValue(h_pos)
 
-        self.main_window.macro_panel.update_current_table(current)
+        self.main_window.sheet_script_panel.update_current_table(current)
 
         self.last = current
+
+    def update_tab_labels(self):
+        """Updates all tab labels to match current sheet names"""
+
+        code_array = self.main_window.grid.model.code_array
+        sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+
+        if sheet_names:
+            for i in range(min(self.count(), len(sheet_names))):
+                self.setTabText(i, sheet_names[i])

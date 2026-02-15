@@ -238,7 +238,7 @@ class Workflows:
         self.main_window.settings.changed_since_save = False
 
         # Update macro editor
-        self.main_window.macro_panel.update_()
+        self.main_window.sheet_script_panel.update_()
 
         # Exit safe mode
         self.main_window.safe_mode = False
@@ -279,7 +279,7 @@ class Workflows:
         self.main_window.undo_stack.clear()
 
         # Reset macro editor
-        self.main_window.macro_panel.macro_editor.clear()
+        self.main_window.sheet_script_panel.macro_editor.clear()
 
         # Is the file signed properly ?
         self.main_window.safe_mode = True
@@ -368,7 +368,7 @@ class Workflows:
             # Update index widgets
             grid.update_index_widgets()
 
-            grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
+            grid.model.emit_data_changed_all()
 
             # Select upper left cell because initial selection oddities
             grid.reset_selection()
@@ -381,7 +381,7 @@ class Workflows:
         self.main_window.settings.changed_since_save = False
 
         # Update macro editor
-        self.main_window.macro_panel.update_()
+        self.main_window.sheet_script_panel.update_()
 
         # Add to file history
         self.main_window.settings.add_to_file_history(filepath.as_posix())

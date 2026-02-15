@@ -25,6 +25,7 @@
 * :class:`MenuBar`: QMenuBar, the main menubar
 * :class:`FileMenu`: File menu for the main menubar
 * :class:`EditMenu`: Edit menu for the main menubar
+* :class:`ToolsMenu`: Tools menu for the main menubar
 * :class:`ViewMenu`: View menu for the main menubar
 * :class:`FormatMenu`: Format menu for the main menubar
 * :class:`MacroMenu`: Macro menu for the main menubar
@@ -78,14 +79,14 @@ class MenuBar(QMenuBar):
         self.edit_menu = EditMenu(self, actions)
         self.view_menu = ViewMenu(self, actions)
         self.format_menu = FormatMenu(self, actions)
-        self.macro_menu = MacroMenu(self, actions)
+        self.tools_menu = ToolsMenu(self, actions)
         self.help_menu = HelpMenu(self, actions)
 
         self.addMenu(self.file_menu)
         self.addMenu(self.edit_menu)
         self.addMenu(self.view_menu)
         self.addMenu(self.format_menu)
-        self.addMenu(self.macro_menu)
+        self.addMenu(self.tools_menu)
         self.addMenu(self.help_menu)
 
 
@@ -164,6 +165,47 @@ class EditMenu(QMenu):
         self.addAction(actions.resize_grid)
 
 
+class ToolsMenu(QMenu):
+    """Tools menu for the main menubar"""
+
+    def __init__(self, parent: QWidget, actions: MainWindowActions):
+        """
+        :param parent: Parent widget
+        :param actions: Main window actions
+
+        """
+
+        super().__init__('&Tools', parent)
+
+        self.macro_submenu = self.addMenu('Macro')
+        self.macro_submenu.addAction(actions.insert_image)
+        if matplotlib_figure is not None:
+            self.macro_submenu.addAction(actions.insert_chart)
+        self.macro_submenu.addSeparator()
+        self.macro_submenu.addAction(actions.quote)
+        self.macro_submenu.addAction(actions.money)
+        if dateutil is not None:
+            self.macro_submenu.addAction(actions.datetime)
+            self.macro_submenu.addAction(actions.date)
+            self.macro_submenu.addAction(actions.time)
+        self.macro_submenu.addSeparator()
+        self.macro_submenu.addAction(actions.insert_sum)
+
+        self.addSeparator()
+
+        self.recalculate_submenu = self.addMenu('Recalculate')
+        self.recalculate_submenu.addAction(actions.recalculate_dirty)
+        self.recalculate_submenu.addAction(actions.recalculate_cell_only)
+        self.recalculate_submenu.addAction(actions.recalculate_ancestors)
+        self.recalculate_submenu.addAction(actions.recalculate_children)
+        self.recalculate_submenu.addAction(actions.recalculate_all)
+        self.addAction(actions.toggle_auto_recalculate)
+
+        self.addSeparator()
+
+        self.addAction(actions.toggle_spell_checker)
+
+
 class ViewMenu(QMenu):
     """View menu for the main menubar"""
 
@@ -186,20 +228,15 @@ class ViewMenu(QMenu):
         self.toolbar_submenu.addAction(actions.toggle_find_toolbar)
 
         self.addAction(actions.toggle_entry_line_dock)
-        self.addAction(actions.toggle_macro_dock)
+        self.addAction(actions.toggle_sheet_script_dock)
         self.addSeparator()
         self.addAction(actions.goto_cell)
-        self.addSeparator()
-        self.addAction(actions.toggle_spell_checker)
         self.addSeparator()
         self.addAction(actions.zoom_in)
         self.addAction(actions.zoom_out)
         self.addAction(actions.zoom_1)
         self.addSeparator()
-        self.addAction(actions.refresh_cells)
-        self.addAction(actions.toggle_periodic_updates)
         self.addSeparator()
-        self.addAction(actions.show_frozen)
 
 
 class FormatMenu(QMenu):
@@ -231,7 +268,6 @@ class FormatMenu(QMenu):
         if matplotlib_figure is not None:
             self.renderer_submenu.addAction(actions.matplotlib)
 
-        self.addAction(actions.freeze_cell)
         self.addAction(actions.lock_cell)
         self.addAction(actions.button_cell)
 
@@ -501,6 +537,8 @@ class TableChoiceContextMenu(QMenu):
 
         self.addAction(actions.insert_table)
         self.addAction(actions.delete_table)
+        self.addSeparator()
+        self.addAction(actions.rename_sheet)
 
 
 class ToolbarManagerMenu(QMenu):

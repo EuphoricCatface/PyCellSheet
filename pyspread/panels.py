@@ -22,7 +22,7 @@
 
 **Provides**
 
- * :class:`MacroPanel`
+ * :class:`SheetScriptPanel`
 
 """
 
@@ -44,8 +44,8 @@ except ImportError:
     from lib.exception_handling import get_user_codeframe
 
 
-class MacroPanel(QDialog):
-    """The macro panel"""
+class SheetScriptPanel(QDialog):
+    """The sheet script panel"""
 
     class AppliedIndicator(QLabel):
 
@@ -55,6 +55,8 @@ class MacroPanel(QDialog):
             self.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             self._applied = True
             self.stylesheet_update()
+            if parent:
+                parent.installEventFilter(self)
 
         def stylesheet_update(self):
             # Qt does not guarantee the applying of new style
@@ -66,12 +68,20 @@ class MacroPanel(QDialog):
                 "QLabel[applied=false] { color: red } \n"
             )
 
-        def paintEvent(self, a0):
-            super().paintEvent(a0)
+        def _reposition(self):
             if self.parent():
                 self.move(
                     self.parent().width() - self.width(), 0
                 )
+
+        def eventFilter(self, obj, event):
+            if event.type() == event.Type.Resize:
+                self._reposition()
+            return False
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self._reposition()
 
         @pyqtProperty(bool)
         def applied(self):
@@ -108,7 +118,7 @@ class MacroPanel(QDialog):
 
         font_family = self.parent.settings.macro_editor_font_family
         self.macro_editor = SpellTextEdit(self, font_family=font_family)
-        self.applied_indicator = MacroPanel.AppliedIndicator(self.macro_editor)
+        self.applied_indicator = SheetScriptPanel.AppliedIndicator(self.macro_editor)
         self.macro_editor.textChanged.connect(
             lambda: self.applied_indicator.setProperty("applied", False)
         )
@@ -170,7 +180,7 @@ class MacroPanel(QDialog):
             self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
             self.code_array.macros_draft[self.current_table] = None
             self.applied_indicator.setProperty("applied", True)
-            self.parent.grid.model.dataChanged.emit(QModelIndex(), QModelIndex())
+            self.parent.grid.model.emit_data_changed_all()
 
         self.parent.grid.gui_update()
 

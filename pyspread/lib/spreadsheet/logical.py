@@ -1,8 +1,9 @@
 try:
-    from pyspread.lib.pycellsheet import EmptyCell
+    from pyspread.lib.pycellsheet import EmptyCell, flatten_args
     from pyspread.lib.spreadsheet.errors import SpreadsheetErrorNa
 except ImportError:
-    from lib.pycellsheet import EmptyCell
+    from lib.pycellsheet import EmptyCell, flatten_args
+    from lib.spreadsheet.errors import SpreadsheetErrorNa
 
 _LOGICAL_FUNCTIONS = [
     'AND', 'FALSE', 'IF', 'IFERROR', 'IFNA', 'IFS', 'LAMBDA', 'LET', 'NOT', 'OR', 'SWITCH',
@@ -12,7 +13,7 @@ __all__ = _LOGICAL_FUNCTIONS + ["_LOGICAL_FUNCTIONS"]
 
 
 def AND(*args):
-    return all(args)
+    return all(flatten_args(*args))
 
 
 def FALSE():
@@ -57,8 +58,8 @@ def NOT(expr):
     return not expr
 
 
-def OR(a, b):
-    return a or b
+def OR(*args):
+    return any(flatten_args(*args))
 
 
 def SWITCH(expr, *args):
@@ -85,4 +86,4 @@ def TRUE():
 
 
 def XOR(args):
-    return len(list(filter(bool, args))) % 2
+    return len(list(filter(bool, flatten_args(args)))) % 2

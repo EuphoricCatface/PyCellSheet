@@ -110,7 +110,7 @@ class ToolBarBase(QToolBar):
         button.setText("Add/remove toolbar icons")
         button.setMenu(ToolbarManagerMenu(self))
         button.setIcon(Icon.menu_manager)
-        button.setFixedWidth(int(button.height()/3))
+        button.setFixedWidth(max(int(button.sizeHint().height() / 3), 8))
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
         return button
@@ -278,7 +278,6 @@ class FormatToolbar(ToolBarBase):
 
         self.addSeparator()
 
-        self.addAction(actions.freeze_cell)
         self.addAction(actions.lock_cell)
         self.addAction(actions.button_cell)
 

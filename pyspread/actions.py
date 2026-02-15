@@ -115,6 +115,7 @@ class MainWindowActions(AttrDict):
         self.create_file_actions()
         self.create_edit_actions()
         self.create_view_actions()
+        self.create_tools_actions()
         self.create_format_actions()
         self.create_macro_actions()
         self.create_help_actions()
@@ -311,6 +312,10 @@ class MainWindowActions(AttrDict):
                                    icon=Icon.delete_table,
                                    statustip='Delete current table')
 
+        self.rename_sheet = Action(self.parent, "Rename sheet",
+                                   self.parent.grid.on_rename_sheet,
+                                   statustip='Rename the current sheet')
+
         self.resize_grid = Action(self.parent, "Resize grid",
                                   self.parent.workflows.edit_resize,
                                   icon=Icon.resize_grid,
@@ -354,10 +359,10 @@ class MainWindowActions(AttrDict):
             self.parent, "Entry line", self.parent.on_toggle_entry_line_dock,
             checkable=True, statustip='Show/hide the entry line')
 
-        self.toggle_macro_dock = Action(
-            self.parent, "Macro panel", self.parent.on_toggle_macro_dock,
+        self.toggle_sheet_script_dock = Action(
+            self.parent, "Sheet Script", self.parent.on_toggle_sheet_script_dock,
             checkable=True, shortcut='F4' if self.shortcuts else "",
-            statustip='Show/hide the macro panel')
+            statustip='Show/hide the sheet script panel')
 
         self.goto_cell = Action(self.parent, "Go to cell",
                                 self.parent.workflows.view_goto_cell,
@@ -390,25 +395,51 @@ class MainWindowActions(AttrDict):
                              shortcut='Ctrl+0' if self.shortcuts else "",
                              statustip='Show grid on standard zoom level')
 
-        self.refresh_cells = \
-            Action(self.parent, "Refresh selected cells",
-                   self.parent.grid.refresh_selected_frozen_cells,
-                   icon=Icon.refresh,
-                   shortcut=QKeySequence.StandardKey.Refresh if self.shortcuts else "",
-                   statustip='Refresh selected cells even when frozen')
+    def create_tools_actions(self):
+        """actions for Tools menu"""
 
-        self.toggle_periodic_updates = \
-            Action(self.parent, "Toggle periodic updates",
-                   self.parent.on_toggle_refresh_timer,
-                   icon=Icon.toggle_periodic_updates, checkable=True,
-                   statustip='Toggles periodic updates for frozen cells')
+        self.toggle_auto_recalculate = Action(
+            self.parent, "Auto Recalculate",
+            self.parent.on_toggle_auto_recalculate,
+            checkable=True,
+            statustip='Toggle automatic recalculation of dependent cells'
+        )
 
-        self.show_frozen = Action(self.parent, "Show frozen",
-                                  self.parent.grid.on_show_frozen_pressed,
-                                  icon=Icon.show_frozen,
-                                  checkable=True,
-                                  statustip='Indicates frozen cells with a '
-                                            'background crosshatch')
+        self.recalculate_dirty = Action(
+            self.parent, "Dirty cells",
+            self.parent.on_recalculate,
+            shortcut='F9' if self.shortcuts else "",
+            statustip='Force recalculation of all dirty cells'
+        )
+
+        self.recalculate_cell_only = Action(
+            self.parent, "This cell only",
+            self.parent.on_recalculate_cell_only,
+            shortcut='Alt+F9' if self.shortcuts else "",
+            statustip='Recalculate the current cell only'
+        )
+
+        self.recalculate_ancestors = Action(
+            self.parent, "This cell and its ancestors",
+            self.parent.on_recalculate_ancestors,
+            shortcut='Ctrl+F9' if self.shortcuts else "",
+            statustip='Recalculate the current cell and its dependencies'
+        )
+
+        self.recalculate_children = Action(
+            self.parent, "This cell and its children",
+            self.parent.on_recalculate_children,
+            shortcut='Shift+F9' if self.shortcuts else "",
+            statustip='Recalculate the current cell and its dependents'
+        )
+
+        self.recalculate_all = Action(
+            self.parent, "Entire workspace",
+            self.parent.on_recalculate_all,
+            shortcut='Ctrl+Shift+F9' if self.shortcuts else "",
+            statustip='Recalculate all cells in the workspace'
+        )
+
 
     def create_format_actions(self):
         """actions for Format menu"""
@@ -514,14 +545,6 @@ class MainWindowActions(AttrDict):
             self.parent.widgets.background_color_button.on_pressed,
             icon=Icon.background_color,
             statustip='Lauch background color dialog')
-
-        self.freeze_cell = Action(self.parent, "Freeze cell",
-                                  self.parent.grid.on_freeze_pressed,
-                                  icon=Icon.freeze,
-                                  checkable=True,
-                                  statustip='Freeze the selected cell so that '
-                                            'is is only updated when <F5> is '
-                                            'pressed')
 
         self.lock_cell = Action(self.parent, "Lock cell",
                                 self.parent.grid.on_lock_pressed,
