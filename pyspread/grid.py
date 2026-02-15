@@ -39,6 +39,7 @@ from ast import literal_eval
 from contextlib import contextmanager
 from datetime import datetime, date, time
 from io import BytesIO
+import logging
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy
@@ -69,6 +70,8 @@ try:
     from moneyed import Money
 except ImportError:
     Money = None
+
+logger = logging.getLogger(__name__)
 
 try:
     from pyspread import commands
@@ -2550,7 +2553,7 @@ class GridCellDelegate(QStyledItemDelegate):
         # Paint dirty indicator icon on the right side
         is_dirty = self.code_array.dep_graph.is_dirty(key)
         if is_dirty:
-            print(f"DEBUG: paint_() rendering icon for dirty cell {key}")
+            logger.debug("paint_() rendering icon for dirty cell %s", key)
             self._render_dirty_icon(painter, rect, index)
 
         option.rect = old_rect

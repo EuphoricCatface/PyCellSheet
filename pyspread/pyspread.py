@@ -62,7 +62,7 @@ def excepthook(exception_type, exception_value, exception_traceback):
     traceback_msg = "".join(traceback.format_exception(exception_type,
                                                        exception_value,
                                                        exception_traceback))
-    print(f"Error: {traceback_msg}\n")
+    logging.error("Unhandled exception:\n%s", traceback_msg)
 
 
 def main():
