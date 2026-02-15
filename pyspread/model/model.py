@@ -1368,12 +1368,12 @@ class CodeArray(DataArray):
         except AttributeError:
             numpy.set_string_function(lambda s: repr(s.tolist() if hasattr(s, "tolist") else s))
 
-        # Prevent unchanged cells from being recalculated on cursor movement
-        cached = self.smart_cache.get(key)
-        unchanged = (cached is not SmartCache.INVALID and
-                     value == self(key)) or \
-                    ((value is None or value == "") and
-                     cached is SmartCache.INVALID)
+        # Prevent unchanged cells from being recalculated on cursor movement.
+        # Compare against stored code, not cache state.
+        old_value = self(key)
+        old_empty = old_value in (None, "")
+        new_empty = value in (None, "")
+        unchanged = (old_value == value) or (old_empty and new_empty)
 
         super().__setitem__(key, value)
 
