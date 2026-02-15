@@ -161,6 +161,9 @@ class Settings:
     # Status bar cell result summation
     show_statusbar_sum = True
 
+    recalc_mode = "auto"
+    """Recalculation mode: auto or manual"""
+
     def __init__(self, parent: QWidget, reset_settings: bool = False):
         """
         :param parent: Parent widget, normally main window
@@ -233,6 +236,7 @@ class Settings:
             settings.setValue("file_history", self.file_history)
         settings.setValue("signature_key", self.signature_key)
         settings.setValue("show_statusbar_sum", self.show_statusbar_sum)
+        settings.setValue("recalc_mode", self.recalc_mode)
 
         # GUI state
         for widget_name in self.widget_names:
@@ -307,6 +311,9 @@ class Settings:
         setting2attr("file_history")
         setting2attr("signature_key")
         setting2attr("show_statusbar_sum", mapper=qt_bool)
+        setting2attr("recalc_mode")
+        if self.recalc_mode not in ("auto", "manual"):
+            self.recalc_mode = Settings.recalc_mode
 
         # GUI state
 

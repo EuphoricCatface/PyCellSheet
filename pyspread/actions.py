@@ -115,6 +115,7 @@ class MainWindowActions(AttrDict):
         self.create_file_actions()
         self.create_edit_actions()
         self.create_view_actions()
+        self.create_tools_actions()
         self.create_format_actions()
         self.create_macro_actions()
         self.create_help_actions()
@@ -311,6 +312,10 @@ class MainWindowActions(AttrDict):
                                    icon=Icon.delete_table,
                                    statustip='Delete current table')
 
+        self.rename_sheet = Action(self.parent, "Rename sheet",
+                                   self.parent.grid.on_rename_sheet,
+                                   statustip='Rename the current sheet')
+
         self.resize_grid = Action(self.parent, "Resize grid",
                                   self.parent.workflows.edit_resize,
                                   icon=Icon.resize_grid,
@@ -325,11 +330,6 @@ class MainWindowActions(AttrDict):
                                  shortcut='F11' if self.shortcuts else "",
                                  statustip='Show grid in fullscreen mode '
                                            '(press <F11> to leave)')
-
-        self.recalculate = Action(self.parent, "Recalculate",
-                                  self.parent.on_recalculate,
-                                  shortcut='F9' if self.shortcuts else "",
-                                  statustip='Force recalculation of all dirty cells')
 
         self.toggle_main_toolbar = Action(self.parent, "Main toolbar",
                                           self.parent.on_toggle_main_toolbar,
@@ -359,10 +359,10 @@ class MainWindowActions(AttrDict):
             self.parent, "Entry line", self.parent.on_toggle_entry_line_dock,
             checkable=True, statustip='Show/hide the entry line')
 
-        self.toggle_macro_dock = Action(
-            self.parent, "Macro panel", self.parent.on_toggle_macro_dock,
+        self.toggle_sheet_script_dock = Action(
+            self.parent, "Sheet Script", self.parent.on_toggle_sheet_script_dock,
             checkable=True, shortcut='F4' if self.shortcuts else "",
-            statustip='Show/hide the macro panel')
+            statustip='Show/hide the sheet script panel')
 
         self.goto_cell = Action(self.parent, "Go to cell",
                                 self.parent.workflows.view_goto_cell,
@@ -394,6 +394,51 @@ class MainWindowActions(AttrDict):
                              icon=Icon.zoom_1,
                              shortcut='Ctrl+0' if self.shortcuts else "",
                              statustip='Show grid on standard zoom level')
+
+    def create_tools_actions(self):
+        """actions for Tools menu"""
+
+        self.toggle_auto_recalculate = Action(
+            self.parent, "Auto Recalculate",
+            self.parent.on_toggle_auto_recalculate,
+            checkable=True,
+            statustip='Toggle automatic recalculation of dependent cells'
+        )
+
+        self.recalculate_dirty = Action(
+            self.parent, "Dirty cells",
+            self.parent.on_recalculate,
+            shortcut='F9' if self.shortcuts else "",
+            statustip='Force recalculation of all dirty cells'
+        )
+
+        self.recalculate_cell_only = Action(
+            self.parent, "This cell only",
+            self.parent.on_recalculate_cell_only,
+            shortcut='Alt+F9' if self.shortcuts else "",
+            statustip='Recalculate the current cell only'
+        )
+
+        self.recalculate_ancestors = Action(
+            self.parent, "This cell and its ancestors",
+            self.parent.on_recalculate_ancestors,
+            shortcut='Ctrl+F9' if self.shortcuts else "",
+            statustip='Recalculate the current cell and its dependencies'
+        )
+
+        self.recalculate_children = Action(
+            self.parent, "This cell and its children",
+            self.parent.on_recalculate_children,
+            shortcut='Shift+F9' if self.shortcuts else "",
+            statustip='Recalculate the current cell and its dependents'
+        )
+
+        self.recalculate_all = Action(
+            self.parent, "Entire workspace",
+            self.parent.on_recalculate_all,
+            shortcut='Ctrl+Shift+F9' if self.shortcuts else "",
+            statustip='Recalculate all cells in the workspace'
+        )
 
 
     def create_format_actions(self):

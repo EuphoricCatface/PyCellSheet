@@ -73,11 +73,5 @@ def UNARY_PERCENT(a):
     return a / 100
 
 
-# def UNIQUE():
-# Google Sheets help includes UNIQUE as one of operators
-#  but I think it's a typo or something.
-# It is also listed in the "Filter" section.
-
-
 def UPLUS(a):
     return +a

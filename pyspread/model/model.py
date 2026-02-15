@@ -497,7 +497,8 @@ class DictGrid(KeyValueStore):
 
         # PerSheetInitScripts as string list
         self.macros: list[str] = [u"" for _ in range(shape[2])]
-        # later this will be dict. sheets will have string names
+        # Sheet names corresponding to table indices
+        self.sheet_names: list[str] = [f"Sheet {i}" for i in range(shape[2])]
         self.exp_parser_code = u""
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
@@ -747,6 +748,31 @@ class DataArray:
 
         # Set dict_grid shape attribute
         self.dict_grid.shape = shape
+
+        # Adjust sheet-specific lists to match new table count
+        old_tables = old_shape[2]
+        new_tables = shape[2]
+        if new_tables < old_tables:
+            # Trim lists
+            self.macros = self.macros[:new_tables]
+            self.macros_draft = self.macros_draft[:new_tables]
+            self.sheet_globals_copyable = self.sheet_globals_copyable[:new_tables]
+            self.sheet_globals_uncopyable = self.sheet_globals_uncopyable[:new_tables]
+            self.dict_grid.sheet_names = self.dict_grid.sheet_names[:new_tables]
+        elif new_tables > old_tables:
+            # Extend lists
+            for i in range(old_tables, new_tables):
+                self.macros.append(u"")
+                self.macros_draft.append(None)
+                self.sheet_globals_copyable.append(dict())
+                self.sheet_globals_uncopyable.append(dict())
+                # Generate unique sheet name
+                new_name = f"Sheet {i}"
+                counter = 1
+                while new_name in self.dict_grid.sheet_names:
+                    new_name = f"Sheet {i}_{counter}"
+                    counter += 1
+                self.dict_grid.sheet_names.append(new_name)
 
         self._adjust_rowcol(0, 0, 0)
         self._adjust_cell_attributes(0, 0, 0)
@@ -1255,11 +1281,18 @@ class DataArray:
         self._adjust_cell_attributes(insertion_point, no_to_insert, axis, tab)
 
         if axis == 2:
-            for _ in range(no_to_insert):
+            for i in range(no_to_insert):
                 self.macros.insert(insertion_point, u"")
                 self.macros_draft.insert(insertion_point, None)
                 self.sheet_globals_copyable.insert(insertion_point, dict())
                 self.sheet_globals_uncopyable.insert(insertion_point, dict())
+                # Generate unique sheet name
+                new_name = f"Sheet {insertion_point + i}"
+                counter = 1
+                while new_name in self.dict_grid.sheet_names:
+                    new_name = f"Sheet {insertion_point + i}_{counter}"
+                    counter += 1
+                self.dict_grid.sheet_names.insert(insertion_point, new_name)
 
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
@@ -1306,10 +1339,16 @@ class DataArray:
 
         if axis == 2:
             for _ in range(no_to_delete):
-                self.macros.insert(deletion_point, u"")
-                self.macros_draft.insert(deletion_point, None)
-                self.sheet_globals_copyable.insert(deletion_point, dict())
-                self.sheet_globals_uncopyable.insert(deletion_point, dict())
+                if deletion_point < len(self.macros):
+                    self.macros.pop(deletion_point)
+                if deletion_point < len(self.macros_draft):
+                    self.macros_draft.pop(deletion_point)
+                if deletion_point < len(self.sheet_globals_copyable):
+                    self.sheet_globals_copyable.pop(deletion_point)
+                if deletion_point < len(self.sheet_globals_uncopyable):
+                    self.sheet_globals_uncopyable.pop(deletion_point)
+                if deletion_point < len(self.dict_grid.sheet_names):
+                    self.dict_grid.sheet_names.pop(deletion_point)
 
         # Now re-insert moved keys
 
@@ -1413,7 +1452,13 @@ class CodeArray(DataArray):
             # Invalidate cache for this cell and its dependents
             # IMPORTANT: Invalidate BEFORE removing from dep graph,
             # so invalidate() can propagate to dependents
-            self.smart_cache.invalidate(key)
+            preserve_dependents_cache = (
+                self.settings.recalc_mode == "manual"
+            )
+            self.smart_cache.invalidate(
+                key,
+                preserve_dependents_cache=preserve_dependents_cache,
+            )
             # Remove dependencies for this cell (will be re-tracked on next eval)
             # Reverse edges are preserved by default for cycle detection
             self.dep_graph.remove_cell(key)
@@ -1427,6 +1472,12 @@ class CodeArray(DataArray):
         """
 
         code = self(key)
+
+        if self.settings.recalc_mode == "manual" \
+           and self.dep_graph.is_dirty(key):
+            cached = self.smart_cache.get_raw(key)
+            if cached is not SmartCache.INVALID:
+                return deepcopy(cached)
 
         # Smart cache handling (check even for empty cells)
         cached = self.smart_cache.get(key)
@@ -1614,6 +1665,7 @@ class CodeArray(DataArray):
         # This will evaluate and cache, clearing dirty flags
         for key in dirty_cells:
             try:
+                self.smart_cache.drop(key)
                 # Access the cell - this triggers evaluation
                 _ = self[key]
             except Exception:
@@ -1621,6 +1673,93 @@ class CodeArray(DataArray):
                 pass
 
         return len(dirty_cells)
+
+    def _filter_recalc_keys(self, keys) -> list[Tuple[int, int, int]]:
+        """Return a unique list of valid cell keys"""
+
+        rows, columns, tables = self.shape
+        seen = set()
+        filtered = []
+        for key in keys:
+            if not isinstance(key, tuple) or len(key) != 3:
+                continue
+            row, column, table = key
+            if any(not isinstance(ele, int) for ele in key):
+                continue
+            if not (0 <= row < rows and 0 <= column < columns
+                    and 0 <= table < tables):
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            filtered.append(key)
+        return filtered
+
+    def _recalculate_keys(self, keys) -> int:
+        """Recalculate a set of cells, ignoring evaluation errors"""
+
+        recalculated = 0
+        for key in keys:
+            try:
+                self.smart_cache.drop(key)
+                _ = self[key]
+                recalculated += 1
+            except Exception:
+                pass
+        return recalculated
+
+    def recalculate_cell_only(self, key: Tuple[int, int, int]) -> int:
+        """Recalculate a single cell and mark dependents dirty if it changed"""
+
+        keys = self._filter_recalc_keys([key])
+        if not keys:
+            return 0
+        key = keys[0]
+
+        old = self.smart_cache.get_raw(key)
+        changed = old is SmartCache.INVALID
+
+        try:
+            self.smart_cache.drop(key)
+            new = self[key]
+            if old is not SmartCache.INVALID:
+                try:
+                    changed = (new != old)
+                except Exception:
+                    changed = True
+        except Exception:
+            changed = True
+
+        if changed:
+            direct_dependents = self.dep_graph.dependents.get(key, set())
+            if self.settings.recalc_mode == "auto":
+                for dependent in direct_dependents:
+                    self.smart_cache.invalidate(dependent)
+            else:
+                for dependent in direct_dependents:
+                    self.dep_graph.mark_dirty(dependent)
+
+        return 1
+
+    def recalculate_ancestors(self, key: Tuple[int, int, int]) -> int:
+        """Recalculate a cell and all transitive dependencies"""
+
+        deps = self.dep_graph.get_all_dependencies(key)
+        keys = self._filter_recalc_keys(list(deps) + [key])
+        return self._recalculate_keys(keys)
+
+    def recalculate_children(self, key: Tuple[int, int, int]) -> int:
+        """Recalculate a cell and all transitive dependents"""
+
+        dependents = self.dep_graph.get_all_dependents(key)
+        keys = self._filter_recalc_keys([key] + list(dependents))
+        return self._recalculate_keys(keys)
+
+    def recalculate_all(self) -> int:
+        """Recalculate all cells in the workspace"""
+
+        keys = self._filter_recalc_keys(list(self.dict_grid.keys()))
+        return self._recalculate_keys(keys)
 
     def get_globals(self) -> dict:
         """Returns globals dict"""

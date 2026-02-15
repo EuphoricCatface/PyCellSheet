@@ -132,7 +132,8 @@ class SmartCache:
 
         return True
 
-    def invalidate(self, key, _visited=None):
+    def invalidate(self, key, _visited=None, preserve_dependents_cache=False,
+                   _is_root=True):
         """Invalidate a cache entry
 
         Removes the cache entry and marks the cell and all its dependents dirty.
@@ -144,6 +145,10 @@ class SmartCache:
             Cell key (row, col, table)
         _visited: set, optional
             Internal parameter to track visited cells and avoid infinite loops
+        preserve_dependents_cache: bool, optional
+            If True, only the root cell cache is removed; dependents keep cache
+        _is_root: bool, optional
+            Internal parameter to determine root vs dependent recursion
 
         """
 
@@ -156,7 +161,8 @@ class SmartCache:
         _visited.add(key)
 
         # Remove from cache
-        self._cache.pop(key, None)
+        if _is_root or not preserve_dependents_cache:
+            self._cache.pop(key, None)
 
         # Mark dirty
         self.dep_graph.mark_dirty(key)
@@ -164,9 +170,21 @@ class SmartCache:
         # Recursively invalidate all dependents (so they recalculate automatically)
         dependents = self.dep_graph.dependents.get(key, set())
         for dependent in dependents:
-            self.invalidate(dependent, _visited)
+            self.invalidate(dependent, _visited,
+                            preserve_dependents_cache=preserve_dependents_cache,
+                            _is_root=False)
 
     def clear(self):
         """Clear all cache entries"""
 
         self._cache.clear()
+
+    def get_raw(self, key):
+        """Return cached value without validity checks"""
+
+        return self._cache.get(key, self.INVALID)
+
+    def drop(self, key):
+        """Remove cached value without touching dirty flags"""
+
+        self._cache.pop(key, None)

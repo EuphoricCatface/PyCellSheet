@@ -1552,6 +1552,41 @@ class Grid(QTableView):
                                        description)
         self.main_window.undo_stack.push(command)
 
+    def on_rename_sheet(self):
+        """Rename sheet event handler"""
+
+        from PyQt6.QtWidgets import QInputDialog
+
+        code_array = self.model.code_array
+        sheet_names = code_array.dict_grid.sheet_names
+        current_name = sheet_names[self.table]
+
+        new_name, ok = QInputDialog.getText(
+            self.main_window,
+            "Rename Sheet",
+            "Enter new sheet name:",
+            text=current_name
+        )
+
+        if ok and new_name:
+            # Validate: not empty, not duplicate
+            if new_name.strip() == "":
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self.main_window, "Invalid Name",
+                                  "Sheet name cannot be empty.")
+                return
+
+            if new_name in sheet_names and new_name != current_name:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self.main_window, "Duplicate Name",
+                                  f"Sheet '{new_name}' already exists.")
+                return
+
+            # Update sheet name
+            sheet_names[self.table] = new_name
+            # Update tab label
+            self.main_window.table_choice.setTabText(self.table, new_name)
+
 
 class GridHeaderView(QHeaderView):
     """QHeaderView with zoom support"""
@@ -2663,7 +2698,15 @@ class TableChoice(QTabBar):
         if value > self.count():
             # Insert
             for i in range(self.count(), value):
-                self.addTab(str(i))
+                # Get sheet name from code_array if available
+                grid = getattr(self.main_window, "grid", None)
+                if grid is None:
+                    sheet_names = None
+                else:
+                    code_array = grid.model.code_array
+                    sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+                tab_label = sheet_names[i] if sheet_names and i < len(sheet_names) else f"Sheet {i}"
+                self.addTab(tab_label)
 
         elif value < self.count():
             # Remove
@@ -2729,6 +2772,16 @@ class TableChoice(QTabBar):
             grid.verticalScrollBar().setValue(v_pos)
             grid.horizontalScrollBar().setValue(h_pos)
 
-        self.main_window.macro_panel.update_current_table(current)
+        self.main_window.sheet_script_panel.update_current_table(current)
 
         self.last = current
+
+    def update_tab_labels(self):
+        """Updates all tab labels to match current sheet names"""
+
+        code_array = self.main_window.grid.model.code_array
+        sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+
+        if sheet_names:
+            for i in range(min(self.count(), len(sheet_names))):
+                self.setTabText(i, sheet_names[i])

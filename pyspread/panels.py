@@ -22,7 +22,7 @@
 
 **Provides**
 
- * :class:`MacroPanel`
+ * :class:`SheetScriptPanel`
 
 """
 
@@ -44,8 +44,8 @@ except ImportError:
     from lib.exception_handling import get_user_codeframe
 
 
-class MacroPanel(QDialog):
-    """The macro panel"""
+class SheetScriptPanel(QDialog):
+    """The sheet script panel"""
 
     class AppliedIndicator(QLabel):
 
@@ -118,7 +118,7 @@ class MacroPanel(QDialog):
 
         font_family = self.parent.settings.macro_editor_font_family
         self.macro_editor = SpellTextEdit(self, font_family=font_family)
-        self.applied_indicator = MacroPanel.AppliedIndicator(self.macro_editor)
+        self.applied_indicator = SheetScriptPanel.AppliedIndicator(self.macro_editor)
         self.macro_editor.textChanged.connect(
             lambda: self.applied_indicator.setProperty("applied", False)
         )
