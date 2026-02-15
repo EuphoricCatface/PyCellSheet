@@ -39,6 +39,7 @@ from ast import literal_eval
 from contextlib import contextmanager
 from datetime import datetime, date, time
 from io import BytesIO
+import logging
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy
@@ -46,7 +47,7 @@ import numpy
 from PyQt6.QtWidgets \
     import (QTableView, QStyledItemDelegate, QTabBar, QWidget, QMainWindow,
             QStyleOptionViewItem, QApplication, QStyle, QAbstractItemDelegate,
-            QHeaderView, QFontDialog, QInputDialog, QLineEdit,
+            QHeaderView, QFontDialog, QInputDialog, QLineEdit, QMessageBox,
             QAbstractItemView)
 from PyQt6.QtGui \
     import (QColor, QBrush, QFont, QPainter, QPalette, QImage, QKeyEvent,
@@ -69,6 +70,8 @@ try:
     from moneyed import Money
 except ImportError:
     Money = None
+
+logger = logging.getLogger(__name__)
 
 try:
     from pyspread import commands
@@ -1555,8 +1558,6 @@ class Grid(QTableView):
     def on_rename_sheet(self):
         """Rename sheet event handler"""
 
-        from PyQt6.QtWidgets import QInputDialog
-
         code_array = self.model.code_array
         sheet_names = code_array.dict_grid.sheet_names
         current_name = sheet_names[self.table]
@@ -1571,21 +1572,30 @@ class Grid(QTableView):
         if ok and new_name:
             # Validate: not empty, not duplicate
             if new_name.strip() == "":
-                from PyQt6.QtWidgets import QMessageBox
                 QMessageBox.warning(self.main_window, "Invalid Name",
                                   "Sheet name cannot be empty.")
                 return
 
             if new_name in sheet_names and new_name != current_name:
-                from PyQt6.QtWidgets import QMessageBox
                 QMessageBox.warning(self.main_window, "Duplicate Name",
                                   f"Sheet '{new_name}' already exists.")
                 return
 
-            # Update sheet name
-            sheet_names[self.table] = new_name
-            # Update tab label
-            self.main_window.table_choice.setTabText(self.table, new_name)
+            description = f"Rename sheet '{current_name}' to '{new_name}'"
+            command = commands.RenameSheet(
+                self,
+                self.table,
+                current_name,
+                new_name,
+                description,
+            )
+            self.main_window.undo_stack.push(command)
+
+            if not self.main_window.settings.changed_since_save:
+                self.main_window.settings.changed_since_save = True
+                self.main_window.setWindowTitle(
+                    "* " + self.main_window.windowTitle()
+                )
 
 
 class GridHeaderView(QHeaderView):
@@ -2550,7 +2560,7 @@ class GridCellDelegate(QStyledItemDelegate):
         # Paint dirty indicator icon on the right side
         is_dirty = self.code_array.dep_graph.is_dirty(key)
         if is_dirty:
-            print(f"DEBUG: paint_() rendering icon for dirty cell {key}")
+            logger.debug("paint_() rendering icon for dirty cell %s", key)
             self._render_dirty_icon(painter, rect, index)
 
         option.rect = old_rect

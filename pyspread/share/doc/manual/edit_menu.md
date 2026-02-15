@@ -9,7 +9,8 @@ title: Edit actions
 
 ## Edit → Undo
 
-Most user actions in pyspread can be undone by **`Edit → Undo`** (Shortcut: `<Ctrl> + Z)`.
+Most user actions in PyCellSheet can be undone by **`Edit → Undo`**
+(shortcut: `<Ctrl> + Z`).
 There is a list of undoable commands in the main toolbar.
 
 ## Edit → Redo
@@ -48,7 +49,11 @@ The mimetype of the data to be pasted is chosen in a dialog. The data is then in
 
 ## Edit → Find
 
-Cell code and cell results can be searched with `<Ctrl> + F` or using the menu with **`Edit → Find`**. A dialog is opened, in which search queries can be entered. *pyspread* allows searching contained text, word-wise contained text and regular expressions, which can be toggled in the search toolbar. Toggle the `More` Button for extended options.
+Cell code and cell results can be searched with `<Ctrl> + F` or by using
+**`Edit → Find`**. A dialog is opened where search queries can be entered.
+PyCellSheet supports substring, whole-word, and regular-expression search,
+which can be toggled in the search toolbar. Toggle the `More` button for
+extended options.
 
 ![Find dialog](images/screenshot_find_dialog.png)
 

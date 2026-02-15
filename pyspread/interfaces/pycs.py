@@ -49,6 +49,7 @@ from builtins import str, map, object
 import ast
 from base64 import b64decode, b85encode
 from collections import OrderedDict
+import re
 from typing import Any, BinaryIO, Callable, Iterable, Tuple
 
 try:
@@ -133,6 +134,7 @@ class PycsReader:
         # Now there are many pages of macros
         self.current_macro = -1
         self.current_macro_remaining = 0
+        self._macro_header_re = re.compile(r"^\(macro:(.+)\)\s+([0-9]+)$")
 
     def __iter__(self):
         """Iterates over self.pycs_file, replacing everything in code_array"""
@@ -382,22 +384,26 @@ class PycsReader:
             self.current_macro_remaining -= 1
             return
 
-        sheet_identifier = ""
-        if not line.startswith("(macro:"):
+        header_line = line.rstrip("\r\n")
+        header_match = self._macro_header_re.fullmatch(header_line)
+        if header_match is None:
             raise ValueError("The save file does not follow the macro name conventions")
-        for i in iter(line[7:]):
-            if i == ")":
-                break
-            sheet_identifier += i
+        raw_sheet_identifier, line_count_str = header_match.groups()
+
+        try:
+            parsed_identifier = ast.literal_eval(raw_sheet_identifier)
+        except Exception:
+            parsed_identifier = raw_sheet_identifier
 
         # Try to parse as integer (old format), otherwise treat as sheet name
         try:
-            new_sheet_number = int(sheet_identifier)
+            new_sheet_number = int(parsed_identifier)
             if self.current_macro + 1 != new_sheet_number:
                 raise ValueError("The save file does not follow the macro name conventions")
         except ValueError:
             # Sheet identifier is a name, not a number - look it up
             sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+            sheet_identifier = str(parsed_identifier)
             if sheet_names and sheet_identifier in sheet_names:
                 new_sheet_number = sheet_names.index(sheet_identifier)
             else:
@@ -406,9 +412,6 @@ class PycsReader:
 
         self.current_macro = new_sheet_number
 
-        line_count_str = ""
-        for i in iter(line[9 + len(sheet_identifier)]):
-            line_count_str += i
         self.current_macro_remaining = int(line_count_str)
 
 class PycsWriter(object):
@@ -583,8 +586,9 @@ class PycsWriter(object):
         for i, macro in enumerate(macros):
             # Use sheet name if available, otherwise fall back to index
             sheet_identifier = sheet_names[i] if sheet_names and i < len(sheet_names) else str(i)
+            macro_count = macro.count('\n') + 1
             macro_list = [
-                f"(macro:{sheet_identifier}) {macro.count('\n') + 1}",
+                f"(macro:{sheet_identifier!r}) {macro_count}",
                 macro,
                 ""  # To append a linebreak at the end
             ]
