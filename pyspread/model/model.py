@@ -136,6 +136,14 @@ except ImportError:
 class_format_functions = {}
 
 
+def _get_isolated_builtins() -> dict[str, Any]:
+    """Returns a per-evaluation builtins mapping that is detached from runtime globals."""
+
+    if isinstance(__builtins__, dict):
+        return dict(__builtins__)
+    return dict(__builtins__.__dict__)
+
+
 class DefaultCellAttributeDict(AttrDict):
     """Holds default values for all cell attributes"""
 
@@ -1451,21 +1459,6 @@ class CodeArray(DataArray):
 
         return res
 
-    def _get_updated_environment(self, env_dict: dict = None) -> dict:
-        """Returns globals environment with 'magic' variable
-
-        :param env_dict: Maps global variable name to value, None: {'S': self}
-
-        """
-
-        if env_dict is None:
-            env_dict = {'S': self}
-
-        env = globals().copy()
-        env.update(env_dict)
-
-        return env
-
     def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
         """Evaluates one cell and returns its result
 
@@ -1512,6 +1505,8 @@ class CodeArray(DataArray):
         #  --- PythonEval START ---  #
         env = deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
+        # Keep eval globals isolated from module/runtime globals.
+        env["__builtins__"] = _get_isolated_builtins()
         cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
         self.cell_meta_gen.set_context(key)
         local = {
@@ -1682,11 +1677,6 @@ class CodeArray(DataArray):
         keys = self._filter_recalc_keys(list(self.dict_grid.keys()))
         return self._recalculate_keys(keys)
 
-    def get_globals(self) -> dict:
-        """Returns globals dict"""
-
-        return globals()
-
     def execute_macros(self, current_table) -> Tuple[str, str]:
         """Executes all macros and returns result string and error string
 
@@ -1704,14 +1694,6 @@ class CodeArray(DataArray):
         # Windows exec does not like Windows newline
         self.macros[current_table] = self.macros[current_table].replace('\r\n', '\n')
 
-        # # Set up environment for evaluation
-        # globals().update(self._get_updated_environment())
-        # for var in "XYZRCT":
-        #     try:
-        #         del globals()[var]
-        #     except KeyError:
-        #         pass
-
         # Create file-like string to capture output
         code_out = io.StringIO()
         code_err = io.StringIO()
@@ -1721,7 +1703,7 @@ class CodeArray(DataArray):
         sys.stdout = code_out
         sys.stderr = code_err
 
-        sheet_globals = {}
+        sheet_globals = {"__builtins__": _get_isolated_builtins()}
         try:
             exec(self.macros[current_table], sheet_globals)
 
