@@ -25,6 +25,7 @@
 * :class:`MenuBar`: QMenuBar, the main menubar
 * :class:`FileMenu`: File menu for the main menubar
 * :class:`EditMenu`: Edit menu for the main menubar
+* :class:`ToolsMenu`: Tools menu for the main menubar
 * :class:`ViewMenu`: View menu for the main menubar
 * :class:`FormatMenu`: Format menu for the main menubar
 * :class:`MacroMenu`: Macro menu for the main menubar
@@ -76,6 +77,7 @@ class MenuBar(QMenuBar):
 
         self.file_menu = FileMenu(self, actions)
         self.edit_menu = EditMenu(self, actions)
+        self.tools_menu = ToolsMenu(self, actions)
         self.view_menu = ViewMenu(self, actions)
         self.format_menu = FormatMenu(self, actions)
         self.macro_menu = MacroMenu(self, actions)
@@ -83,6 +85,7 @@ class MenuBar(QMenuBar):
 
         self.addMenu(self.file_menu)
         self.addMenu(self.edit_menu)
+        self.addMenu(self.tools_menu)
         self.addMenu(self.view_menu)
         self.addMenu(self.format_menu)
         self.addMenu(self.macro_menu)
@@ -164,6 +167,29 @@ class EditMenu(QMenu):
         self.addAction(actions.resize_grid)
 
 
+class ToolsMenu(QMenu):
+    """Tools menu for the main menubar"""
+
+    def __init__(self, parent: QWidget, actions: MainWindowActions):
+        """
+        :param parent: Parent widget
+        :param actions: Main window actions
+
+        """
+
+        super().__init__('&Tools', parent)
+
+        self.recalculate_submenu = self.addMenu('Recalculate')
+        self.recalculate_submenu.addAction(actions.recalculate_dirty)
+        self.recalculate_submenu.addAction(actions.recalculate_cell_only)
+        self.recalculate_submenu.addAction(actions.recalculate_ancestors)
+        self.recalculate_submenu.addAction(actions.recalculate_children)
+        self.recalculate_submenu.addAction(actions.recalculate_all)
+
+        self.addSeparator()
+        self.addAction(actions.toggle_auto_recalculate)
+
+
 class ViewMenu(QMenu):
     """View menu for the main menubar"""
 
@@ -177,8 +203,6 @@ class ViewMenu(QMenu):
         super().__init__('&View', parent)
 
         self.addAction(actions.fullscreen)
-        self.addSeparator()
-        self.addAction(actions.recalculate)
         self.addSeparator()
 
         self.toolbar_submenu = self.addMenu('Toolbars')

@@ -351,6 +351,13 @@ class MainWindow(QMainWindow):
         macrodock_visible = self.macro_dock.isVisibleTo(self)
         actions.toggle_macro_dock.setChecked(macrodock_visible)
 
+        actions.toggle_auto_recalculate.setChecked(
+            self.settings.recalc_mode == "auto"
+        )
+        auto_mode = self.settings.recalc_mode == "auto"
+        actions.recalculate_ancestors.setEnabled(not auto_mode)
+        actions.recalculate_children.setEnabled(not auto_mode)
+
     @property
     def focused_grid(self):
         """Returns grid with focus or self if none has focus"""
@@ -514,19 +521,85 @@ class MainWindow(QMainWindow):
         num_recalculated = self.grid.model.code_array.recalculate_dirty()
 
         if num_recalculated > 0:
-            # Update the grid display
-            self.grid.model.dataChanged.emit(
-                self.grid.model.index(0, 0),
-                self.grid.model.index(
-                    self.grid.model.rowCount() - 1,
-                    self.grid.model.columnCount() - 1
-                )
-            )
+            self._refresh_grid()
             self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} cells", 2000
+                f"Recalculated {num_recalculated} dirty cells", 2000
             )
         else:
             self.statusBar().showMessage("No dirty cells to recalculate", 2000)
+
+    def on_toggle_auto_recalculate(self, toggled: bool):
+        """Auto recalculate toggle event handler"""
+
+        self.settings.recalc_mode = "auto" if toggled else "manual"
+        self.update_action_toggles()
+        if self._loading:
+            return
+        if toggled:
+            self.on_recalculate()
+
+    def _refresh_grid(self):
+        """Emit dataChanged for the full grid"""
+
+        self.grid.model.dataChanged.emit(
+            self.grid.model.index(0, 0),
+            self.grid.model.index(
+                self.grid.model.rowCount() - 1,
+                self.grid.model.columnCount() - 1
+            )
+        )
+
+    def on_recalculate_cell_only(self):
+        """Recalculate current cell only"""
+
+        num_recalculated = self.grid.model.code_array.recalculate_cell_only(
+            self.grid.current
+        )
+        if num_recalculated > 0:
+            self._refresh_grid()
+            self.statusBar().showMessage("Recalculated current cell", 2000)
+        else:
+            self.statusBar().showMessage("No cell to recalculate", 2000)
+
+    def on_recalculate_ancestors(self):
+        """Recalculate current cell and its ancestors"""
+
+        num_recalculated = self.grid.model.code_array.recalculate_ancestors(
+            self.grid.current
+        )
+        if num_recalculated > 0:
+            self._refresh_grid()
+            self.statusBar().showMessage(
+                f"Recalculated {num_recalculated} cells (ancestors)", 2000
+            )
+        else:
+            self.statusBar().showMessage("No cells to recalculate", 2000)
+
+    def on_recalculate_children(self):
+        """Recalculate current cell and its children"""
+
+        num_recalculated = self.grid.model.code_array.recalculate_children(
+            self.grid.current
+        )
+        if num_recalculated > 0:
+            self._refresh_grid()
+            self.statusBar().showMessage(
+                f"Recalculated {num_recalculated} cells (children)", 2000
+            )
+        else:
+            self.statusBar().showMessage("No cells to recalculate", 2000)
+
+    def on_recalculate_all(self):
+        """Recalculate all cells in the workspace"""
+
+        num_recalculated = self.grid.model.code_array.recalculate_all()
+        if num_recalculated > 0:
+            self._refresh_grid()
+            self.statusBar().showMessage(
+                f"Recalculated {num_recalculated} cells (workspace)", 2000
+            )
+        else:
+            self.statusBar().showMessage("No cells to recalculate", 2000)
 
     def on_approve(self):
         """Approve event handler"""
