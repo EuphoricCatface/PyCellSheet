@@ -395,13 +395,11 @@ class ReferenceParser:
 
     def cell_ref(self, spreadsheet_ref_notation: str, current_sheet: "ReferenceParser.Sheet"):
         target_sheet: "ReferenceParser.Sheet" = current_sheet
-        exc_index = -1
         non_sheet = spreadsheet_ref_notation
         if "!" in spreadsheet_ref_notation:
             exc_index = spreadsheet_ref_notation.index("!")
-            sheet_name = spreadsheet_ref_notation[:exc_index]
-            sheet_name.strip('"')
-            target_sheet = self.sheet_ref(spreadsheet_ref_notation[:exc_index])
+            sheet_name = spreadsheet_ref_notation[:exc_index].strip('"')
+            target_sheet = self.sheet_ref(sheet_name)
             non_sheet = spreadsheet_ref_notation[exc_index + 1:]
         if ":" in non_sheet:
             col_index = non_sheet.index(":")
@@ -537,9 +535,11 @@ class ReferenceParser:
             while True:
                 if not single_cell_indices:
                     break
-                s_index = single_cell_indices.popleft()
-                if s_index[0] > end:
+                s_index = single_cell_indices[0]
+                # Name spans are [start, end), so start==end belongs to the next chunk.
+                if s_index[0] >= end:
                     break
+                single_cell_indices.popleft()
                 s_str = f"C(\"{single_cell_idx_name.pop(s_index)}\")"
                 names_idx_replacement_str[s_index] = s_str
 
@@ -580,9 +580,12 @@ class ReferenceParser:
         # Step 8: Finally, assemble the code with the replacements
         last_end = 0
         parsed_code_list = []
-        for (start, end), replacements in names_idx_replacement_str.items():
+        for (start, end), replacements in sorted(names_idx_replacement_str.items(), key=lambda item: item[0][0]):
             parsed_code_list.append(code[last_end:start])
-            parsed_code_list.extend(replacements)
+            if isinstance(replacements, list):
+                parsed_code_list.extend(replacements)
+            else:
+                parsed_code_list.append(replacements)
             last_end = end
         parsed_code_list.append(code[last_end:])
 
