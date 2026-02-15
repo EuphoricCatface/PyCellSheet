@@ -33,12 +33,6 @@ Switches the Sheet Script panel on and off.
 
 ----------
 
-## View → Toggle spell checker
-
-Activates the spell checker if `pyenchant` is installed. Code in the entry line is checked in English language mode. Unknown words are marked with a red curly underline.
-
-----------
-
 ## View → Zoom in
 
 Zoom the grid in.
