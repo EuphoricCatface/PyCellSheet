@@ -29,7 +29,11 @@ Provides:
 """
 
 from collections import defaultdict
+import logging
 from .exceptions import CircularRefError
+
+
+logger = logging.getLogger(__name__)
 
 
 class DependencyGraph:
@@ -75,6 +79,7 @@ class DependencyGraph:
 
         self.dependencies[dependent].add(dependency)
         self.dependents[dependency].add(dependent)
+        logger.debug("Added dependency %s -> %s", dependent, dependency)
 
     def remove_cell(self, key, remove_reverse_edges=False):
         """Remove dependency relationships for a cell
@@ -93,20 +98,26 @@ class DependencyGraph:
 
         """
 
+        logger.debug("Removing cell %s (remove_reverse_edges=%s)",
+                     key, remove_reverse_edges)
+
         # Remove forward edges: this cell no longer depends on anything
         if key in self.dependencies:
             for dependency in self.dependencies[key]:
                 self.dependents[dependency].discard(key)
             del self.dependencies[key]
+            logger.debug("Removed forward edges for cell %s", key)
 
         # Remove reverse edges: nothing depends on this cell anymore
         if remove_reverse_edges and key in self.dependents:
             for dependent in self.dependents[key]:
                 self.dependencies[dependent].discard(key)
             del self.dependents[key]
+            logger.debug("Removed reverse edges for cell %s", key)
 
         # Clear dirty flag for removed cell
         self.dirty.discard(key)
+        logger.debug("Cleared dirty flag for removed cell %s", key)
 
     def check_for_cycles(self, start_key):
         """Check if there are any cycles starting from the given cell
@@ -125,6 +136,7 @@ class DependencyGraph:
 
         """
 
+        logger.debug("Checking for cycles starting from %s", start_key)
         visited = set()
         rec_stack = []  # Recursion stack to track current path
 
@@ -135,6 +147,7 @@ class DependencyGraph:
                 # Found a cycle! Build the cycle path
                 cycle_start_idx = rec_stack.index(key)
                 cycle = rec_stack[cycle_start_idx:] + [key]
+                logger.debug("Cycle detected: %s", cycle)
                 raise CircularRefError(cycle)
 
             if key in visited:
@@ -150,6 +163,7 @@ class DependencyGraph:
             rec_stack.pop()
 
         dfs(start_key)
+        logger.debug("No cycles detected from %s", start_key)
 
     def mark_dirty(self, key):
         """Mark a cell and all its dependents as dirty
@@ -164,9 +178,11 @@ class DependencyGraph:
         """
 
         if key in self.dirty:
+            logger.debug("Cell %s already dirty; skipping", key)
             return  # Already dirty, avoid redundant work
 
         self.dirty.add(key)
+        logger.debug("Marked cell %s dirty", key)
 
         # Propagate to all dependents (cells that depend on this cell)
         dependents = self.dependents.get(key, set())
@@ -188,7 +204,9 @@ class DependencyGraph:
 
         """
 
-        return key in self.dirty
+        dirty = key in self.dirty
+        logger.debug("Dirty check for %s: %s", key, dirty)
+        return dirty
 
     def clear_dirty(self, key):
         """Clear the dirty flag for a cell
@@ -201,6 +219,7 @@ class DependencyGraph:
         """
 
         self.dirty.discard(key)
+        logger.debug("Cleared dirty flag for %s", key)
 
     def get_all_dependencies(self, key):
         """Get all transitive dependencies for a cell
@@ -240,6 +259,7 @@ class DependencyGraph:
                 dfs(dependency)
 
         dfs(key)
+        logger.debug("Transitive dependencies for %s: %s", key, result)
         return result
 
     def get_all_dependents(self, key):
@@ -280,6 +300,7 @@ class DependencyGraph:
                 dfs(dependent)
 
         dfs(key)
+        logger.debug("Transitive dependents for %s: %s", key, result)
         return result
 
     def get_all_dirty(self):
@@ -292,4 +313,6 @@ class DependencyGraph:
 
         """
 
-        return set(self.dirty)
+        all_dirty = set(self.dirty)
+        logger.debug("All dirty cells requested: %s", all_dirty)
+        return all_dirty

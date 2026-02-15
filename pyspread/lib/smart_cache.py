@@ -28,6 +28,11 @@ Provides:
 
 """
 
+import logging
+
+
+logger = logging.getLogger(__name__)
+
 
 class SmartCache:
     """Dependency-aware cache for cell evaluation results
@@ -71,6 +76,7 @@ class SmartCache:
         """
 
         self._cache[key] = value
+        logger.debug("Cache set for %s", key)
 
     def get(self, key):
         """Get a cached value if valid, otherwise return INVALID
@@ -93,9 +99,12 @@ class SmartCache:
         """
 
         if not self.is_valid(key):
+            logger.debug("Cache miss/invalid for %s", key)
             return self.INVALID
 
-        return self._cache.get(key, self.INVALID)
+        value = self._cache.get(key, self.INVALID)
+        logger.debug("Cache hit for %s", key)
+        return value
 
     def is_valid(self, key):
         """Check if a cached value is valid
@@ -118,18 +127,23 @@ class SmartCache:
         """
 
         if key not in self._cache:
+            logger.debug("Cache validity check failed for %s: not cached", key)
             return False
 
         # Check if this cell is dirty
         if self.dep_graph.is_dirty(key):
+            logger.debug("Cache validity check failed for %s: cell is dirty", key)
             return False
 
         # Check if any dependencies are dirty (direct or transitive)
         all_deps = self.dep_graph.get_all_dependencies(key)
         for dep in all_deps:
             if self.dep_graph.is_dirty(dep):
+                logger.debug("Cache validity check failed for %s: dependency %s is dirty",
+                             key, dep)
                 return False
 
+        logger.debug("Cache validity check passed for %s", key)
         return True
 
     def invalidate(self, key, _visited=None, preserve_dependents_cache=False,
@@ -157,15 +171,20 @@ class SmartCache:
             _visited = set()
 
         if key in _visited:
+            logger.debug("Skipping cache invalidation for already visited cell %s", key)
             return
         _visited.add(key)
 
         # Remove from cache
         if _is_root or not preserve_dependents_cache:
             self._cache.pop(key, None)
+            logger.debug("Dropped cache for %s during invalidation", key)
+        else:
+            logger.debug("Preserved cache for dependent cell %s during invalidation", key)
 
         # Mark dirty
         self.dep_graph.mark_dirty(key)
+        logger.debug("Marked %s dirty during cache invalidation", key)
 
         # Recursively invalidate all dependents (so they recalculate automatically)
         dependents = self.dep_graph.dependents.get(key, set())
@@ -178,13 +197,20 @@ class SmartCache:
         """Clear all cache entries"""
 
         self._cache.clear()
+        logger.debug("Cleared all cache entries")
 
     def get_raw(self, key):
         """Return cached value without validity checks"""
 
-        return self._cache.get(key, self.INVALID)
+        value = self._cache.get(key, self.INVALID)
+        if value is self.INVALID:
+            logger.debug("Raw cache miss for %s", key)
+        else:
+            logger.debug("Raw cache hit for %s", key)
+        return value
 
     def drop(self, key):
         """Remove cached value without touching dirty flags"""
 
         self._cache.pop(key, None)
+        logger.debug("Dropped cache entry for %s", key)
