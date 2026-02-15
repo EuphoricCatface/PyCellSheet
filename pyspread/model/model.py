@@ -1495,6 +1495,10 @@ class CodeArray(DataArray):
         except Exception as err:
             return err
 
+        # Rebuild this cell's forward dependency set on each evaluation.
+        # Keep reverse edges so dependents of this cell remain known.
+        self.dep_graph.remove_cell(key)
+
         #  --- Dependency Tracking & Cycle Detection START ---  #
         # Check for circular references before evaluating
         try:
