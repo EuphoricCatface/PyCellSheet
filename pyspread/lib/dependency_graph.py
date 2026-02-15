@@ -61,6 +61,16 @@ class DependencyGraph:
         # Dirty flags: set of cells that need recalculation
         self.dirty = set()
 
+        # Transitive-closure caches to avoid repeated DFS on hot paths.
+        self._deps_closure_cache = {}
+        self._dependents_closure_cache = {}
+
+    def _invalidate_closure_cache(self):
+        """Invalidate cached transitive-closure lookups."""
+
+        self._deps_closure_cache.clear()
+        self._dependents_closure_cache.clear()
+
     def add_dependency(self, dependent, dependency):
         """Add a dependency relationship
 
@@ -79,6 +89,7 @@ class DependencyGraph:
 
         self.dependencies[dependent].add(dependency)
         self.dependents[dependency].add(dependent)
+        self._invalidate_closure_cache()
         logger.debug("Added dependency %s -> %s", dependent, dependency)
 
     def remove_cell(self, key, remove_reverse_edges=False):
@@ -117,6 +128,7 @@ class DependencyGraph:
 
         # Clear dirty flag for removed cell
         self.dirty.discard(key)
+        self._invalidate_closure_cache()
         logger.debug("Cleared dirty flag for removed cell %s", key)
 
     def check_for_cycles(self, start_key):
@@ -243,6 +255,11 @@ class DependencyGraph:
 
         """
 
+        cached = self._deps_closure_cache.get(key)
+        if cached is not None:
+            logger.debug("Transitive dependencies cache hit for %s", key)
+            return set(cached)
+
         result = set()
         visited = set()
 
@@ -259,6 +276,7 @@ class DependencyGraph:
                 dfs(dependency)
 
         dfs(key)
+        self._deps_closure_cache[key] = frozenset(result)
         logger.debug("Transitive dependencies for %s: %s", key, result)
         return result
 
@@ -284,6 +302,11 @@ class DependencyGraph:
 
         """
 
+        cached = self._dependents_closure_cache.get(key)
+        if cached is not None:
+            logger.debug("Transitive dependents cache hit for %s", key)
+            return set(cached)
+
         result = set()
         visited = set()
 
@@ -300,6 +323,7 @@ class DependencyGraph:
                 dfs(dependent)
 
         dfs(key)
+        self._dependents_closure_cache[key] = frozenset(result)
         logger.debug("Transitive dependents for %s: %s", key, result)
         return result
 
