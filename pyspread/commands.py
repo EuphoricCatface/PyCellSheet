@@ -884,6 +884,28 @@ class SetCellTextAlignment(SetCellFormat):
         self.model.emit_data_changed_all()
 
 
+class RenameSheet(QUndoCommand):
+    """Renames a sheet (table tab text)"""
+
+    def __init__(self, grid, sheet_index: int, old_name: str, new_name: str,
+                 description: str):
+        super().__init__(description)
+        self.grid = grid
+        self.sheet_index = sheet_index
+        self.old_name = old_name
+        self.new_name = new_name
+
+    def _apply(self, name: str):
+        self.grid.model.code_array.dict_grid.sheet_names[self.sheet_index] = name
+        self.grid.main_window.table_choice.setTabText(self.sheet_index, name)
+
+    def redo(self):
+        self._apply(self.new_name)
+
+    def undo(self):
+        self._apply(self.old_name)
+
+
 class SetCellRenderer(QUndoCommand):
     """Sets cell renderer in grid
 
