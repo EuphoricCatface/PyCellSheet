@@ -19,11 +19,11 @@ Toolbars contains a sub menu, in which the different toolbars can be switched on
 
 ## View → Entry line
 
-Swiches the entry line on and off.
+Switches the entry line on and off.
 
-## View → Macro panel
+## View → Sheet Script
 
-Swiches the macro panel on and off.
+Switches the Sheet Script panel on and off.
 
 ----------
 
@@ -35,7 +35,7 @@ Swiches the macro panel on and off.
 
 ## View → Toggle spell checker
 
-Activates the spell checker for pyspread >=1.1 if pyenchant is installed. Code in the entry lineis checked in the English language. Words that are unknown are marked with a red curly underline.
+Activates the spell checker if `pyenchant` is installed. Code in the entry line is checked in English language mode. Unknown words are marked with a red curly underline.
 
 ----------
 
@@ -52,4 +52,3 @@ Zoom the grid out.
 Reset the grid zoom level to 100%.
 
 ----------
-

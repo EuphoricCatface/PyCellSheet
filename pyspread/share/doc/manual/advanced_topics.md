@@ -7,9 +7,11 @@ title: Advanced topics
 
 # Advanced topics
 
-## Accessing the current cell from a macro
+## Accessing the current cell from a sheet script helper
 
-The variables X, Y, Z, R, C and T are set to None inside the macro panel. In order to access the row, column or table of the cell that is calling a function inside the macro panel or inside an external library, the respective variables have to be provided as parameters.
+The variables `X`, `Y`, and `Z` are cell-context values. In sheet scripts they
+are not automatically bound to a calling cell. To use caller coordinates in a
+script helper or external library function, pass coordinates as parameters.
 
 ## Conditional formatting
 
@@ -25,7 +27,7 @@ def color(value, condition_func, X, Y, Z):
 
     return value
 ```
-into the macro panel and
+into the Sheet Script panel and
 ```
 color(5, lambda x: x>4, X, Y, Z)
 ```
@@ -36,8 +38,10 @@ If you change the first parameter in the cell's function from 5 into 1 then the 
 ## Adjusting the float accuracy that is displayed in a cell
 
 While one can use the `round` function to adjust accuracy, this may be tedious for larger spreadsheets.
-Therefore, starting with pyspread v 2.3, `class_format_functions` is available. It is a dict that maps a type to a function.
-It should be used in the Macro editor. The following code adjusts `float` output:
+`class_format_functions` is available as a dictionary mapping a type to a
+display-formatting function.
+It should be configured in the Sheet Script panel. The following code adjusts
+`float` output:
 
 ```python
 class_format_functions[float] = lambda x: f"{x:.4f}"
@@ -54,7 +58,8 @@ For arbitrary precision, you may want to try out the [mpmath module](https://pyp
 provides the pretty attribute for human friendly representation.
 
 If you are working with currencies, you may be interested in the [Python Money Class](https://pypi.org/project/money/).
-Putting their currency presets approach, which is stated on their project page, into the macro editor works well for me:
+Putting their currency presets approach, which is stated on their project page,
+into the Sheet Script panel works well:
 
 ```
 class EUR(Money):
@@ -65,7 +70,8 @@ class EUR(Money):
 
 ## Cyclic references
 
-Cyclic references are possible in pyspread. However, recursion depth is limited. Pyspread shows an error when the maximum recursion depth is exceeded. It is strongly advisable to only use cyclic references when either a frozen or a button cell interrupts the cycle. Otherwise, cyclic calculations may lock up pyspread.
+PyCellSheet uses dependency tracking and circular-reference detection. If a
+cycle is created, the cycle is detected and reported as an error.
 
 ## Result stability
 
@@ -73,11 +79,15 @@ Result stability is not guaranteed when redefining global variables because exec
 
 ## Security annoyance when approving files in read only folders
 
-If a pys file is situated in a folder without write and file creation access, the signature file cannot be created. Therefore, the file has to approved each time it is opened.
+If a `.pycs` or `.pycsu` file is located in a folder without write or file
+creation permissions, a signature file cannot be created. Therefore, the file
+must be approved each time it is opened.
 
 ## Handling large amounts of data
 
-While the pyspread main grid may be large, filling many cells may consume considerable amounts of memory. When handling large amounts of data, data should be loaded into one cell. This approach saves memory, Therefore, load all your data in a numpy array that is situated within a cell and work from there.
+While the main grid may be large, filling many cells can consume considerable
+memory. For large datasets, load data into one cell (for example, as a NumPy
+array) and work from there.
 
 ## Substituting pivot tables
 
@@ -85,4 +95,5 @@ In the examples directory, a Pivot table replacement is shown using list compreh
 
 ## Memory consumption for sheets with many matplotlib charts
 
-If there are hundreds of charts in a spreadsheet then pyspread can consume considerable amounts of memory. This is most obvious when printing or when creating PDF files.
+If there are hundreds of charts in a spreadsheet, PyCellSheet may consume
+considerable memory. This is most obvious when printing or creating PDF files.
