@@ -394,6 +394,45 @@ class TestWorkflows:
             panel.current_table = 0
             panel.update_()
 
+    def test_default_sheet_script_template_does_not_trigger_draft_warning(self, monkeypatch):
+        """Untouched default template draft should not prompt warning."""
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_drafts = list(code_array.macros_draft)
+        old_macros = list(code_array.macros)
+
+        class _FailIfCalledDialog:
+            def __init__(self, _parent):
+                raise AssertionError("SheetScriptDraftDialog should not be shown")
+
+        called = {"count": 0}
+
+        def fake_apply_all_sheet_scripts():
+            called["count"] += 1
+            return 0, 0
+
+        try:
+            code_array.macros = ["" for _ in range(code_array.shape[2])]
+            panel.current_table = 0
+            panel.update_()
+
+            monkeypatch.setitem(
+                self.workflows._resolve_unapplied_sheet_script_drafts.__globals__,
+                "SheetScriptDraftDialog",
+                _FailIfCalledDialog,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                                fake_apply_all_sheet_scripts)
+
+            assert self.workflows._resolve_unapplied_sheet_script_drafts()
+            assert called["count"] == 0
+        finally:
+            code_array.macros = old_macros
+            code_array.macros_draft = old_drafts
+            panel.current_table = 0
+            panel.update_()
+
     def test_filepath_open_untrusted_defers_scripts_until_approve(self, tmp_path, monkeypatch):
         """Untrusted loads must stay in safe mode and defer script execution."""
 

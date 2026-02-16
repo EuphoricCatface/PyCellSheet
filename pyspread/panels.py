@@ -104,6 +104,8 @@ class SheetScriptPanel(QDialog):
         self.parent = parent
         self.code_array = code_array
         self.current_table = 0
+        self._implicit_default_draft = self.code_array.macros_draft[0] \
+            if self.code_array.macros_draft else None
 
         self._init_widgets()
         self._layout()
@@ -252,7 +254,19 @@ class SheetScriptPanel(QDialog):
         """Returns whether any sheet has unapplied draft content."""
 
         self.persist_current_draft()
-        return any(draft is not None for draft in self.code_array.macros_draft)
+        for idx, draft in enumerate(self.code_array.macros_draft):
+            if draft is None:
+                continue
+            if self._is_implicit_default_draft(idx, draft):
+                continue
+            if draft != self.code_array.macros[idx]:
+                return True
+        return False
+
+    def _is_implicit_default_draft(self, table: int, draft: str) -> bool:
+        """True for untouched default template drafts."""
+
+        return self.code_array.macros[table] == "" and draft == self._implicit_default_draft
 
     def discard_all_drafts(self):
         """Discard all unapplied drafts across all tables."""
