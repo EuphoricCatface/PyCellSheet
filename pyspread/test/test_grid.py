@@ -1115,7 +1115,11 @@ class TestGridTableModel:
         assert not self.model.code_array.dict_grid.cell_attributes
         assert not self.model.code_array.row_heights
         assert not self.model.code_array.col_widths
-        assert not self.model.code_array.macros
+        tables = self.model.shape[2]
+        assert self.model.code_array.macros == ["" for _ in range(tables)]
+        assert self.model.code_array.macros_draft == [None for _ in range(tables)]
+        assert self.model.code_array.sheet_globals_copyable == [dict() for _ in range(tables)]
+        assert self.model.code_array.sheet_globals_uncopyable == [dict() for _ in range(tables)]
 
 
 class TestGridCellDelegate:

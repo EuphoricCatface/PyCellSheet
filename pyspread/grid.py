@@ -2130,10 +2130,10 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.col_widths.clear()
 
             # Clear macros
-            self.code_array.dict_grid.macros = ["" for _ in range(self.shape[2])]
-            self.code_array.dict_grid.macros_draft = dict()
-            self.code_array.dict_grid.sheet_globals_uncopyable = {i: dict() for i in range(self.shape[2])}
-            self.code_array.dict_grid.sheet_globals_copyable = {i: dict() for i in range(self.shape[2])}
+            self.code_array.macros = ["" for _ in range(self.shape[2])]
+            self.code_array.macros_draft = [None for _ in range(self.shape[2])]
+            self.code_array.sheet_globals_uncopyable = [dict() for _ in range(self.shape[2])]
+            self.code_array.sheet_globals_copyable = [dict() for _ in range(self.shape[2])]
 
 
 class GridCellDelegate(QStyledItemDelegate):
