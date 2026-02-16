@@ -49,6 +49,16 @@ class _DummyWriterCodeArray:
         self.dict_grid = _DummyDictGrid()
         self.dict_grid.sheet_names = sheet_names
         self.dict_grid.macros = macros
+        self.cell_attributes = []
+        self.dict_grid.row_heights = {}
+        self.dict_grid.col_widths = {}
+        self._code = {}
+
+    def __iter__(self):
+        return iter(self._code)
+
+    def __call__(self, key):
+        return self._code[key]
 
 
 def test_pycs2sheet_names_sanitizes_and_uniquifies():
@@ -189,3 +199,24 @@ def test_writer_macros_section_uses_normalized_sheet_names():
     assert macros_lines[0].startswith("(macro:'Main') 1\n")
     assert macros_lines[1].startswith("(macro:'Sheet 1') 1\n")
     assert macros_lines[2].startswith("(macro:'Main_1') 1\n")
+
+
+def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
+    sys.path.insert(0, pyspread_path)
+    from interfaces.pycs import PycsWriter
+    sys.path.pop(0)
+
+    source = _DummyWriterCodeArray(
+        ["Revenue", "Revenue", " "],
+        ["a = 1", "b = 2", "c = 3"],
+    )
+    source._code[(0, 0, 0)] = "'text'"
+
+    serialized = "".join(list(PycsWriter(source))).encode("utf-8")
+
+    target = _DummyCodeArray(3)
+    reader = PycsReader(BytesIO(serialized), target)
+    list(reader)
+
+    assert target.dict_grid.sheet_names == ["Revenue", "Revenue_1", "Sheet 2"]
+    assert target.macros == ["a = 1", "b = 2", "c = 3"]
