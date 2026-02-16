@@ -56,6 +56,7 @@ class Settings:
     """Simulates settings class"""
 
     timeout = 1000
+    recalc_mode = "auto"
 
 
 class TestCellAttributes(object):
@@ -159,6 +160,26 @@ class TestCellAttributes(object):
         result_cas = CellAttributes()
         result_cas.append(ca3)
         assert self.cell_attr.for_table(2) == result_cas
+
+
+def test_sheet_script_alias_property():
+    """sheet_scripts aliases macros."""
+
+    code_array = CodeArray((2, 2, 2), Settings())
+    code_array.sheet_scripts = ["a = 1", "b = 2"]
+
+    assert code_array.macros == ["a = 1", "b = 2"]
+    assert code_array.sheet_scripts == ["a = 1", "b = 2"]
+
+
+def test_execute_sheet_script_alias():
+    """execute_sheet_script delegates to execute_macros."""
+
+    code_array = CodeArray((2, 2, 1), Settings())
+    code_array.sheet_scripts = ["x = 7"]
+    code_array.execute_sheet_script(0)
+
+    assert code_array._eval_cell((0, 0, 0), "x") == 7
 
 
 class TestKeyValueStore(object):

@@ -637,6 +637,18 @@ class DataArray:
         self.dict_grid.macros = macros
 
     @property
+    def sheet_scripts(self) -> list[str]:
+        """Alias of `macros` with Sheet Script terminology."""
+
+        return self.macros
+
+    @sheet_scripts.setter
+    def sheet_scripts(self, sheet_scripts: list[str]):
+        """Alias setter of `macros` with Sheet Script terminology."""
+
+        self.macros = sheet_scripts
+
+    @property
     def exp_parser_code(self) -> str:
         """macros interface to dict_grid"""
 
@@ -1740,6 +1752,11 @@ class CodeArray(DataArray):
                              f"but is unknown if it can be safely used without doing so.\n")
                 self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
+
+    def execute_sheet_script(self, current_table) -> Tuple[str, str]:
+        """Alias of execute_macros() with Sheet Script terminology."""
+
+        return self.execute_macros(current_table)
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
                      startkey: Tuple[int, int, int],
