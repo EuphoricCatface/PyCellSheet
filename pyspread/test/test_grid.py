@@ -33,9 +33,9 @@ import sys
 
 import pytest
 
-from PyQt6.QtCore import QItemSelectionModel, QItemSelection, Qt
+from PyQt6.QtCore import QItemSelectionModel, QItemSelection, Qt, QRectF
 from PyQt6.QtWidgets import QApplication, QAbstractItemView
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtGui import QFont, QColor, QImage, QPainter
 
 
 PYSPREADPATH = abspath(join(dirname(__file__) + "/.."))
@@ -63,6 +63,7 @@ with insert_path(PYSPREADPATH):
     from ..commands import MakeButtonCell, RemoveButtonCell
     from ..lib.selection import Selection
     from ..interfaces.pycs import qt62qt5_fontweights
+    from ..grid import Icon
 
 
 app = QApplication.instance()
@@ -1124,6 +1125,49 @@ class TestGridTableModel:
 
 class TestGridCellDelegate:
     """Unit tests for GridCellDelegate in grid.py"""
+
+    grid = main_window.grid
+    delegate = grid.itemDelegate()
+
+    def test_render_dirty_icon_skips_small_cells(self, monkeypatch):
+        """Dirty icon should not paint when the cell is too small."""
+
+        calls = {"count": 0}
+
+        class _DummyIcon:
+            def paint(self, *_args, **_kwargs):
+                calls["count"] += 1
+
+        monkeypatch.setattr(Icon, "refresh", _DummyIcon())
+
+        image = QImage(16, 16, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_dirty_icon(painter, QRectF(0, 0, 9, 9))
+        finally:
+            painter.end()
+
+        assert calls["count"] == 0
+
+    def test_render_dirty_icon_paints_normal_cells(self, monkeypatch):
+        """Dirty icon should paint once when the cell has enough room."""
+
+        calls = {"count": 0}
+
+        class _DummyIcon:
+            def paint(self, *_args, **_kwargs):
+                calls["count"] += 1
+
+        monkeypatch.setattr(Icon, "refresh", _DummyIcon())
+
+        image = QImage(48, 24, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_dirty_icon(painter, QRectF(0, 0, 48, 24))
+        finally:
+            painter.end()
+
+        assert calls["count"] == 1
 
 
 class TestTableChoice:
