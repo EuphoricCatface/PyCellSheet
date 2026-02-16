@@ -54,10 +54,12 @@ from typing import Any, BinaryIO, Callable, Iterable, Tuple
 
 try:
     from pyspread.lib.attrdict import AttrDict
+    from pyspread.lib.sheet_name import sanitize_loaded_sheet_name
     from pyspread.lib.selection import Selection
     from pyspread.model.model import CellAttribute, CodeArray
 except ImportError:
     from lib.attrdict import AttrDict
+    from lib.sheet_name import sanitize_loaded_sheet_name
     from lib.selection import Selection
     from model.model import CellAttribute, CodeArray
 
@@ -156,6 +158,9 @@ class PycsReader:
         for cell_attribute in self.cell_attributes_postfixes:
             self.code_array.cell_attributes.append(cell_attribute)
 
+        # Ensure sheet_names length always matches table count after load.
+        self._finalize_sheet_names()
+
     # Decorators
 
     def version_handler(method: Callable) -> Callable:
@@ -228,7 +233,7 @@ class PycsReader:
 
         """
 
-        sheet_name = line.rstrip('\n')
+        raw_sheet_name = line.rstrip('\n')
         # Initialize sheet_names list if first call in this section
         if not hasattr(self, '_sheet_names_initialized'):
             if hasattr(self.code_array.dict_grid, 'sheet_names'):
@@ -236,7 +241,34 @@ class PycsReader:
             self._sheet_names_initialized = True
         # Append to sheet_names list (order matters)
         if hasattr(self.code_array.dict_grid, 'sheet_names'):
-            self.code_array.dict_grid.sheet_names.append(sheet_name)
+            sheet_names = self.code_array.dict_grid.sheet_names
+            # Ignore extra names beyond table count.
+            if len(sheet_names) >= self.code_array.shape[2]:
+                return
+            sheet_name = sanitize_loaded_sheet_name(
+                raw_sheet_name,
+                sheet_names,
+                fallback_index=len(sheet_names),
+            )
+            sheet_names.append(sheet_name)
+
+    def _finalize_sheet_names(self):
+        """Normalize sheet names count and fill missing names deterministically."""
+
+        sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+        if sheet_names is None:
+            return
+
+        expected_count = self.code_array.shape[2]
+        normalized = []
+
+        for i in range(expected_count):
+            raw = sheet_names[i] if i < len(sheet_names) else ""
+            normalized.append(
+                sanitize_loaded_sheet_name(raw, normalized, fallback_index=i)
+            )
+
+        self.code_array.dict_grid.sheet_names = normalized
 
     def _pycs2code(self, line: str):
         """Updates code in pycs code_array
