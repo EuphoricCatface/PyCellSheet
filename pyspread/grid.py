@@ -75,6 +75,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from pyspread import commands
+    from pyspread.icons import Icon
     from pyspread.dialogs import DiscardDataDialog
     from pyspread.grid_renderer import (painter_save, CellRenderer,
                                         CellEdgeRenderer,
@@ -101,6 +102,7 @@ try:
     from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput, Formatter
 except ImportError:
     import commands
+    from icons import Icon
     from dialogs import DiscardDataDialog
     from grid_renderer import (painter_save, CellRenderer, CellEdgeRenderer,
                                QColorCache, BorderWidthBottomCache,
@@ -2490,33 +2492,34 @@ class GridCellDelegate(QStyledItemDelegate):
 
         self._render_svg(painter, rect, index, svg_str=svg_str)
 
-    def _render_dirty_icon(self, painter: QPainter, rect: QRectF,
-                          index: QModelIndex):
+    def _render_dirty_icon(self, painter: QPainter, rect: QRectF):
         """Renders refresh icon on the right side for dirty cells
 
         :param painter: Painter with which icon is rendered
         :param rect: Cell rect of the cell to be painted
-        :param index: Index of cell for which icon is rendered
 
         """
-        try:
-            from pyspread.icons import Icon
-        except ImportError:
-            from icons import Icon
+        min_cell_size = min(rect.width(), rect.height())
+        if min_cell_size < 10:
+            return
 
-        # Icon size (16x16 pixels, or scaled by zoom)
-        icon_size = 16 * self.grid.zoom
-        padding = 4 * self.grid.zoom  # Padding from right edge
+        padding = max(1.0, min(4.0, min_cell_size * 0.08))
+        icon_size = max(10.0, min(16.0, min_cell_size * 0.5))
 
-        # Position icon on the right side
         icon_x = rect.right() - icon_size - padding
-        icon_y = rect.center().y() - icon_size / 2  # Vertically centered
-
-        # Create icon rect
+        icon_y = rect.top() + padding
         icon_rect = QRectF(icon_x, icon_y, icon_size, icon_size)
+        badge_rect = icon_rect.adjusted(-1, -1, 1, 1)
 
-        # Render the icon
-        Icon.refresh.paint(painter, icon_rect.toRect(), Qt.AlignmentFlag.AlignCenter)
+        with painter_save(painter):
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 180))
+            painter.drawRoundedRect(badge_rect, 2.5, 2.5)
+            Icon.refresh.paint(
+                painter,
+                icon_rect.toAlignedRect(),
+                Qt.AlignmentFlag.AlignCenter
+            )
 
     def paint_(self, painter: QPainter, rect: QRectF,
                option: QStyleOptionViewItem, index: QModelIndex):
@@ -2562,7 +2565,7 @@ class GridCellDelegate(QStyledItemDelegate):
         is_dirty = self.code_array.dep_graph.is_dirty(key)
         if is_dirty:
             logger.debug("paint_() rendering icon for dirty cell %s", key)
-            self._render_dirty_icon(painter, rect, index)
+            self._render_dirty_icon(painter, rect)
 
         option.rect = old_rect
 
