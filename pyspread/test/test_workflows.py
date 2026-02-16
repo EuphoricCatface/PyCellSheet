@@ -110,18 +110,26 @@ class TestWorkflows:
         assert main_window.windowTitle() == title
 
     param_file_new = [
-        ((1000, 100, 3), (1000, 100, 3), None),
-        ((100, 100, 3), (100, 100, 3), None),
+        ((1000, 100, 3), (1000, 100, 3), None, True),
+        ((100, 100, 3), (100, 100, 3), None, True),
         ((10000000, 100, 3), (1000, 100, 3),
-         "Error: Grid shape (10000000, 100, 3) exceeds (1000000, 100000, 100)."
-         ),
-        (None, (1000, 100, 3), None),
+         "Error: Grid shape (10000000, 100, 3) exceeds (1000000, 100000, 100).",
+         False),
+        (None, (1000, 100, 3), None, False),
     ]
 
-    @pytest.mark.parametrize("shape, res, msg", param_file_new)
-    def test_file_new(self, shape, res, msg, monkeypatch):
+    @pytest.mark.parametrize("shape, res, msg, should_apply", param_file_new)
+    def test_file_new(self, shape, res, msg, should_apply, monkeypatch):
         """Unit test for file_new"""
 
+        called = {"count": 0}
+
+        def fake_apply_all_sheet_scripts():
+            called["count"] += 1
+            return 0, 0
+
+        monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                            fake_apply_all_sheet_scripts)
         monkeypatch.setattr(GridShapeDialog, "shape", shape)
         self.workflows.file_new()
 
@@ -130,12 +138,67 @@ class TestWorkflows:
         assert main_window.settings.last_file_input_path == Path.home()
         assert main_window.settings.changed_since_save is False
         assert main_window.safe_mode is False
+        expected_calls = 1 if should_apply else 0
+        assert called["count"] == expected_calls
         if msg:
             assert main_window.statusBar().currentMessage() == msg
 
         monkeypatch.setattr(GridShapeDialog, "shape",
                             main_window.settings.shape)
         self.workflows.file_new()
+
+    def test_apply_all_sheet_scripts_executes_each_table(self, monkeypatch):
+        """apply_all_sheet_scripts should run one script per table."""
+
+        code_array = main_window.grid.model.code_array
+        old_shape = code_array.shape
+        old_safe_mode = main_window.safe_mode
+
+        try:
+            main_window.safe_mode = False
+            main_window.grid.model.shape = (old_shape[0], old_shape[1], 3)
+            called_tables = []
+
+            def fake_execute_sheet_script(table):
+                called_tables.append(table)
+                return "", ""
+
+            monkeypatch.setattr(code_array, "execute_sheet_script",
+                                fake_execute_sheet_script)
+
+            executed, errors = self.workflows.apply_all_sheet_scripts()
+
+            assert called_tables == [0, 1, 2]
+            assert executed == 3
+            assert errors == 0
+        finally:
+            main_window.grid.model.shape = old_shape
+            main_window.safe_mode = old_safe_mode
+
+    def test_apply_all_sheet_scripts_skips_in_safe_mode(self, monkeypatch):
+        """apply_all_sheet_scripts should not execute anything in safe mode."""
+
+        code_array = main_window.grid.model.code_array
+        old_safe_mode = main_window.safe_mode
+
+        try:
+            main_window.safe_mode = True
+            called = {"count": 0}
+
+            def fake_execute_sheet_script(table):
+                called["count"] += 1
+                return "", ""
+
+            monkeypatch.setattr(code_array, "execute_sheet_script",
+                                fake_execute_sheet_script)
+
+            executed, errors = self.workflows.apply_all_sheet_scripts()
+
+            assert called["count"] == 0
+            assert executed == 0
+            assert errors == 0
+        finally:
+            main_window.safe_mode = old_safe_mode
 
     param_count_file_lines = [
         ("", 0, "counttest.txt", None),
