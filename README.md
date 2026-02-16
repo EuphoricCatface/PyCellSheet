@@ -34,3 +34,16 @@ The core design choice is copy-priority semantics: cell references return deep-c
 pip install -r requirements.txt
 python -m pyspread
 ```
+
+## Testing
+
+```bash
+# Core suite (current interpreter)
+QT_QPA_PLATFORM=offscreen pytest -q
+
+# Multi-version gate (local, if interpreters are installed)
+tox -e py310,py311,py312,py313,py314
+
+# Optional dependency coverage (latest line)
+tox -e py314-optional
+```
