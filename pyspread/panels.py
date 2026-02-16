@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -34,7 +35,7 @@ from traceback import print_exception
 from PyQt6.QtCore import Qt, pyqtProperty, QModelIndex
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QSplitter
-from PyQt6.QtWidgets import QTextEdit, QLabel
+from PyQt6.QtWidgets import QTextEdit, QLabel, QWidget
 
 try:
     from pyspread.lib.spelltextedit import SpellTextEdit
@@ -51,12 +52,17 @@ class SheetScriptPanel(QDialog):
 
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.setText("Draft")
             self.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             self._applied = True
-            self.stylesheet_update()
+            self._update_text_and_style()
             if parent:
                 parent.installEventFilter(self)
+
+        def _update_text_and_style(self):
+            self.setText("Applied" if self._applied else "Draft")
+            self.setToolTip("Applied" if self._applied
+                            else "Draft changes pending")
+            self.stylesheet_update()
 
         def stylesheet_update(self):
             # Qt does not guarantee the applying of new style
@@ -89,11 +95,8 @@ class SheetScriptPanel(QDialog):
 
         @applied.setter
         def applied(self, applied):
-            if self._applied == applied:
-                return
-            self._applied = applied
-            self.setText("Applied" if applied else "--Draft--")
-            self.stylesheet_update()
+            self._applied = bool(applied)
+            self._update_text_and_style()
 
     def __init__(self, parent, code_array):
         super().__init__()
@@ -118,32 +121,71 @@ class SheetScriptPanel(QDialog):
 
         font_family = self.parent.settings.macro_editor_font_family
         self.macro_editor = SpellTextEdit(self, font_family=font_family)
+        self.macro_editor.setPlaceholderText(
+            "Sheet Script draft. Press Apply to execute and store for this sheet."
+        )
         self.applied_indicator = SheetScriptPanel.AppliedIndicator(self.macro_editor)
         self.macro_editor.textChanged.connect(
-            lambda: self.applied_indicator.setProperty("applied", False)
+            lambda: setattr(self.applied_indicator, "applied", False)
         )
 
         self.result_viewer = QTextEdit(self)
         self.result_viewer.setReadOnly(True)
+        self.result_viewer.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.result_viewer.setPlaceholderText(
+            "Applied output and errors appear here."
+        )
+        self.result_viewer.setFontFamily(font_family)
 
         self.splitter = QSplitter(Qt.Orientation.Vertical, self)
 
-        self.splitter.addWidget(self.macro_editor)
-        self.splitter.addWidget(self.result_viewer)
+        self.editor_label = QLabel("Script Editor")
+        self.editor_label.setStyleSheet("font-weight: bold;")
+        self.editor_section = QWidget(self)
+        self.editor_layout = QVBoxLayout(self.editor_section)
+        self.editor_layout.setContentsMargins(0, 0, 0, 0)
+        self.editor_layout.setSpacing(4)
+        self.editor_layout.addWidget(self.editor_label)
+        self.editor_layout.addWidget(self.macro_editor)
+
+        self.output_label = QLabel("Apply Output")
+        self.output_label.setStyleSheet("font-weight: bold;")
+        self.output_section = QWidget(self)
+        self.output_layout = QVBoxLayout(self.output_section)
+        self.output_layout.setContentsMargins(0, 0, 0, 0)
+        self.output_layout.setSpacing(4)
+        self.output_layout.addWidget(self.output_label)
+        self.output_layout.addWidget(self.result_viewer)
+
+        self.splitter.addWidget(self.editor_section)
+        self.splitter.addWidget(self.output_section)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.setHandleWidth(8)
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 2)
 
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Apply |
             QDialogButtonBox.StandardButton.Reset
         )
+        self.button_box.button(
+            QDialogButtonBox.StandardButton.Apply
+        ).setText("Apply Script")
+        self.button_box.button(
+            QDialogButtonBox.StandardButton.Reset
+        ).setText("Revert Draft")
 
     def _layout(self):
         """Layout dialog widgets"""
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(6)
         layout.addWidget(self.splitter)
         layout.addWidget(self.button_box)
 
         self.setLayout(layout)
+        self.splitter.setSizes([380, 220])
 
     def _is_invalid_code(self, current_table) -> str:
         """Preliminary code check
@@ -179,7 +221,7 @@ class SheetScriptPanel(QDialog):
         else:
             self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
             self.code_array.macros_draft[self.current_table] = None
-            self.applied_indicator.setProperty("applied", True)
+            self.applied_indicator.applied = True
             self.parent.grid.model.emit_data_changed_all()
 
         self.parent.grid.gui_update()
@@ -190,13 +232,13 @@ class SheetScriptPanel(QDialog):
 
         if self.code_array.macros_draft[self.current_table] is not None:
             self.macro_editor.setPlainText(self.code_array.macros_draft[self.current_table])
-            self.applied_indicator.setProperty("applied", False)
+            self.applied_indicator.applied = False
         else:
             self.macro_editor.setPlainText(self.code_array.macros[self.current_table])
-            self.applied_indicator.setProperty("applied", True)
+            self.applied_indicator.applied = True
 
     def update_current_table(self, current):
-        if not self.applied_indicator.property("applied"):
+        if not self.applied_indicator.applied:
             self.code_array.macros_draft[self.current_table] = self.macro_editor.toPlainText()
         self.current_table = current
         self.update_()
@@ -221,4 +263,4 @@ class SheetScriptPanel(QDialog):
     def on_reset(self):
         self.code_array.macros_draft[self.current_table] = None
         self.macro_editor.setPlainText(self.code_array.macros[self.current_table])
-        self.applied_indicator.setProperty("applied", True)
+        self.applied_indicator.applied = True
