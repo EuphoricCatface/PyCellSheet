@@ -184,6 +184,21 @@ def test_execute_sheet_script_alias():
     assert code_array._eval_cell((0, 0, 0), "x") == 7
 
 
+def test_sheet_scripts_alias_tracks_shape_resize():
+    """sheet_scripts should stay aligned with macros when table count changes."""
+
+    code_array = CodeArray((2, 2, 2), Settings())
+    code_array.sheet_scripts = ["a = 1", "b = 2"]
+
+    code_array.shape = (2, 2, 3)
+    assert len(code_array.sheet_scripts) == 3
+    assert len(code_array.macros) == 3
+
+    code_array.shape = (2, 2, 1)
+    assert code_array.sheet_scripts == ["a = 1"]
+    assert code_array.macros == ["a = 1"]
+
+
 class TestKeyValueStore(object):
     """Unit tests for KeyValueStore"""
 
@@ -563,6 +578,22 @@ class TestCodeArray(object):
             assert isinstance(result, res)
         else:
             assert result == res
+
+    def test_legacy_slice_replacement_helpers(self):
+        """Reference helpers replace legacy slice-style references."""
+
+        self.code_array[0, 0, 0] = "2"
+        self.code_array[1, 0, 0] = "C('A1')"
+        self.code_array[2, 0, 0] = "sum(R('A1', 'A2').flatten())"
+        self.code_array[3, 0, 0] = "CR('A1')"
+        self.code_array[4, 0, 0] = "S[0, 0, 0]"
+
+        assert self.code_array._eval_cell((1, 0, 0), self.code_array((1, 0, 0))) == 2
+        assert self.code_array._eval_cell((2, 0, 0), self.code_array((2, 0, 0))) == 4
+        assert self.code_array._eval_cell((3, 0, 0), self.code_array((3, 0, 0))) == 2
+
+        legacy = self.code_array._eval_cell((4, 0, 0), self.code_array((4, 0, 0)))
+        assert isinstance(legacy, NameError)
 
     def test_execute_macros(self):
         """Unit test for execute_macros"""

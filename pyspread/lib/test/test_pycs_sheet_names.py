@@ -60,6 +60,14 @@ class _DummyCodeArray:
         self.col_widths = {}
         self.cell_attributes = []
 
+    @property
+    def sheet_scripts(self):
+        return self.macros
+
+    @sheet_scripts.setter
+    def sheet_scripts(self, value):
+        self.macros = value
+
 
 class _DummyWriterCodeArray:
     def __init__(self, sheet_names, macros):
@@ -226,3 +234,17 @@ def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
 
     assert target.dict_grid.sheet_names == ["Revenue", "Revenue_1", "Sheet 2"]
     assert target.macros == ["a = 1", "b = 2", "c = 3"]
+
+
+def test_reader_macros_are_visible_via_sheet_scripts_alias():
+    source = _DummyWriterCodeArray(
+        ["Main"],
+        ["x = 9"],
+    )
+
+    serialized = "".join(list(PycsWriter(source))).encode("utf-8")
+    target = _DummyCodeArray(1)
+    list(PycsReader(BytesIO(serialized), target))
+
+    assert target.macros == ["x = 9"]
+    assert target.sheet_scripts == ["x = 9"]
