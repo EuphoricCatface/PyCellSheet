@@ -50,7 +50,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
 
 from lib.attrdict import AttrDict
 from lib.selection import Selection
-from lib.pycellsheet import EmptyCell
+from lib.pycellsheet import EmptyCell, ExpressionParser, PythonCode
 sys.path.pop(0)
 
 
@@ -358,6 +358,13 @@ class TestDataArray(object):
         cell_attributes.append(attr)
 
         assert self.data_array.cell_attributes == cell_attributes
+
+    def test_default_expression_parser_mode_contract(self):
+        """DataArray currently defaults to the Mixed parser workaround."""
+
+        assert self.data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Mixed"]
+        assert self.data_array.exp_parser.parse("'hello") == "hello"
+        assert self.data_array.exp_parser.parse("1 + 2") == PythonCode("1 + 2")
 
     param_adjust_cell_attributes = [
         (0, 5, 0, (4, 3, 0), (9, 3, 0)),
