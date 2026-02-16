@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -250,8 +251,14 @@ class MainWindow(QMainWindow):
         self.sheet_script_dock = QDockWidget("Sheet Script", self)
         self.sheet_script_dock.setObjectName("Sheet Script Panel")
         self.sheet_script_dock.setWidget(self.sheet_script_panel)
+        self.sheet_script_dock.setMinimumWidth(320)
+        self.sheet_script_dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea |
+            Qt.DockWidgetArea.RightDockWidgetArea
+        )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,
                            self.sheet_script_dock)
+        self.resizeDocks([self.sheet_script_dock], [360], Qt.Orientation.Horizontal)
 
         self.central_layout = QVBoxLayout(self.main_panel)
         self._layout()
@@ -297,7 +304,7 @@ class MainWindow(QMainWindow):
     def eventFilter(self, source: QWidget, event: QEvent) -> bool:
         """Overloaded event filter for handling QDockWidget close events
 
-        Updates the menu if the macro panel is closed.
+        Updates the menu when dock widgets are closed.
 
         :param source: Source widget of event
         :param event: Any QEvent
@@ -379,8 +386,7 @@ class MainWindow(QMainWindow):
 
         This triggers the safe_mode icon in the statusbar.
 
-        If safe_mode changes from True to False then caches are cleared and
-        macros are executed.
+        Entering/exiting safe mode only updates execution state and UI badges.
 
         :param value: Safe mode
 
@@ -399,8 +405,6 @@ class MainWindow(QMainWindow):
             self.safe_mode_widget.hide()
             # Disable approval menu entry
             self.main_window_actions.approve.setEnabled(False)
-            # Execute macros
-            self.sheet_script_panel.on_apply()
 
     def on_print(self):
         """Print event handler"""
@@ -519,20 +523,19 @@ class MainWindow(QMainWindow):
         """Recalculate dirty cells event handler (F9 shortcut)"""
 
         num_recalculated = self.grid.model.code_array.recalculate_dirty()
-
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} dirty cells", 2000
-            )
-        else:
-            self.statusBar().showMessage("No dirty cells to recalculate", 2000)
+        self._show_recalc_status("dirty", num_recalculated)
 
     def on_toggle_auto_recalculate(self, toggled: bool):
         """Auto recalculate toggle event handler"""
 
         self.settings.recalc_mode = "auto" if toggled else "manual"
         self.update_action_toggles()
+        mode_label = "enabled" if toggled else "disabled"
+        self.statusBar().showMessage(
+            f"Automatic recalculation {mode_label}", 2500
+        )
         if self._loading:
             return
         if toggled:
@@ -549,6 +552,32 @@ class MainWindow(QMainWindow):
             )
         )
 
+    def _show_recalc_status(self, scope: str, count: int):
+        """Show standardized recalc status message with scope and count"""
+
+        scope_labels = {
+            "dirty": "Dirty cells",
+            "current": "Current cell",
+            "ancestors": "Current cell + ancestors",
+            "children": "Current cell + children",
+            "workspace": "Entire workspace",
+        }
+        scope_label = scope_labels.get(scope, scope)
+        mode_label = "Auto" if self.settings.recalc_mode == "auto" else "Manual"
+
+        if count == 0:
+            self.statusBar().showMessage(
+                f"No cells needed recalculation (scope: {scope_label}, mode: {mode_label})",
+                4000
+            )
+            return
+
+        noun = "cell" if count == 1 else "cells"
+        self.statusBar().showMessage(
+            f"Recalculated {count} {noun} (scope: {scope_label}, mode: {mode_label})",
+            3500
+        )
+
     def on_recalculate_cell_only(self):
         """Recalculate current cell only"""
 
@@ -557,9 +586,7 @@ class MainWindow(QMainWindow):
         )
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage("Recalculated current cell", 2000)
-        else:
-            self.statusBar().showMessage("No cell to recalculate", 2000)
+        self._show_recalc_status("current", num_recalculated)
 
     def on_recalculate_ancestors(self):
         """Recalculate current cell and its ancestors"""
@@ -569,11 +596,7 @@ class MainWindow(QMainWindow):
         )
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} cells (ancestors)", 2000
-            )
-        else:
-            self.statusBar().showMessage("No cells to recalculate", 2000)
+        self._show_recalc_status("ancestors", num_recalculated)
 
     def on_recalculate_children(self):
         """Recalculate current cell and its children"""
@@ -583,11 +606,7 @@ class MainWindow(QMainWindow):
         )
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} cells (children)", 2000
-            )
-        else:
-            self.statusBar().showMessage("No cells to recalculate", 2000)
+        self._show_recalc_status("children", num_recalculated)
 
     def on_recalculate_all(self):
         """Recalculate all cells in the workspace"""
@@ -595,17 +614,14 @@ class MainWindow(QMainWindow):
         num_recalculated = self.grid.model.code_array.recalculate_all()
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} cells (workspace)", 2000
-            )
-        else:
-            self.statusBar().showMessage("No cells to recalculate", 2000)
+        self._show_recalc_status("workspace", num_recalculated)
 
     def on_approve(self):
         """Approve event handler"""
 
         if ApproveWarningDialog(self).choice:
             self.safe_mode = False
+            self.workflows.apply_all_sheet_scripts()
 
     def on_preferences(self):
         """Preferences event handler (:class:`dialogs.PreferencesDialog`) """

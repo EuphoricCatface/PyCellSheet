@@ -150,31 +150,35 @@ class DependencyGraph:
 
         logger.debug("Checking for cycles starting from %s", start_key)
         visited = set()
-        rec_stack = []  # Recursion stack to track current path
+        rec_stack = []
+        rec_stack_set = set()
 
-        def dfs(key):
-            """DFS helper that returns True if cycle found"""
+        stack = [(start_key, iter(self.dependencies.get(start_key, set())))]
+        while stack:
+            key, iterator = stack[-1]
 
-            if key in rec_stack:
-                # Found a cycle! Build the cycle path
-                cycle_start_idx = rec_stack.index(key)
-                cycle = rec_stack[cycle_start_idx:] + [key]
+            if key not in visited:
+                visited.add(key)
+                rec_stack.append(key)
+                rec_stack_set.add(key)
+
+            try:
+                dependency = next(iterator)
+            except StopIteration:
+                stack.pop()
+                rec_stack.pop()
+                rec_stack_set.remove(key)
+                continue
+
+            if dependency in rec_stack_set:
+                cycle_start_idx = rec_stack.index(dependency)
+                cycle = rec_stack[cycle_start_idx:] + [dependency]
                 logger.debug("Cycle detected: %s", cycle)
                 raise CircularRefError(cycle)
 
-            if key in visited:
-                return  # Already explored this path
+            if dependency not in visited:
+                stack.append((dependency, iter(self.dependencies.get(dependency, set()))))
 
-            visited.add(key)
-            rec_stack.append(key)
-
-            # Visit all dependencies (cells this cell depends on)
-            for dependency in self.dependencies.get(key, set()):
-                dfs(dependency)
-
-            rec_stack.pop()
-
-        dfs(start_key)
         logger.debug("No cycles detected from %s", start_key)
 
     def mark_dirty(self, key):
@@ -189,17 +193,16 @@ class DependencyGraph:
 
         """
 
-        if key in self.dirty:
-            logger.debug("Cell %s already dirty; skipping", key)
-            return  # Already dirty, avoid redundant work
+        stack = [key]
+        while stack:
+            current = stack.pop()
+            if current in self.dirty:
+                logger.debug("Cell %s already dirty; skipping", current)
+                continue
 
-        self.dirty.add(key)
-        logger.debug("Marked cell %s dirty", key)
-
-        # Propagate to all dependents (cells that depend on this cell)
-        dependents = self.dependents.get(key, set())
-        for dependent in dependents:
-            self.mark_dirty(dependent)  # Recursive propagation
+            self.dirty.add(current)
+            logger.debug("Marked cell %s dirty", current)
+            stack.extend(self.dependents.get(current, set()))
 
     def is_dirty(self, key):
         """Check if a cell is marked dirty
@@ -261,21 +264,17 @@ class DependencyGraph:
             return set(cached)
 
         result = set()
-        visited = set()
-
-        def dfs(current_key):
-            """DFS to collect all transitive dependencies"""
-
-            if current_key in visited:
-                return
-
-            visited.add(current_key)
-
+        visited = {key}
+        stack = [key]
+        while stack:
+            current_key = stack.pop()
             for dependency in self.dependencies.get(current_key, set()):
+                if dependency in visited:
+                    continue
+                visited.add(dependency)
                 result.add(dependency)
-                dfs(dependency)
+                stack.append(dependency)
 
-        dfs(key)
         self._deps_closure_cache[key] = frozenset(result)
         logger.debug("Transitive dependencies for %s: %s", key, result)
         return result
@@ -308,21 +307,17 @@ class DependencyGraph:
             return set(cached)
 
         result = set()
-        visited = set()
-
-        def dfs(current_key):
-            """DFS to collect all transitive dependents"""
-
-            if current_key in visited:
-                return
-
-            visited.add(current_key)
-
+        visited = {key}
+        stack = [key]
+        while stack:
+            current_key = stack.pop()
             for dependent in self.dependents.get(current_key, set()):
+                if dependent in visited:
+                    continue
+                visited.add(dependent)
                 result.add(dependent)
-                dfs(dependent)
+                stack.append(dependent)
 
-        dfs(key)
         self._dependents_closure_cache[key] = frozenset(result)
         logger.debug("Transitive dependents for %s: %s", key, result)
         return result

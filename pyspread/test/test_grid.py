@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -33,9 +34,9 @@ import sys
 
 import pytest
 
-from PyQt6.QtCore import QItemSelectionModel, QItemSelection
+from PyQt6.QtCore import QItemSelectionModel, QItemSelection, Qt, QRectF
 from PyQt6.QtWidgets import QApplication, QAbstractItemView
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtGui import QFont, QColor, QImage, QPainter
 
 
 PYSPREADPATH = abspath(join(dirname(__file__) + "/.."))
@@ -63,6 +64,7 @@ with insert_path(PYSPREADPATH):
     from ..commands import MakeButtonCell, RemoveButtonCell
     from ..lib.selection import Selection
     from ..interfaces.pycs import qt62qt5_fontweights
+    from ..grid import Icon
 
 
 app = QApplication.instance()
@@ -985,6 +987,30 @@ class TestGridTableModel:
         index = Index(row, column)
         assert self.model.code(index) == res
 
+    def test_set_data_emits_dirty_dependent_in_active_table(self):
+        """Dirty dependents in the active table should be repainted on edit."""
+
+        emitted = []
+
+        def collect(top_left, _bottom_right):
+            emitted.append((top_left.row(), top_left.column()))
+
+        self.model.dataChanged.connect(collect)
+        try:
+            index = self.model.index(0, 0)
+            edited_key = self.model.current(index)
+            dirty_key = (1, 1, edited_key[2])
+            self.model.code_array.dep_graph.dirty.clear()
+            self.model.code_array.dep_graph.dirty.add(dirty_key)
+
+            self.model.setData(index, "123", Qt.ItemDataRole.EditRole)
+        finally:
+            self.model.dataChanged.disconnect(collect)
+            self.model.code_array.dep_graph.dirty.clear()
+
+        assert (0, 0) in emitted
+        assert (1, 1) in emitted
+
     param_test_insertRows = [
         (0, 5, (0, 0, 0), "0", (5, 0, 0), "0"),
         (0, 5, (0, 0, 0), "0", (0, 0, 0), None),
@@ -1091,11 +1117,58 @@ class TestGridTableModel:
         assert not self.model.code_array.dict_grid.cell_attributes
         assert not self.model.code_array.row_heights
         assert not self.model.code_array.col_widths
-        assert not self.model.code_array.macros
+        tables = self.model.shape[2]
+        assert self.model.code_array.macros == ["" for _ in range(tables)]
+        assert self.model.code_array.macros_draft == [None for _ in range(tables)]
+        assert self.model.code_array.sheet_globals_copyable == [dict() for _ in range(tables)]
+        assert self.model.code_array.sheet_globals_uncopyable == [dict() for _ in range(tables)]
 
 
 class TestGridCellDelegate:
     """Unit tests for GridCellDelegate in grid.py"""
+
+    grid = main_window.grid
+    delegate = grid.itemDelegate()
+
+    def test_render_dirty_icon_skips_small_cells(self, monkeypatch):
+        """Dirty icon should not paint when the cell is too small."""
+
+        calls = {"count": 0}
+
+        class _DummyIcon:
+            def paint(self, *_args, **_kwargs):
+                calls["count"] += 1
+
+        monkeypatch.setattr(Icon, "refresh", _DummyIcon())
+
+        image = QImage(16, 16, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_dirty_icon(painter, QRectF(0, 0, 9, 9))
+        finally:
+            painter.end()
+
+        assert calls["count"] == 0
+
+    def test_render_dirty_icon_paints_normal_cells(self, monkeypatch):
+        """Dirty icon should paint once when the cell has enough room."""
+
+        calls = {"count": 0}
+
+        class _DummyIcon:
+            def paint(self, *_args, **_kwargs):
+                calls["count"] += 1
+
+        monkeypatch.setattr(Icon, "refresh", _DummyIcon())
+
+        image = QImage(48, 24, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_dirty_icon(painter, QRectF(0, 0, 48, 24))
+        finally:
+            painter.end()
+
+        assert calls["count"] == 1
 
 
 class TestTableChoice:

@@ -75,6 +75,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from pyspread import commands
+    from pyspread.icons import Icon
     from pyspread.dialogs import DiscardDataDialog
     from pyspread.grid_renderer import (painter_save, CellRenderer,
                                         CellEdgeRenderer,
@@ -91,6 +92,7 @@ try:
                                           qt62qt5_fontweights)
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import quote, wrap_text
+    from pyspread.lib.sheet_name import validate_sheet_name
     from pyspread.lib.qimage2ndarray import array2qimage
     from pyspread.lib.typechecks import is_svg, check_shape_validity
     from pyspread.menus import (GridContextMenu, TableChoiceContextMenu,
@@ -100,6 +102,7 @@ try:
     from pyspread.lib.pycellsheet import EmptyCell, HelpText, RangeOutput, Formatter
 except ImportError:
     import commands
+    from icons import Icon
     from dialogs import DiscardDataDialog
     from grid_renderer import (painter_save, CellRenderer, CellEdgeRenderer,
                                QColorCache, BorderWidthBottomCache,
@@ -111,6 +114,7 @@ except ImportError:
     from interfaces.pycs import qt52qt6_fontweights, qt62qt5_fontweights
     from lib.selection import Selection
     from lib.string_helpers import quote, wrap_text
+    from lib.sheet_name import validate_sheet_name
     from lib.qimage2ndarray import array2qimage
     from lib.typechecks import is_svg, check_shape_validity
     from menus import (GridContextMenu, TableChoiceContextMenu,
@@ -1570,15 +1574,13 @@ class Grid(QTableView):
         )
 
         if ok and new_name:
-            # Validate: not empty, not duplicate
-            if new_name.strip() == "":
-                QMessageBox.warning(self.main_window, "Invalid Name",
-                                  "Sheet name cannot be empty.")
-                return
-
-            if new_name in sheet_names and new_name != current_name:
-                QMessageBox.warning(self.main_window, "Duplicate Name",
-                                  f"Sheet '{new_name}' already exists.")
+            is_valid, reason = validate_sheet_name(
+                new_name,
+                sheet_names,
+                current_name=current_name,
+            )
+            if not is_valid:
+                QMessageBox.warning(self.main_window, "Invalid Name", reason)
                 return
 
             description = f"Rename sheet '{current_name}' to '{new_name}'"
@@ -2063,8 +2065,9 @@ class GridTableModel(QAbstractTableModel):
 
                 # Also emit dataChanged for all dirty dependents (so they repaint)
                 if hasattr(self.code_array, 'dep_graph'):
+                    target_table = key[2]
                     for dependent_key in self.code_array.dep_graph.dirty:
-                        if dependent_key != key and dependent_key[2] == table:  # Same sheet
+                        if dependent_key != key and dependent_key[2] == target_table:
                             dep_row, dep_col, _ = dependent_key
                             dep_index = self.index(dep_row, dep_col)
                             self.dataChanged.emit(dep_index, dep_index)
@@ -2129,10 +2132,10 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.col_widths.clear()
 
             # Clear macros
-            self.code_array.dict_grid.macros = ["" for _ in range(self.shape[2])]
-            self.code_array.dict_grid.macros_draft = dict()
-            self.code_array.dict_grid.sheet_globals_uncopyable = {i: dict() for i in range(self.shape[2])}
-            self.code_array.dict_grid.sheet_globals_copyable = {i: dict() for i in range(self.shape[2])}
+            self.code_array.macros = ["" for _ in range(self.shape[2])]
+            self.code_array.macros_draft = [None for _ in range(self.shape[2])]
+            self.code_array.sheet_globals_uncopyable = [dict() for _ in range(self.shape[2])]
+            self.code_array.sheet_globals_copyable = [dict() for _ in range(self.shape[2])]
 
 
 class GridCellDelegate(QStyledItemDelegate):
@@ -2489,33 +2492,34 @@ class GridCellDelegate(QStyledItemDelegate):
 
         self._render_svg(painter, rect, index, svg_str=svg_str)
 
-    def _render_dirty_icon(self, painter: QPainter, rect: QRectF,
-                          index: QModelIndex):
+    def _render_dirty_icon(self, painter: QPainter, rect: QRectF):
         """Renders refresh icon on the right side for dirty cells
 
         :param painter: Painter with which icon is rendered
         :param rect: Cell rect of the cell to be painted
-        :param index: Index of cell for which icon is rendered
 
         """
-        try:
-            from pyspread.icons import Icon
-        except ImportError:
-            from icons import Icon
+        min_cell_size = min(rect.width(), rect.height())
+        if min_cell_size < 10:
+            return
 
-        # Icon size (16x16 pixels, or scaled by zoom)
-        icon_size = 16 * self.grid.zoom
-        padding = 4 * self.grid.zoom  # Padding from right edge
+        padding = max(1.0, min(4.0, min_cell_size * 0.08))
+        icon_size = max(10.0, min(16.0, min_cell_size * 0.5))
 
-        # Position icon on the right side
         icon_x = rect.right() - icon_size - padding
-        icon_y = rect.center().y() - icon_size / 2  # Vertically centered
-
-        # Create icon rect
+        icon_y = rect.top() + padding
         icon_rect = QRectF(icon_x, icon_y, icon_size, icon_size)
+        badge_rect = icon_rect.adjusted(-1, -1, 1, 1)
 
-        # Render the icon
-        Icon.refresh.paint(painter, icon_rect.toRect(), Qt.AlignmentFlag.AlignCenter)
+        with painter_save(painter):
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 180))
+            painter.drawRoundedRect(badge_rect, 2.5, 2.5)
+            Icon.refresh.paint(
+                painter,
+                icon_rect.toAlignedRect(),
+                Qt.AlignmentFlag.AlignCenter
+            )
 
     def paint_(self, painter: QPainter, rect: QRectF,
                option: QStyleOptionViewItem, index: QModelIndex):
@@ -2561,7 +2565,7 @@ class GridCellDelegate(QStyledItemDelegate):
         is_dirty = self.code_array.dep_graph.is_dirty(key)
         if is_dirty:
             logger.debug("paint_() rendering icon for dirty cell %s", key)
-            self._render_dirty_icon(painter, rect, index)
+            self._render_dirty_icon(painter, rect)
 
         option.rect = old_rect
 
