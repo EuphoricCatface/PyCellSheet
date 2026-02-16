@@ -56,6 +56,7 @@ from copy import copy, deepcopy
 from inspect import isgenerator
 import io
 from itertools import product
+from pydoc import plaintext, render_doc
 import re
 import sys
 from traceback import print_exception
@@ -1486,7 +1487,6 @@ class CodeArray(DataArray):
             if not args:
                 return HelpText(args, ZEN)
 
-            from pydoc import render_doc, plaintext
             return HelpText(args, render_doc(*args, renderer=plaintext))
 
         if self.safe_mode:
