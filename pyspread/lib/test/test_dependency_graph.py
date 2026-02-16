@@ -366,3 +366,43 @@ def test_get_all_dirty_after_clear():
     dep_graph.clear_dirty((0, 0, 0))
 
     assert dep_graph.get_all_dirty() == {(0, 1, 0)}
+
+
+def test_mark_dirty_deep_chain_no_recursion_error(graph):
+    """Dirty propagation on a deep chain should not rely on recursion."""
+
+    chain_len = 2500
+    for i in range(1, chain_len):
+        graph.add_dependency((i, 0, 0), (i - 1, 0, 0))
+
+    graph.mark_dirty((0, 0, 0))
+
+    assert len(graph.dirty) == chain_len
+
+
+def test_transitive_closure_deep_chain_no_recursion_error(graph):
+    """Transitive closure lookup should handle deep chains iteratively."""
+
+    chain_len = 2500
+    for i in range(1, chain_len):
+        graph.add_dependency((i, 0, 0), (i - 1, 0, 0))
+
+    deps = graph.get_all_dependencies((chain_len - 1, 0, 0))
+    dependents = graph.get_all_dependents((0, 0, 0))
+
+    assert len(deps) == chain_len - 1
+    assert len(dependents) == chain_len - 1
+
+
+def test_cycle_detection_deep_chain_with_back_edge(graph):
+    """Cycle detection should work for deep chains without recursion errors."""
+
+    chain_len = 1200
+    for i in range(1, chain_len):
+        graph.add_dependency((i, 0, 0), (i - 1, 0, 0))
+
+    # Add back edge from first node to last node to create a cycle
+    graph.add_dependency((0, 0, 0), (chain_len - 1, 0, 0))
+
+    with pytest.raises(CircularRefError):
+        graph.check_for_cycles((0, 0, 0))
