@@ -385,8 +385,7 @@ class MainWindow(QMainWindow):
 
         This triggers the safe_mode icon in the statusbar.
 
-        If safe_mode changes from True to False then caches are cleared and
-        macros are executed.
+        Entering/exiting safe mode only updates execution state and UI badges.
 
         :param value: Safe mode
 
@@ -405,8 +404,6 @@ class MainWindow(QMainWindow):
             self.safe_mode_widget.hide()
             # Disable approval menu entry
             self.main_window_actions.approve.setEnabled(False)
-            # Execute macros
-            self.sheet_script_panel.on_apply()
 
     def on_print(self):
         """Print event handler"""
@@ -623,6 +620,7 @@ class MainWindow(QMainWindow):
 
         if ApproveWarningDialog(self).choice:
             self.safe_mode = False
+            self.workflows.apply_all_sheet_scripts()
 
     def on_preferences(self):
         """Preferences event handler (:class:`dialogs.PreferencesDialog`) """

@@ -183,6 +183,34 @@ class Workflows:
             title = f"{filepath.name} - pyspread"
         self.main_window.setWindowTitle(title)
 
+    def apply_all_sheet_scripts(self):
+        """Execute all applied sheet scripts across tables.
+
+        Returns a tuple ``(tables_executed, tables_with_errors)``.
+        """
+
+        code_array = self.main_window.grid.model.code_array
+        if code_array.safe_mode:
+            return 0, 0
+
+        current_table = self.main_window.sheet_script_panel.current_table
+        total_tables = code_array.shape[2]
+        tables_with_errors = 0
+
+        for table in range(total_tables):
+            result, err = code_array.execute_sheet_script(table)
+            if table == current_table:
+                self.main_window.sheet_script_panel.update_result_viewer(
+                    result=result, err=err
+                )
+            if err:
+                tables_with_errors += 1
+
+        self.main_window.grid.model.emit_data_changed_all()
+        self.main_window.grid.gui_update()
+
+        return total_tables, tables_with_errors
+
     @handle_changed_since_save
     def file_new(self):
         """File new workflow"""
@@ -243,6 +271,13 @@ class Workflows:
         # Exit safe mode
         self.main_window.safe_mode = False
 
+        tables_executed, tables_with_errors = self.apply_all_sheet_scripts()
+        if tables_executed and tables_with_errors:
+            self.main_window.statusBar().showMessage(
+                f"Applied {tables_executed} sheet scripts ({tables_with_errors} with errors).",
+                5000
+            )
+
     def count_file_lines(self, filepath: Path):
         """Returns line count of file in filepath
 
@@ -283,16 +318,16 @@ class Workflows:
 
         # Is the file signed properly ?
         self.main_window.safe_mode = True
+        trusted_file = False
         signature_key = self.main_window.settings.signature_key
         try:
             with open(filepath, "rb") as infile:
                 signature_path = filepath.with_suffix(filepath.suffix + '.sig')
                 with open(signature_path, "rb") as sigfile:
-                    self.main_window.safe_mode = not verify(infile.read(),
-                                                            sigfile.read(),
-                                                            signature_key)
+                    trusted_file = verify(infile.read(), sigfile.read(),
+                                          signature_key)
         except OSError:
-            self.main_window.safe_mode = True
+            trusted_file = False
 
         # File format handling
         if filepath.suffix == ".pycsu":
@@ -382,6 +417,16 @@ class Workflows:
 
         # Update macro editor
         self.main_window.sheet_script_panel.update_()
+
+        # Leave safe mode for trusted files and execute all sheet scripts.
+        self.main_window.safe_mode = not trusted_file
+        if trusted_file:
+            tables_executed, tables_with_errors = self.apply_all_sheet_scripts()
+            if tables_executed and tables_with_errors:
+                self.main_window.statusBar().showMessage(
+                    f"Applied {tables_executed} sheet scripts ({tables_with_errors} with errors).",
+                    5000
+                )
 
         # Add to file history
         self.main_window.settings.add_to_file_history(filepath.as_posix())
