@@ -348,6 +348,9 @@ class TestWorkflows:
     def test_edit_sort_ascending(self):
         """Unit test for test_edit_sort_ascending"""
 
+        main_window.grid.model.shape = (1000, 100, 3)
+        main_window.grid.model.reset()
+
         main_window.grid.model.code_array[0, 0, 0] = "1"
         main_window.grid.model.code_array[1, 0, 0] = "3"
         main_window.grid.model.code_array[2, 0, 0] = "2"
@@ -368,6 +371,9 @@ class TestWorkflows:
 
     def test_edit_sort_descending(self):
         """Unit test for test_edit_sort_descending"""
+
+        main_window.grid.model.shape = (1000, 100, 3)
+        main_window.grid.model.reset()
 
         main_window.grid.model.code_array[0, 0, 0] = "1"
         main_window.grid.model.code_array[1, 0, 0] = "3"

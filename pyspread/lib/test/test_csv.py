@@ -44,10 +44,10 @@ TESTPATH = Path(__file__).parent
 
 
 param_sniff = [
-    (TESTPATH / 'valid1.csv', True, ',', 0, QUOTE_NONE, '"', "\r\n", 0),
-    (TESTPATH / 'valid2.csv', True, '\t', 0, QUOTE_NONE, '"', "\r\n", 0),
-    (TESTPATH / 'valid3.csv', True, '\t', 0, QUOTE_NONE, '"', "\r\n", 0),
-    (TESTPATH / 'valid4.csv', True, ',', 0, QUOTE_NONE, '"', "\r\n", 0),
+    (TESTPATH / 'valid1.csv', True, ',', 0, QUOTE_NONE, None, "\r\n", 0),
+    (TESTPATH / 'valid2.csv', True, '\t', 0, QUOTE_NONE, None, "\r\n", 0),
+    (TESTPATH / 'valid3.csv', True, '\t', 0, QUOTE_NONE, None, "\r\n", 0),
+    (TESTPATH / 'valid4.csv', True, ',', 0, QUOTE_NONE, None, "\r\n", 0),
 ]
 
 
