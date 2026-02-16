@@ -28,6 +28,7 @@ Unit tests for grid.py
 """
 
 from contextlib import contextmanager
+from copy import deepcopy
 from os.path import abspath, dirname, join
 import sys
 
@@ -86,10 +87,51 @@ class TestMainWindow:
         assert not main_window.main_window_actions.approve.isEnabled()
         assert not main_window.safe_mode
 
-    def test_on_clear_globals(self):
-        """Unit test for on_clear_globals"""
+    def test_sheet_script_globals_are_isolated_per_sheet(self):
+        """Sheet Script globals should not leak across sheets."""
 
-        main_window.on_clear_globals()
+        code_array = main_window.grid.model.code_array
+        old_macro0 = code_array.macros[0]
+        old_macro1 = code_array.macros[1]
+        old_draft0 = code_array.macros_draft[0]
+        old_draft1 = code_array.macros_draft[1]
+        old_copyable0 = deepcopy(code_array.sheet_globals_copyable[0])
+        old_copyable1 = deepcopy(code_array.sheet_globals_copyable[1])
+        old_uncopyable0 = deepcopy(code_array.sheet_globals_uncopyable[0])
+        old_uncopyable1 = deepcopy(code_array.sheet_globals_uncopyable[1])
+
+        key_sheet0 = (0, 0, 0)
+        key_sheet1 = (0, 0, 1)
+
+        try:
+            code_array.macros[0] = "RATE = 7"
+            code_array.macros[1] = ""
+            code_array.execute_sheet_script(0)
+            code_array.execute_sheet_script(1)
+
+            code_array[key_sheet0] = "RATE"
+            code_array[key_sheet1] = "RATE"
+
+            assert code_array[key_sheet0] == 7
+            assert isinstance(code_array[key_sheet1], NameError)
+        finally:
+            for key in (key_sheet0, key_sheet1):
+                try:
+                    code_array.pop(key)
+                except KeyError:
+                    pass
+                code_array.dep_graph.remove_cell(key)
+
+            code_array.macros[0] = old_macro0
+            code_array.macros[1] = old_macro1
+            code_array.macros_draft[0] = old_draft0
+            code_array.macros_draft[1] = old_draft1
+            code_array.sheet_globals_copyable[0] = old_copyable0
+            code_array.sheet_globals_copyable[1] = old_copyable1
+            code_array.sheet_globals_uncopyable[0] = old_uncopyable0
+            code_array.sheet_globals_uncopyable[1] = old_uncopyable1
+            code_array.smart_cache.clear()
+            code_array.dep_graph.dirty.clear()
 
     def test_recalculate_actions_are_undo_safe(self):
         """Recalculate actions must not push undo commands."""
