@@ -79,6 +79,7 @@ try:
     from pyspread.lib.csv import csv_reader, convert
     from pyspread.lib.file_helpers import \
         (linecount, file_progress_gen, ProgressDialogCanceled)
+    from pyspread.lib.pycellsheet import EmptyCell
     from pyspread.model.model import CellAttribute, class_format_functions
 except ImportError:
     import commands
@@ -97,6 +98,7 @@ except ImportError:
     from lib.csv import csv_reader, convert
     from lib.file_helpers import \
         (linecount, file_progress_gen, ProgressDialogCanceled)
+    from lib.pycellsheet import EmptyCell
     from model.model import CellAttribute, class_format_functions
 
 
@@ -1733,7 +1735,14 @@ class Workflows:
         if top == bottom:
             return
 
-        data = grid.model.code_array[top:bottom+1, left:right+1, table].copy()
+        data = numpy.array([
+            [
+                None if (value := grid.model.code_array[row, column, table]) == EmptyCell
+                else value
+                for column in range(left, right + 1)
+            ]
+            for row in range(top, bottom + 1)
+        ], dtype="O")
         if ascending:
             data[data == None] = numpy.inf  # `is` does not work here
         else:
