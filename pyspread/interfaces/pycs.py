@@ -54,10 +54,12 @@ from typing import Any, BinaryIO, Callable, Iterable, Tuple
 
 try:
     from pyspread.lib.attrdict import AttrDict
+    from pyspread.lib.sheet_name import sanitize_loaded_sheet_name, generate_unique_sheet_name
     from pyspread.lib.selection import Selection
     from pyspread.model.model import CellAttribute, CodeArray
 except ImportError:
     from lib.attrdict import AttrDict
+    from lib.sheet_name import sanitize_loaded_sheet_name, generate_unique_sheet_name
     from lib.selection import Selection
     from model.model import CellAttribute, CodeArray
 
@@ -156,6 +158,9 @@ class PycsReader:
         for cell_attribute in self.cell_attributes_postfixes:
             self.code_array.cell_attributes.append(cell_attribute)
 
+        # Ensure sheet_names length always matches table count after load.
+        self._finalize_sheet_names()
+
     # Decorators
 
     def version_handler(method: Callable) -> Callable:
@@ -228,7 +233,7 @@ class PycsReader:
 
         """
 
-        sheet_name = line.rstrip('\n')
+        raw_sheet_name = line.rstrip('\n')
         # Initialize sheet_names list if first call in this section
         if not hasattr(self, '_sheet_names_initialized'):
             if hasattr(self.code_array.dict_grid, 'sheet_names'):
@@ -236,7 +241,34 @@ class PycsReader:
             self._sheet_names_initialized = True
         # Append to sheet_names list (order matters)
         if hasattr(self.code_array.dict_grid, 'sheet_names'):
-            self.code_array.dict_grid.sheet_names.append(sheet_name)
+            sheet_names = self.code_array.dict_grid.sheet_names
+            # Ignore extra names beyond table count.
+            if len(sheet_names) >= self.code_array.shape[2]:
+                return
+            sheet_name = sanitize_loaded_sheet_name(
+                raw_sheet_name,
+                sheet_names,
+                fallback_index=len(sheet_names),
+            )
+            sheet_names.append(sheet_name)
+
+    def _finalize_sheet_names(self):
+        """Normalize sheet names count and fill missing names deterministically."""
+
+        sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+        if sheet_names is None:
+            return
+
+        expected_count = self.code_array.shape[2]
+        normalized = []
+
+        for i in range(expected_count):
+            raw = sheet_names[i] if i < len(sheet_names) else ""
+            normalized.append(
+                sanitize_loaded_sheet_name(raw, normalized, fallback_index=i)
+            )
+
+        self.code_array.dict_grid.sheet_names = normalized
 
     def _pycs2code(self, line: str):
         """Updates code in pycs code_array
@@ -450,6 +482,20 @@ class PycsWriter(object):
             for line in self._section2writer[key]():
                 yield line
 
+    def _normalized_sheet_names(self) -> list[str]:
+        """Return valid, unique sheet names aligned to current table count."""
+
+        table_count = self.code_array.shape[2]
+        raw_names = getattr(self.code_array.dict_grid, 'sheet_names', []) or []
+
+        normalized = []
+        for i in range(table_count):
+            raw = raw_names[i] if i < len(raw_names) else ""
+            normalized.append(
+                generate_unique_sheet_name(raw, normalized, fallback_index=i)
+            )
+        return normalized
+
     def __len__(self) -> int:
         """Returns how many lines will be written when saving the code_array"""
 
@@ -487,9 +533,8 @@ class PycsWriter(object):
 
         """
 
-        if hasattr(self.code_array.dict_grid, 'sheet_names'):
-            for name in self.code_array.dict_grid.sheet_names:
-                yield name + u"\n"
+        for name in self._normalized_sheet_names():
+            yield name + u"\n"
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format
@@ -582,10 +627,10 @@ class PycsWriter(object):
         """
 
         macros = self.code_array.dict_grid.macros
-        sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+        sheet_names = self._normalized_sheet_names()
         for i, macro in enumerate(macros):
             # Use sheet name if available, otherwise fall back to index
-            sheet_identifier = sheet_names[i] if sheet_names and i < len(sheet_names) else str(i)
+            sheet_identifier = sheet_names[i] if i < len(sheet_names) else str(i)
             macro_count = macro.count('\n') + 1
             macro_list = [
                 f"(macro:{sheet_identifier!r}) {macro_count}",

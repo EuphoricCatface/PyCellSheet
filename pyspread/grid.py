@@ -91,6 +91,7 @@ try:
                                           qt62qt5_fontweights)
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import quote, wrap_text
+    from pyspread.lib.sheet_name import validate_sheet_name
     from pyspread.lib.qimage2ndarray import array2qimage
     from pyspread.lib.typechecks import is_svg, check_shape_validity
     from pyspread.menus import (GridContextMenu, TableChoiceContextMenu,
@@ -111,6 +112,7 @@ except ImportError:
     from interfaces.pycs import qt52qt6_fontweights, qt62qt5_fontweights
     from lib.selection import Selection
     from lib.string_helpers import quote, wrap_text
+    from lib.sheet_name import validate_sheet_name
     from lib.qimage2ndarray import array2qimage
     from lib.typechecks import is_svg, check_shape_validity
     from menus import (GridContextMenu, TableChoiceContextMenu,
@@ -1570,15 +1572,13 @@ class Grid(QTableView):
         )
 
         if ok and new_name:
-            # Validate: not empty, not duplicate
-            if new_name.strip() == "":
-                QMessageBox.warning(self.main_window, "Invalid Name",
-                                  "Sheet name cannot be empty.")
-                return
-
-            if new_name in sheet_names and new_name != current_name:
-                QMessageBox.warning(self.main_window, "Duplicate Name",
-                                  f"Sheet '{new_name}' already exists.")
+            is_valid, reason = validate_sheet_name(
+                new_name,
+                sheet_names,
+                current_name=current_name,
+            )
+            if not is_valid:
+                QMessageBox.warning(self.main_window, "Invalid Name", reason)
                 return
 
             description = f"Rename sheet '{current_name}' to '{new_name}'"
@@ -2063,8 +2063,9 @@ class GridTableModel(QAbstractTableModel):
 
                 # Also emit dataChanged for all dirty dependents (so they repaint)
                 if hasattr(self.code_array, 'dep_graph'):
+                    target_table = key[2]
                     for dependent_key in self.code_array.dep_graph.dirty:
-                        if dependent_key != key and dependent_key[2] == table:  # Same sheet
+                        if dependent_key != key and dependent_key[2] == target_table:
                             dep_row, dep_col, _ = dependent_key
                             dep_index = self.index(dep_row, dep_col)
                             self.dataChanged.emit(dep_index, dep_index)
@@ -2129,10 +2130,10 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.col_widths.clear()
 
             # Clear macros
-            self.code_array.dict_grid.macros = ["" for _ in range(self.shape[2])]
-            self.code_array.dict_grid.macros_draft = dict()
-            self.code_array.dict_grid.sheet_globals_uncopyable = {i: dict() for i in range(self.shape[2])}
-            self.code_array.dict_grid.sheet_globals_copyable = {i: dict() for i in range(self.shape[2])}
+            self.code_array.macros = ["" for _ in range(self.shape[2])]
+            self.code_array.macros_draft = [None for _ in range(self.shape[2])]
+            self.code_array.sheet_globals_uncopyable = [dict() for _ in range(self.shape[2])]
+            self.code_array.sheet_globals_copyable = [dict() for _ in range(self.shape[2])]
 
 
 class GridCellDelegate(QStyledItemDelegate):

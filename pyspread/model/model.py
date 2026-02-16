@@ -89,6 +89,7 @@ try:
     from pyspread.lib.typechecks import is_stringlike
     from pyspread.lib.selection import Selection
     from pyspread.lib.string_helpers import ZEN
+    from pyspread.lib.sheet_name import generate_unique_sheet_name
     from pyspread.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
         ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
 
@@ -105,6 +106,7 @@ except ImportError:
     from lib.typechecks import is_stringlike
     from lib.selection import Selection
     from lib.string_helpers import ZEN
+    from lib.sheet_name import generate_unique_sheet_name
     from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
         ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
 
@@ -635,6 +637,18 @@ class DataArray:
         self.dict_grid.macros = macros
 
     @property
+    def sheet_scripts(self) -> list[str]:
+        """Alias of `macros` with Sheet Script terminology."""
+
+        return self.macros
+
+    @sheet_scripts.setter
+    def sheet_scripts(self, sheet_scripts: list[str]):
+        """Alias setter of `macros` with Sheet Script terminology."""
+
+        self.macros = sheet_scripts
+
+    @property
     def exp_parser_code(self) -> str:
         """macros interface to dict_grid"""
 
@@ -695,12 +709,11 @@ class DataArray:
                 self.macros_draft.append(None)
                 self.sheet_globals_copyable.append(dict())
                 self.sheet_globals_uncopyable.append(dict())
-                # Generate unique sheet name
-                new_name = f"Sheet {i}"
-                counter = 1
-                while new_name in self.dict_grid.sheet_names:
-                    new_name = f"Sheet {i}_{counter}"
-                    counter += 1
+                new_name = generate_unique_sheet_name(
+                    f"Sheet {i}",
+                    self.dict_grid.sheet_names,
+                    fallback_index=i,
+                )
                 self.dict_grid.sheet_names.append(new_name)
 
         self._adjust_rowcol(0, 0, 0)
@@ -1215,12 +1228,11 @@ class DataArray:
                 self.macros_draft.insert(insertion_point, None)
                 self.sheet_globals_copyable.insert(insertion_point, dict())
                 self.sheet_globals_uncopyable.insert(insertion_point, dict())
-                # Generate unique sheet name
-                new_name = f"Sheet {insertion_point + i}"
-                counter = 1
-                while new_name in self.dict_grid.sheet_names:
-                    new_name = f"Sheet {insertion_point + i}_{counter}"
-                    counter += 1
+                new_name = generate_unique_sheet_name(
+                    f"Sheet {insertion_point + i}",
+                    self.dict_grid.sheet_names,
+                    fallback_index=insertion_point + i,
+                )
                 self.dict_grid.sheet_names.insert(insertion_point, new_name)
 
         for key in new_keys:
@@ -1740,6 +1752,11 @@ class CodeArray(DataArray):
                              f"but is unknown if it can be safely used without doing so.\n")
                 self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
+
+    def execute_sheet_script(self, current_table) -> Tuple[str, str]:
+        """Alias of execute_macros() with Sheet Script terminology."""
+
+        return self.execute_macros(current_table)
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
                      startkey: Tuple[int, int, int],
