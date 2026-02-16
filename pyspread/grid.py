@@ -2063,8 +2063,9 @@ class GridTableModel(QAbstractTableModel):
 
                 # Also emit dataChanged for all dirty dependents (so they repaint)
                 if hasattr(self.code_array, 'dep_graph'):
+                    target_table = key[2]
                     for dependent_key in self.code_array.dep_graph.dirty:
-                        if dependent_key != key and dependent_key[2] == table:  # Same sheet
+                        if dependent_key != key and dependent_key[2] == target_table:
                             dep_row, dep_col, _ = dependent_key
                             dep_index = self.index(dep_row, dep_col)
                             self.dataChanged.emit(dep_index, dep_index)

@@ -90,3 +90,39 @@ class TestMainWindow:
         """Unit test for on_clear_globals"""
 
         main_window.on_clear_globals()
+
+    def test_recalculate_actions_are_undo_safe(self):
+        """Recalculate actions must not push undo commands."""
+
+        code_array = main_window.grid.model.code_array
+        old_mode = main_window.settings.recalc_mode
+        main_window.settings.recalc_mode = "manual"
+
+        try:
+            code_array[0, 0, 0] = "1"
+            code_array[0, 1, 0] = "C('A1') + 1"
+            _ = code_array[0, 1, 0]
+            code_array[0, 0, 0] = "2"
+            main_window.grid.current = (0, 1, 0)
+
+            before_count = main_window.undo_stack.count()
+            before_index = main_window.undo_stack.index()
+
+            main_window.on_recalculate()
+            main_window.on_recalculate_cell_only()
+            main_window.on_recalculate_ancestors()
+            main_window.on_recalculate_children()
+            main_window.on_recalculate_all()
+
+            assert main_window.undo_stack.count() == before_count
+            assert main_window.undo_stack.index() == before_index
+        finally:
+            for key in ((0, 0, 0), (0, 1, 0)):
+                try:
+                    code_array.pop(key)
+                except KeyError:
+                    pass
+            code_array.dep_graph.remove_cell((0, 0, 0))
+            code_array.dep_graph.remove_cell((0, 1, 0))
+            code_array.dep_graph.dirty.clear()
+            main_window.settings.recalc_mode = old_mode
