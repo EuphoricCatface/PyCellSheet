@@ -37,6 +37,8 @@ python -m pyspread
 
 ## Testing
 
+CI gate policy and required-check contract are documented in `docs/ci_gate.md`.
+
 ```bash
 # Core suite (current interpreter)
 QT_QPA_PLATFORM=offscreen pytest -q
