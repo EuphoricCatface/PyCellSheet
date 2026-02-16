@@ -100,7 +100,7 @@ The results 15 and 225 appear. `a` is globally available in all cells.
 
 External modules can be imported into pyspread. Therefore, powerful types and manipulation methods are available.
 
-Open the macro panel with `<F4>` and type
+Open the Sheet Script panel with `<F4>` and type
 
 
 ```python
@@ -156,13 +156,13 @@ which yields `10`.
 
 Pyspread renders a plot in any cell that returns a matplotlib figure. Merging the cell with
 other cells can increase plot size. In order to make generating plots easier, a chart dialog
-has been added to the Macros menu. This chart dialog generates a formula
+has been added to the `Tools -> Macro` submenu. This chart dialog generates a formula
 for the current cell. This formula uses a pyspread specific function that returns a
  matplotlib figure. You can use the object S inside the chart dialog window.
 
 Switch to table 3. Select cell (0,0,3).
 
-Select `Insert chart` from the `Macro` menu.
+Select `Insert chart` from `Tools -> Macro`.
 
 On the left side, Python code can be edited. On the right side, a chart can be displayed as soon as the code delivers a matplotlib figure in the last line.
 

@@ -9,7 +9,7 @@ import pytest
 pyspread_path = abspath(join(dirname(__file__) + "/../.."))
 sys.path.insert(0, pyspread_path)
 
-from interfaces.pycs import PycsReader
+from interfaces.pycs import PycsReader, PycsWriter
 
 sys.path.pop(0)
 
@@ -83,10 +83,6 @@ def test_finalize_sheet_names_fills_missing_defaults():
 
 
 def test_writer_normalizes_sheet_names_for_output():
-    sys.path.insert(0, pyspread_path)
-    from interfaces.pycs import PycsWriter
-    sys.path.pop(0)
-
     code_array = _DummyWriterCodeArray(
         ["Good", " ", "Bad\tName", "Good"],
         ["a=1", "b=2", "c=3", "d=4"],
@@ -184,10 +180,6 @@ def test_pycs2macros_raises_for_invalid_header():
 
 
 def test_writer_macros_section_uses_normalized_sheet_names():
-    sys.path.insert(0, pyspread_path)
-    from interfaces.pycs import PycsWriter
-    sys.path.pop(0)
-
     code_array = _DummyWriterCodeArray(
         ["Main", " ", "Main"],
         ["a = 1", "b = 2", "c = 3"],
@@ -202,10 +194,6 @@ def test_writer_macros_section_uses_normalized_sheet_names():
 
 
 def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
-    sys.path.insert(0, pyspread_path)
-    from interfaces.pycs import PycsWriter
-    sys.path.pop(0)
-
     source = _DummyWriterCodeArray(
         ["Revenue", "Revenue", " "],
         ["a = 1", "b = 2", "c = 3"],
