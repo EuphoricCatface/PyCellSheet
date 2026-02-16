@@ -250,8 +250,14 @@ class MainWindow(QMainWindow):
         self.sheet_script_dock = QDockWidget("Sheet Script", self)
         self.sheet_script_dock.setObjectName("Sheet Script Panel")
         self.sheet_script_dock.setWidget(self.sheet_script_panel)
+        self.sheet_script_dock.setMinimumWidth(320)
+        self.sheet_script_dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea |
+            Qt.DockWidgetArea.RightDockWidgetArea
+        )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,
                            self.sheet_script_dock)
+        self.resizeDocks([self.sheet_script_dock], [360], Qt.Orientation.Horizontal)
 
         self.central_layout = QVBoxLayout(self.main_panel)
         self._layout()
@@ -297,7 +303,7 @@ class MainWindow(QMainWindow):
     def eventFilter(self, source: QWidget, event: QEvent) -> bool:
         """Overloaded event filter for handling QDockWidget close events
 
-        Updates the menu if the macro panel is closed.
+        Updates the menu when dock widgets are closed.
 
         :param source: Source widget of event
         :param event: Any QEvent
@@ -528,6 +534,10 @@ class MainWindow(QMainWindow):
 
         self.settings.recalc_mode = "auto" if toggled else "manual"
         self.update_action_toggles()
+        mode_label = "enabled" if toggled else "disabled"
+        self.statusBar().showMessage(
+            f"Automatic recalculation {mode_label}", 2500
+        )
         if self._loading:
             return
         if toggled:
@@ -547,9 +557,27 @@ class MainWindow(QMainWindow):
     def _show_recalc_status(self, scope: str, count: int):
         """Show standardized recalc status message with scope and count"""
 
+        scope_labels = {
+            "dirty": "Dirty cells",
+            "current": "Current cell",
+            "ancestors": "Current cell + ancestors",
+            "children": "Current cell + children",
+            "workspace": "Entire workspace",
+        }
+        scope_label = scope_labels.get(scope, scope)
+        mode_label = "Auto" if self.settings.recalc_mode == "auto" else "Manual"
+
+        if count == 0:
+            self.statusBar().showMessage(
+                f"No cells needed recalculation (scope: {scope_label}, mode: {mode_label})",
+                4000
+            )
+            return
+
         noun = "cell" if count == 1 else "cells"
         self.statusBar().showMessage(
-            f"Recalculated {count} {noun} ({scope})", 2000
+            f"Recalculated {count} {noun} (scope: {scope_label}, mode: {mode_label})",
+            3500
         )
 
     def on_recalculate_cell_only(self):
