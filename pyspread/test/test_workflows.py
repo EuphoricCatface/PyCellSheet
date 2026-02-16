@@ -200,6 +200,57 @@ class TestWorkflows:
         finally:
             main_window.safe_mode = old_safe_mode
 
+    def test_apply_all_sheet_scripts_counts_errors_and_updates_current_view(self, monkeypatch):
+        """apply_all_sheet_scripts should count errors and update current-table output."""
+
+        code_array = main_window.grid.model.code_array
+        old_shape = code_array.shape
+        old_safe_mode = main_window.safe_mode
+        old_current_table = main_window.sheet_script_panel.current_table
+
+        try:
+            main_window.safe_mode = False
+            main_window.grid.model.shape = (old_shape[0], old_shape[1], 3)
+            main_window.sheet_script_panel.current_table = 1
+
+            calls = {"updated": [], "gui": 0, "data_changed": 0}
+
+            def fake_execute_sheet_script(table):
+                if table == 1:
+                    return "ok-table-1", ""
+                if table == 2:
+                    return "", "boom"
+                return "ok-table-0", ""
+
+            def fake_update_result_viewer(result, err):
+                calls["updated"].append((result, err))
+
+            def fake_gui_update():
+                calls["gui"] += 1
+
+            def fake_emit_data_changed_all():
+                calls["data_changed"] += 1
+
+            monkeypatch.setattr(code_array, "execute_sheet_script",
+                                fake_execute_sheet_script)
+            monkeypatch.setattr(main_window.sheet_script_panel, "update_result_viewer",
+                                fake_update_result_viewer)
+            monkeypatch.setattr(main_window.grid, "gui_update", fake_gui_update)
+            monkeypatch.setattr(main_window.grid.model, "emit_data_changed_all",
+                                fake_emit_data_changed_all)
+
+            executed, errors = self.workflows.apply_all_sheet_scripts()
+
+            assert executed == 3
+            assert errors == 1
+            assert calls["updated"] == [("ok-table-1", "")]
+            assert calls["gui"] == 1
+            assert calls["data_changed"] == 1
+        finally:
+            main_window.grid.model.shape = old_shape
+            main_window.safe_mode = old_safe_mode
+            main_window.sheet_script_panel.current_table = old_current_table
+
     param_count_file_lines = [
         ("", 0, "counttest.txt", None),
         ("\n"*100, 100, "counttest.txt", None),
