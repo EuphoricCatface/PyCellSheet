@@ -28,12 +28,7 @@
 
 """
 
-
-try:
-    from dataclasses import dataclass
-except ImportError:
-    # Python 3.6 compatibility
-    from pyspread.lib.dataclasses import dataclass
+from dataclasses import dataclass
 import os
 
 try:

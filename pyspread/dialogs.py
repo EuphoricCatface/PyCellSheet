@@ -51,10 +51,7 @@
 
 from contextlib import redirect_stdout
 import csv
-try:
-    from dataclasses import dataclass
-except ImportError:
-    from pyspread.lib.dataclasses import dataclass  # Python 3.6 compatibility
+from dataclasses import dataclass
 from functools import partial
 import io
 from pathlib import Path
