@@ -20,7 +20,9 @@ Pastes copied cell formats.
 ## Format → Font
 Assigns a font including style and size to the current cell if no selection is present. If a selection is present, the  font is assigned to each selected cell.
 
-The fonts are not stored within the `.pys` file. Therefore, fonts have to be available at the target system when opening a `.pys` file, otherwise, the font is replaced by the default font.
+Fonts are not embedded in `.pycs`/`.pycsu` files. Therefore, fonts have to be
+available on the target system when opening a file, otherwise the default font
+is used.
 
 ## Format → Bold
 Bold toggles the current selection’s cell font bold attribute. If no cell is selected, then the attribute is toggled for the current cell. The shortcut is `<Ctrl> + B`.
@@ -43,11 +45,15 @@ Opens a sub-menu, in which the cell renderer for the current cell can be chosen.
 
 ## Format → Lock cell
 
-Lock toggles the current selection’s cell lock attribute. If no cell is selected, then the current cell is locked. Locking means that the cell cannot be edited from within pyspread until it is unlocked again.
+Lock toggles the current selection's cell lock attribute. If no cell is
+selected, then the current cell is locked. Locking means that the cell cannot
+be edited until it is unlocked again.
 
 ## Format → Button cell
 
-Creates a button cell from the current cell. Button cells may be employed to provide an intuitive interface for the user that allows executing functions from the macro editor by pressing a button in the grid. In this case, the respective function is called in the button cell code.
+Creates a button cell from the current cell. Button cells may be employed to
+provide an intuitive interface for the user that allows executing functions
+from the Sheet Script panel by pressing a button in the grid.
 
 On selecting button cell, a dialog for querying the user for a button text is displayed. Next, a button that is labeled with this text is displayed in the cell instead of cell results. The button cell's code is executed when activating the button (on release).
 

@@ -7,6 +7,14 @@ import ast
 import collections
 import threading
 
+try:
+    from pyspread.lib.exceptions import CircularRefError
+except ImportError:
+    try:
+        from lib.exceptions import CircularRefError
+    except ImportError:
+        from .exceptions import CircularRefError
+
 
 # Dependency tracking context manager
 class DependencyTracker:
@@ -315,8 +323,16 @@ class ReferenceParser:
         self.code_array = code_array
 
     @staticmethod
-    def sheet_name_to_idx(sheet_name):
-        return int(sheet_name)
+    def sheet_name_to_idx(sheet_name: str, code_array=None):
+        try:
+            return int(sheet_name)
+        except ValueError:
+            if code_array is None:
+                raise ValueError(f"Sheet '{sheet_name}' is not numeric and no code_array was provided.")
+            sheet_names = getattr(code_array.dict_grid, 'sheet_names', None)
+            if sheet_names and sheet_name in sheet_names:
+                return sheet_names.index(sheet_name)
+            raise ValueError(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
 
     # NYI: cache sheet, and invalidate the cache if the sheet gets modified
     class Sheet:
@@ -348,7 +364,6 @@ class ReferenceParser:
                 self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
 
                 # Check for circular reference after adding dependency
-                from lib.exceptions import CircularRefError
                 self.code_array.dep_graph.check_for_cycles(current_cell)
                 # If check_for_cycles raises CircularRefError, it will propagate
 
@@ -374,7 +389,6 @@ class ReferenceParser:
                         self.code_array.dep_graph.add_dependency(current_cell, dependency_key)
 
                         # Check for circular reference after adding dependency
-                        from lib.exceptions import CircularRefError
                         self.code_array.dep_graph.check_for_cycles(current_cell)
                         # If check_for_cycles raises CircularRefError, it will propagate
 
@@ -395,13 +409,11 @@ class ReferenceParser:
 
     def cell_ref(self, spreadsheet_ref_notation: str, current_sheet: "ReferenceParser.Sheet"):
         target_sheet: "ReferenceParser.Sheet" = current_sheet
-        exc_index = -1
         non_sheet = spreadsheet_ref_notation
         if "!" in spreadsheet_ref_notation:
             exc_index = spreadsheet_ref_notation.index("!")
-            sheet_name = spreadsheet_ref_notation[:exc_index]
-            sheet_name.strip('"')
-            target_sheet = self.sheet_ref(spreadsheet_ref_notation[:exc_index])
+            sheet_name = spreadsheet_ref_notation[:exc_index].strip('"')
+            target_sheet = self.sheet_ref(sheet_name)
             non_sheet = spreadsheet_ref_notation[exc_index + 1:]
         if ":" in non_sheet:
             col_index = non_sheet.index(":")
@@ -496,7 +508,8 @@ class ReferenceParser:
         split_lines = code_inspect.splitlines()
         line_lengths = [0]
         for line in split_lines:
-            line_lengths.append(line_lengths[-1] + len(line))
+            # +1 accounting for newline
+            line_lengths.append(line_lengths[-1] + len(line) + 1)
         for node in ast.walk(parsed):
             if not isinstance(node, ast.Name):
                 continue
@@ -536,9 +549,11 @@ class ReferenceParser:
             while True:
                 if not single_cell_indices:
                     break
-                s_index = single_cell_indices.popleft()
-                if s_index[0] > end:
+                s_index = single_cell_indices[0]
+                # Name spans are [start, end), so start==end belongs to the next chunk.
+                if s_index[0] >= end:
                     break
+                single_cell_indices.popleft()
                 s_str = f"C(\"{single_cell_idx_name.pop(s_index)}\")"
                 names_idx_replacement_str[s_index] = s_str
 
@@ -579,9 +594,12 @@ class ReferenceParser:
         # Step 8: Finally, assemble the code with the replacements
         last_end = 0
         parsed_code_list = []
-        for (start, end), replacements in names_idx_replacement_str.items():
+        for (start, end), replacements in sorted(names_idx_replacement_str.items(), key=lambda item: item[0][0]):
             parsed_code_list.append(code[last_end:start])
-            parsed_code_list.extend(replacements)
+            if isinstance(replacements, list):
+                parsed_code_list.extend(replacements)
+            else:
+                parsed_code_list.append(replacements)
             last_end = end
         parsed_code_list.append(code[last_end:])
 
@@ -713,7 +731,7 @@ class CELL_META_GENERATOR:
         non_sheet = cell_ref
         exc_index = cell_ref.find("!")
         if exc_index != -1:
-            sheet_index = ReferenceParser.sheet_name_to_idx(cell_ref[:exc_index])
+            sheet_index = ReferenceParser.sheet_name_to_idx(cell_ref[:exc_index].strip('"'), self.code_array)
             non_sheet = cell_ref[exc_index + 1:]
         cell_coord = spreadsheet_ref_to_coord(non_sheet)
 

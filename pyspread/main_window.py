@@ -519,14 +519,9 @@ class MainWindow(QMainWindow):
         """Recalculate dirty cells event handler (F9 shortcut)"""
 
         num_recalculated = self.grid.model.code_array.recalculate_dirty()
-
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} dirty cells", 2000
-            )
-        else:
-            self.statusBar().showMessage("No dirty cells to recalculate", 2000)
+        self._show_recalc_status("dirty", num_recalculated)
 
     def on_toggle_auto_recalculate(self, toggled: bool):
         """Auto recalculate toggle event handler"""
@@ -549,6 +544,14 @@ class MainWindow(QMainWindow):
             )
         )
 
+    def _show_recalc_status(self, scope: str, count: int):
+        """Show standardized recalc status message with scope and count"""
+
+        noun = "cell" if count == 1 else "cells"
+        self.statusBar().showMessage(
+            f"Recalculated {count} {noun} ({scope})", 2000
+        )
+
     def on_recalculate_cell_only(self):
         """Recalculate current cell only"""
 
@@ -557,9 +560,7 @@ class MainWindow(QMainWindow):
         )
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage("Recalculated current cell", 2000)
-        else:
-            self.statusBar().showMessage("No cell to recalculate", 2000)
+        self._show_recalc_status("current", num_recalculated)
 
     def on_recalculate_ancestors(self):
         """Recalculate current cell and its ancestors"""
@@ -569,11 +570,7 @@ class MainWindow(QMainWindow):
         )
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} cells (ancestors)", 2000
-            )
-        else:
-            self.statusBar().showMessage("No cells to recalculate", 2000)
+        self._show_recalc_status("ancestors", num_recalculated)
 
     def on_recalculate_children(self):
         """Recalculate current cell and its children"""
@@ -583,11 +580,7 @@ class MainWindow(QMainWindow):
         )
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} cells (children)", 2000
-            )
-        else:
-            self.statusBar().showMessage("No cells to recalculate", 2000)
+        self._show_recalc_status("children", num_recalculated)
 
     def on_recalculate_all(self):
         """Recalculate all cells in the workspace"""
@@ -595,11 +588,7 @@ class MainWindow(QMainWindow):
         num_recalculated = self.grid.model.code_array.recalculate_all()
         if num_recalculated > 0:
             self._refresh_grid()
-            self.statusBar().showMessage(
-                f"Recalculated {num_recalculated} cells (workspace)", 2000
-            )
-        else:
-            self.statusBar().showMessage("No cells to recalculate", 2000)
+        self._show_recalc_status("workspace", num_recalculated)
 
     def on_approve(self):
         """Approve event handler"""

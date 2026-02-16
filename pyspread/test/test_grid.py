@@ -33,7 +33,7 @@ import sys
 
 import pytest
 
-from PyQt6.QtCore import QItemSelectionModel, QItemSelection
+from PyQt6.QtCore import QItemSelectionModel, QItemSelection, Qt
 from PyQt6.QtWidgets import QApplication, QAbstractItemView
 from PyQt6.QtGui import QFont, QColor
 
@@ -985,6 +985,30 @@ class TestGridTableModel:
         index = Index(row, column)
         assert self.model.code(index) == res
 
+    def test_set_data_emits_dirty_dependent_in_active_table(self):
+        """Dirty dependents in the active table should be repainted on edit."""
+
+        emitted = []
+
+        def collect(top_left, _bottom_right):
+            emitted.append((top_left.row(), top_left.column()))
+
+        self.model.dataChanged.connect(collect)
+        try:
+            index = self.model.index(0, 0)
+            edited_key = self.model.current(index)
+            dirty_key = (1, 1, edited_key[2])
+            self.model.code_array.dep_graph.dirty.clear()
+            self.model.code_array.dep_graph.dirty.add(dirty_key)
+
+            self.model.setData(index, "123", Qt.ItemDataRole.EditRole)
+        finally:
+            self.model.dataChanged.disconnect(collect)
+            self.model.code_array.dep_graph.dirty.clear()
+
+        assert (0, 0) in emitted
+        assert (1, 1) in emitted
+
     param_test_insertRows = [
         (0, 5, (0, 0, 0), "0", (5, 0, 0), "0"),
         (0, 5, (0, 0, 0), "0", (0, 0, 0), None),
@@ -1091,7 +1115,11 @@ class TestGridTableModel:
         assert not self.model.code_array.dict_grid.cell_attributes
         assert not self.model.code_array.row_heights
         assert not self.model.code_array.col_widths
-        assert not self.model.code_array.macros
+        tables = self.model.shape[2]
+        assert self.model.code_array.macros == ["" for _ in range(tables)]
+        assert self.model.code_array.macros_draft == [None for _ in range(tables)]
+        assert self.model.code_array.sheet_globals_copyable == [dict() for _ in range(tables)]
+        assert self.model.code_array.sheet_globals_uncopyable == [dict() for _ in range(tables)]
 
 
 class TestGridCellDelegate:

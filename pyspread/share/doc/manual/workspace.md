@@ -7,7 +7,7 @@ title: The Workspace
 
 # The Workspace
 
-## Starting and exiting pyspread
+## Starting and exiting PyCellSheet
 
 Type
 
@@ -15,15 +15,17 @@ Type
 
 from the command prompt. 
 
-If you want to run *pyspread* without installation then cd into the pyspread directory and type
+If you want to run PyCellSheet without installation, change into the project
+directory and type
 
 `$ ./pyspread/pyspread.py`
 
-You can also launch the file via a file manager (e.g. the Windows Explorer on Widnows).
+You can also launch the file via a file manager (for example Windows Explorer).
 
-You can exit pyspread by closing the main window or by selecting `File -> Quit` from the menu.
+You can exit PyCellSheet by closing the main window or by selecting
+`File -> Quit` from the menu.
 
-## pyspread main window
+## PyCellSheet main window
 
 The main window comprises the following components (see Figure):
 
@@ -32,27 +34,33 @@ The main window comprises the following components (see Figure):
 - Toolbars
 - Entryline
 - Grid
-- Macro editor
+- Sheet Script panel
 - Table choice
 - Statusbar
 
-![pyspread main window](images/screenshot_main_window.png)
+![PyCellSheet main window](images/screenshot_main_window.png)
 
 ## Title bar
 
-When *pyspread* is started or a new spreadsheet is created then the Titlebar displays "pyspread". When a file is opened or saved then the filename is presented in front of " - pyspread".
+When PyCellSheet is started, or when a new spreadsheet is created, the title
+bar displays `pyspread`. When a file is opened or saved, the filename is shown
+in front of ` - pyspread`.
 
-Whenever a spreadsheet is changed then an askerisk "*" is displayed in front of the Titlebar text.
+Whenever a spreadsheet is changed, an asterisk `*` is displayed in front of the
+title text.
 
 ## Menu
 
-Since all actions of pyspread are available via the menu, the manual provides a section for each menu. The menu items do not change position or content when working with *pyspread*. However, the state of toggle actions changes e.g. when selcting a cell in the grid.
+Since all actions are available via menus, this manual provides a section for
+each menu. Menu items do not change position or content while working, but the
+state of toggle actions changes, for example when selecting a cell in the grid.
 
 ## Toolbars
 
 Toolbars make a subset of actions quickly accessible. Status updates of toggle actions are visualized. Actions with multiple states such as the cell renderer choice are displayed with the icon of the current state. The state is changed by clicking on the button, which is indicated by a changed icon.
 
-Toolbar content can be shown or hidden using the toolbar menu at the right side of each toolbar. The show/hide state is restored at the next start of *pyspread*.
+Toolbar content can be shown or hidden using the toolbar menu at the right side
+of each toolbar. The show/hide state is restored at the next application start.
 
 ## Entry line
 
@@ -101,24 +109,28 @@ Only cells of the current table can be selected at any time. Switching tables sw
 Be careful when selecting all cells in a large table. Operations may take considerable time.
 
 #### Secondary grid views
-You can pull out up to 3 secondary grid views from the righr and the lower border of the grid.
+You can pull out up to 3 secondary grid views from the right and lower border
+of the grid.
 These views display the same grid content but can be independently scrolled and zoomed
 in order to effectively work in separated sections of large grids.
 
 Note that actions that affect the grid such as formatting cells refer to the last focused grid.
 
-## Macro editor
+## Sheet Script panel
 
-Macros can be edited from within the macro editor. The editor allows editing a
-text file that is executed when the spreadsheet is opened or when its content is updated.
+Sheet scripts can be edited in the Sheet Script panel. The editor allows editing
+Python code that is executed when script changes are applied.
 
-![Macro editor](images/screenshot_macros.png)
+![Sheet Script panel](images/screenshot_macros.png)
 
-The Apply button executes the macro code. Output (including exceptions) are shown in the lower part of the macro editor.
+The Apply button executes the current sheet script. Output (including exceptions)
+is shown in the lower part of the panel.
 
-The scope of macro execution is global. Therefore, all functions are directly accessible from each cell. For example, the function f that is displayed in the Figure can be called from a cell via f(). The result is the returned string “Hello, pyspread!”.
+The scope of a script is per sheet. Imported modules, helper functions, and
+script-level variables become available to cells in the same sheet.
 
-Since cell evaluation order is not guaranteed in pyspread, macros can be used for operations that enforce state. One example for such operations are some module imports such as rpy2. Furthermore, algorithms that are too complex for a single cell should be written as a macro.
+Sheet scripts are the recommended place for module imports and shared helper
+code that should not be repeated in every cell.
 
 ## Table choice
 

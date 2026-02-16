@@ -29,7 +29,11 @@ Provides:
 """
 
 from collections import defaultdict
+import logging
 from .exceptions import CircularRefError
+
+
+logger = logging.getLogger(__name__)
 
 
 class DependencyGraph:
@@ -57,6 +61,16 @@ class DependencyGraph:
         # Dirty flags: set of cells that need recalculation
         self.dirty = set()
 
+        # Transitive-closure caches to avoid repeated DFS on hot paths.
+        self._deps_closure_cache = {}
+        self._dependents_closure_cache = {}
+
+    def _invalidate_closure_cache(self):
+        """Invalidate cached transitive-closure lookups."""
+
+        self._deps_closure_cache.clear()
+        self._dependents_closure_cache.clear()
+
     def add_dependency(self, dependent, dependency):
         """Add a dependency relationship
 
@@ -75,6 +89,8 @@ class DependencyGraph:
 
         self.dependencies[dependent].add(dependency)
         self.dependents[dependency].add(dependent)
+        self._invalidate_closure_cache()
+        logger.debug("Added dependency %s -> %s", dependent, dependency)
 
     def remove_cell(self, key, remove_reverse_edges=False):
         """Remove dependency relationships for a cell
@@ -93,20 +109,27 @@ class DependencyGraph:
 
         """
 
+        logger.debug("Removing cell %s (remove_reverse_edges=%s)",
+                     key, remove_reverse_edges)
+
         # Remove forward edges: this cell no longer depends on anything
         if key in self.dependencies:
             for dependency in self.dependencies[key]:
                 self.dependents[dependency].discard(key)
             del self.dependencies[key]
+            logger.debug("Removed forward edges for cell %s", key)
 
         # Remove reverse edges: nothing depends on this cell anymore
         if remove_reverse_edges and key in self.dependents:
             for dependent in self.dependents[key]:
                 self.dependencies[dependent].discard(key)
             del self.dependents[key]
+            logger.debug("Removed reverse edges for cell %s", key)
 
         # Clear dirty flag for removed cell
         self.dirty.discard(key)
+        self._invalidate_closure_cache()
+        logger.debug("Cleared dirty flag for removed cell %s", key)
 
     def check_for_cycles(self, start_key):
         """Check if there are any cycles starting from the given cell
@@ -125,31 +148,38 @@ class DependencyGraph:
 
         """
 
+        logger.debug("Checking for cycles starting from %s", start_key)
         visited = set()
-        rec_stack = []  # Recursion stack to track current path
+        rec_stack = []
+        rec_stack_set = set()
 
-        def dfs(key):
-            """DFS helper that returns True if cycle found"""
+        stack = [(start_key, iter(self.dependencies.get(start_key, set())))]
+        while stack:
+            key, iterator = stack[-1]
 
-            if key in rec_stack:
-                # Found a cycle! Build the cycle path
-                cycle_start_idx = rec_stack.index(key)
-                cycle = rec_stack[cycle_start_idx:] + [key]
+            if key not in visited:
+                visited.add(key)
+                rec_stack.append(key)
+                rec_stack_set.add(key)
+
+            try:
+                dependency = next(iterator)
+            except StopIteration:
+                stack.pop()
+                rec_stack.pop()
+                rec_stack_set.remove(key)
+                continue
+
+            if dependency in rec_stack_set:
+                cycle_start_idx = rec_stack.index(dependency)
+                cycle = rec_stack[cycle_start_idx:] + [dependency]
+                logger.debug("Cycle detected: %s", cycle)
                 raise CircularRefError(cycle)
 
-            if key in visited:
-                return  # Already explored this path
+            if dependency not in visited:
+                stack.append((dependency, iter(self.dependencies.get(dependency, set()))))
 
-            visited.add(key)
-            rec_stack.append(key)
-
-            # Visit all dependencies (cells this cell depends on)
-            for dependency in self.dependencies.get(key, set()):
-                dfs(dependency)
-
-            rec_stack.pop()
-
-        dfs(start_key)
+        logger.debug("No cycles detected from %s", start_key)
 
     def mark_dirty(self, key):
         """Mark a cell and all its dependents as dirty
@@ -163,15 +193,16 @@ class DependencyGraph:
 
         """
 
-        if key in self.dirty:
-            return  # Already dirty, avoid redundant work
+        stack = [key]
+        while stack:
+            current = stack.pop()
+            if current in self.dirty:
+                logger.debug("Cell %s already dirty; skipping", current)
+                continue
 
-        self.dirty.add(key)
-
-        # Propagate to all dependents (cells that depend on this cell)
-        dependents = self.dependents.get(key, set())
-        for dependent in dependents:
-            self.mark_dirty(dependent)  # Recursive propagation
+            self.dirty.add(current)
+            logger.debug("Marked cell %s dirty", current)
+            stack.extend(self.dependents.get(current, set()))
 
     def is_dirty(self, key):
         """Check if a cell is marked dirty
@@ -188,7 +219,9 @@ class DependencyGraph:
 
         """
 
-        return key in self.dirty
+        dirty = key in self.dirty
+        logger.debug("Dirty check for %s: %s", key, dirty)
+        return dirty
 
     def clear_dirty(self, key):
         """Clear the dirty flag for a cell
@@ -201,6 +234,7 @@ class DependencyGraph:
         """
 
         self.dirty.discard(key)
+        logger.debug("Cleared dirty flag for %s", key)
 
     def get_all_dependencies(self, key):
         """Get all transitive dependencies for a cell
@@ -224,22 +258,25 @@ class DependencyGraph:
 
         """
 
+        cached = self._deps_closure_cache.get(key)
+        if cached is not None:
+            logger.debug("Transitive dependencies cache hit for %s", key)
+            return set(cached)
+
         result = set()
-        visited = set()
-
-        def dfs(current_key):
-            """DFS to collect all transitive dependencies"""
-
-            if current_key in visited:
-                return
-
-            visited.add(current_key)
-
+        visited = {key}
+        stack = [key]
+        while stack:
+            current_key = stack.pop()
             for dependency in self.dependencies.get(current_key, set()):
+                if dependency in visited:
+                    continue
+                visited.add(dependency)
                 result.add(dependency)
-                dfs(dependency)
+                stack.append(dependency)
 
-        dfs(key)
+        self._deps_closure_cache[key] = frozenset(result)
+        logger.debug("Transitive dependencies for %s: %s", key, result)
         return result
 
     def get_all_dependents(self, key):
@@ -264,22 +301,25 @@ class DependencyGraph:
 
         """
 
+        cached = self._dependents_closure_cache.get(key)
+        if cached is not None:
+            logger.debug("Transitive dependents cache hit for %s", key)
+            return set(cached)
+
         result = set()
-        visited = set()
-
-        def dfs(current_key):
-            """DFS to collect all transitive dependents"""
-
-            if current_key in visited:
-                return
-
-            visited.add(current_key)
-
+        visited = {key}
+        stack = [key]
+        while stack:
+            current_key = stack.pop()
             for dependent in self.dependents.get(current_key, set()):
+                if dependent in visited:
+                    continue
+                visited.add(dependent)
                 result.add(dependent)
-                dfs(dependent)
+                stack.append(dependent)
 
-        dfs(key)
+        self._dependents_closure_cache[key] = frozenset(result)
+        logger.debug("Transitive dependents for %s: %s", key, result)
         return result
 
     def get_all_dirty(self):
@@ -292,4 +332,6 @@ class DependencyGraph:
 
         """
 
-        return set(self.dirty)
+        all_dirty = set(self.dirty)
+        logger.debug("All dirty cells requested: %s", all_dirty)
+        return all_dirty

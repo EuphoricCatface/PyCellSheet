@@ -49,14 +49,17 @@ from builtins import str, map, object
 import ast
 from base64 import b64decode, b85encode
 from collections import OrderedDict
+import re
 from typing import Any, BinaryIO, Callable, Iterable, Tuple
 
 try:
     from pyspread.lib.attrdict import AttrDict
+    from pyspread.lib.sheet_name import sanitize_loaded_sheet_name, generate_unique_sheet_name
     from pyspread.lib.selection import Selection
     from pyspread.model.model import CellAttribute, CodeArray
 except ImportError:
     from lib.attrdict import AttrDict
+    from lib.sheet_name import sanitize_loaded_sheet_name, generate_unique_sheet_name
     from lib.selection import Selection
     from model.model import CellAttribute, CodeArray
 
@@ -133,6 +136,7 @@ class PycsReader:
         # Now there are many pages of macros
         self.current_macro = -1
         self.current_macro_remaining = 0
+        self._macro_header_re = re.compile(r"^\(macro:(.+)\)\s+([0-9]+)$")
 
     def __iter__(self):
         """Iterates over self.pycs_file, replacing everything in code_array"""
@@ -153,6 +157,9 @@ class PycsReader:
         # Apply cell attributes post fixes
         for cell_attribute in self.cell_attributes_postfixes:
             self.code_array.cell_attributes.append(cell_attribute)
+
+        # Ensure sheet_names length always matches table count after load.
+        self._finalize_sheet_names()
 
     # Decorators
 
@@ -226,7 +233,7 @@ class PycsReader:
 
         """
 
-        sheet_name = line.rstrip('\n')
+        raw_sheet_name = line.rstrip('\n')
         # Initialize sheet_names list if first call in this section
         if not hasattr(self, '_sheet_names_initialized'):
             if hasattr(self.code_array.dict_grid, 'sheet_names'):
@@ -234,7 +241,34 @@ class PycsReader:
             self._sheet_names_initialized = True
         # Append to sheet_names list (order matters)
         if hasattr(self.code_array.dict_grid, 'sheet_names'):
-            self.code_array.dict_grid.sheet_names.append(sheet_name)
+            sheet_names = self.code_array.dict_grid.sheet_names
+            # Ignore extra names beyond table count.
+            if len(sheet_names) >= self.code_array.shape[2]:
+                return
+            sheet_name = sanitize_loaded_sheet_name(
+                raw_sheet_name,
+                sheet_names,
+                fallback_index=len(sheet_names),
+            )
+            sheet_names.append(sheet_name)
+
+    def _finalize_sheet_names(self):
+        """Normalize sheet names count and fill missing names deterministically."""
+
+        sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+        if sheet_names is None:
+            return
+
+        expected_count = self.code_array.shape[2]
+        normalized = []
+
+        for i in range(expected_count):
+            raw = sheet_names[i] if i < len(sheet_names) else ""
+            normalized.append(
+                sanitize_loaded_sheet_name(raw, normalized, fallback_index=i)
+            )
+
+        self.code_array.dict_grid.sheet_names = normalized
 
     def _pycs2code(self, line: str):
         """Updates code in pycs code_array
@@ -382,22 +416,26 @@ class PycsReader:
             self.current_macro_remaining -= 1
             return
 
-        sheet_identifier = ""
-        if not line.startswith("(macro:"):
+        header_line = line.rstrip("\r\n")
+        header_match = self._macro_header_re.fullmatch(header_line)
+        if header_match is None:
             raise ValueError("The save file does not follow the macro name conventions")
-        for i in iter(line[7:]):
-            if i == ")":
-                break
-            sheet_identifier += i
+        raw_sheet_identifier, line_count_str = header_match.groups()
+
+        try:
+            parsed_identifier = ast.literal_eval(raw_sheet_identifier)
+        except Exception:
+            parsed_identifier = raw_sheet_identifier
 
         # Try to parse as integer (old format), otherwise treat as sheet name
         try:
-            new_sheet_number = int(sheet_identifier)
+            new_sheet_number = int(parsed_identifier)
             if self.current_macro + 1 != new_sheet_number:
                 raise ValueError("The save file does not follow the macro name conventions")
         except ValueError:
             # Sheet identifier is a name, not a number - look it up
             sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+            sheet_identifier = str(parsed_identifier)
             if sheet_names and sheet_identifier in sheet_names:
                 new_sheet_number = sheet_names.index(sheet_identifier)
             else:
@@ -406,9 +444,6 @@ class PycsReader:
 
         self.current_macro = new_sheet_number
 
-        line_count_str = ""
-        for i in iter(line[9 + len(sheet_identifier)]):
-            line_count_str += i
         self.current_macro_remaining = int(line_count_str)
 
 class PycsWriter(object):
@@ -447,6 +482,20 @@ class PycsWriter(object):
             for line in self._section2writer[key]():
                 yield line
 
+    def _normalized_sheet_names(self) -> list[str]:
+        """Return valid, unique sheet names aligned to current table count."""
+
+        table_count = self.code_array.shape[2]
+        raw_names = getattr(self.code_array.dict_grid, 'sheet_names', []) or []
+
+        normalized = []
+        for i in range(table_count):
+            raw = raw_names[i] if i < len(raw_names) else ""
+            normalized.append(
+                generate_unique_sheet_name(raw, normalized, fallback_index=i)
+            )
+        return normalized
+
     def __len__(self) -> int:
         """Returns how many lines will be written when saving the code_array"""
 
@@ -484,9 +533,8 @@ class PycsWriter(object):
 
         """
 
-        if hasattr(self.code_array.dict_grid, 'sheet_names'):
-            for name in self.code_array.dict_grid.sheet_names:
-                yield name + u"\n"
+        for name in self._normalized_sheet_names():
+            yield name + u"\n"
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format
@@ -579,12 +627,13 @@ class PycsWriter(object):
         """
 
         macros = self.code_array.dict_grid.macros
-        sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+        sheet_names = self._normalized_sheet_names()
         for i, macro in enumerate(macros):
             # Use sheet name if available, otherwise fall back to index
-            sheet_identifier = sheet_names[i] if sheet_names and i < len(sheet_names) else str(i)
+            sheet_identifier = sheet_names[i] if i < len(sheet_names) else str(i)
+            macro_count = macro.count('\n') + 1
             macro_list = [
-                f"(macro:{sheet_identifier}) {macro.count('\n') + 1}",
+                f"(macro:{sheet_identifier!r}) {macro_count}",
                 macro,
                 ""  # To append a linebreak at the end
             ]

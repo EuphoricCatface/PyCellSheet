@@ -48,6 +48,7 @@ sys.path.pop(0)
 class Settings:
     """Simulates settings class"""
     timeout = 1000
+    recalc_mode = "auto"
 
 
 @pytest.fixture
@@ -353,3 +354,53 @@ def test_none_vs_empty_caching(code_array):
     cached = code_array.smart_cache.get((0, 0, 0))
     assert cached is None
     assert cached is not SmartCache.INVALID
+
+
+def test_branching_formula_rebuilds_dependencies(code_array):
+    """Dependencies should track only the currently executed branch."""
+
+    # C1 controls branch
+    code_array[0, 2, 0] = "True"
+    code_array[0, 0, 0] = "10"   # A1
+    code_array[0, 3, 0] = "99"   # D1
+
+    # B1 = A1 if C1 else D1
+    code_array[0, 1, 0] = 'C("A1") if C("C1") else C("D1")'
+    assert code_array[0, 1, 0] == 10
+    deps = code_array.dep_graph.dependencies[(0, 1, 0)]
+    assert (0, 0, 0) in deps   # A1
+    assert (0, 2, 0) in deps   # C1
+    assert (0, 3, 0) not in deps  # D1 not taken
+
+    # Flip condition and reevaluate B1
+    code_array[0, 2, 0] = "False"
+    assert code_array[0, 1, 0] == 99
+    deps = code_array.dep_graph.dependencies[(0, 1, 0)]
+    assert (0, 0, 0) not in deps
+    assert (0, 2, 0) in deps
+    assert (0, 3, 0) in deps
+
+
+def test_cr_dynamic_target_rebuilds_dependencies(code_array):
+    """CR(...) target changes should update dependency edges."""
+
+    # A1 stores target address as string
+    code_array[0, 0, 0] = '"C1"'
+    code_array[0, 2, 0] = "11"  # C1
+    code_array[0, 3, 0] = "22"  # D1
+
+    # B1 reads target from A1
+    code_array[0, 1, 0] = 'CR(C("A1"))'
+    assert code_array[0, 1, 0] == 11
+    deps = code_array.dep_graph.dependencies[(0, 1, 0)]
+    assert (0, 0, 0) in deps  # A1
+    assert (0, 2, 0) in deps  # C1
+    assert (0, 3, 0) not in deps
+
+    # Change target to D1 and reevaluate
+    code_array[0, 0, 0] = '"D1"'
+    assert code_array[0, 1, 0] == 22
+    deps = code_array.dep_graph.dependencies[(0, 1, 0)]
+    assert (0, 0, 0) in deps
+    assert (0, 2, 0) not in deps
+    assert (0, 3, 0) in deps
