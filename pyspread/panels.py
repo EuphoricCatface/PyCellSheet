@@ -238,10 +238,45 @@ class SheetScriptPanel(QDialog):
             self.applied_indicator.applied = True
 
     def update_current_table(self, current):
-        if not self.applied_indicator.applied:
-            self.code_array.macros_draft[self.current_table] = self.macro_editor.toPlainText()
+        self.persist_current_draft()
         self.current_table = current
         self.update_()
+
+    def persist_current_draft(self):
+        """Persist current editor content as draft if not applied."""
+
+        if not self.applied_indicator.applied:
+            self.code_array.macros_draft[self.current_table] = self.macro_editor.toPlainText()
+
+    def has_unapplied_drafts(self) -> bool:
+        """Returns whether any sheet has unapplied draft content."""
+
+        self.persist_current_draft()
+        return any(draft is not None for draft in self.code_array.macros_draft)
+
+    def discard_all_drafts(self):
+        """Discard all unapplied drafts across all tables."""
+
+        for idx in range(len(self.code_array.macros_draft)):
+            self.code_array.macros_draft[idx] = None
+        self.update_()
+
+    def apply_all_drafts_to_scripts(self) -> int:
+        """Apply all draft scripts to applied scripts.
+
+        Returns the number of tables that were updated from draft content.
+        """
+
+        self.persist_current_draft()
+        updated = 0
+        for idx, draft in enumerate(self.code_array.macros_draft):
+            if draft is None:
+                continue
+            self.code_array.macros[idx] = draft
+            self.code_array.macros_draft[idx] = None
+            updated += 1
+        self.update_()
+        return updated
 
     def update_result_viewer(self, result: str = "", err: str = ""):
         """Update event result following execution by main window

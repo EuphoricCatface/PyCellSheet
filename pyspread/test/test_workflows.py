@@ -253,6 +253,147 @@ class TestWorkflows:
             main_window.safe_mode = old_safe_mode
             main_window.sheet_script_panel.current_table = old_current_table
 
+    def test_resolve_sheet_script_drafts_cancel_blocks_transition(self, monkeypatch):
+        """Cancelling draft resolution should block transition workflow actions."""
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_shape = code_array.shape
+        old_drafts = list(code_array.macros_draft)
+        old_safe_mode = main_window.safe_mode
+        old_changed = main_window.settings.changed_since_save
+
+        class _DraftDialog:
+            def __init__(self, _parent):
+                self.choice = None
+
+        called = {"count": 0}
+
+        def fake_apply_all_sheet_scripts():
+            called["count"] += 1
+            return 0, 0
+
+        try:
+            main_window.safe_mode = False
+            main_window.settings.changed_since_save = False
+            code_array.shape = (old_shape[0], old_shape[1], 1)
+            code_array.macros_draft = [None]
+            code_array.macros_draft[0] = "x = 1"
+            panel.current_table = 0
+            panel.update_()
+
+            monkeypatch.setitem(
+                self.workflows.file_new.__globals__,
+                "SheetScriptDraftDialog",
+                _DraftDialog,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                                fake_apply_all_sheet_scripts)
+            monkeypatch.setattr(GridShapeDialog, "shape", (5, 5, 1))
+
+            self.workflows.file_new()
+
+            assert called["count"] == 0
+            assert code_array.shape == (old_shape[0], old_shape[1], 1)
+            assert code_array.macros_draft[0] == "x = 1"
+        finally:
+            code_array.shape = old_shape
+            code_array.macros_draft = old_drafts
+            main_window.safe_mode = old_safe_mode
+            main_window.settings.changed_since_save = old_changed
+            panel.current_table = 0
+            panel.update_()
+
+    def test_resolve_sheet_script_drafts_apply_promotes_and_executes(self, monkeypatch):
+        """Applying draft resolution should promote drafts and execute scripts."""
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_shape = code_array.shape
+        old_macros = list(code_array.macros)
+        old_drafts = list(code_array.macros_draft)
+        old_safe_mode = main_window.safe_mode
+        old_changed = main_window.settings.changed_since_save
+
+        class _DraftDialog:
+            def __init__(self, _parent):
+                self.choice = "apply"
+
+        called = {"count": 0}
+
+        def fake_apply_all_sheet_scripts():
+            called["count"] += 1
+            return 1, 0
+
+        try:
+            main_window.safe_mode = False
+            main_window.settings.changed_since_save = False
+            code_array.shape = (old_shape[0], old_shape[1], 1)
+            code_array.macros = [""]
+            code_array.macros_draft = ["x = 11"]
+            panel.current_table = 0
+            panel.update_()
+
+            monkeypatch.setitem(
+                self.workflows._resolve_unapplied_sheet_script_drafts.__globals__,
+                "SheetScriptDraftDialog",
+                _DraftDialog,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                                fake_apply_all_sheet_scripts)
+
+            assert self.workflows._resolve_unapplied_sheet_script_drafts()
+            assert called["count"] == 1
+            assert code_array.macros[0] == "x = 11"
+            assert code_array.macros_draft[0] is None
+            assert main_window.settings.changed_since_save is True
+        finally:
+            code_array.shape = old_shape
+            code_array.macros = old_macros
+            code_array.macros_draft = old_drafts
+            main_window.safe_mode = old_safe_mode
+            main_window.settings.changed_since_save = old_changed
+            panel.current_table = 0
+            panel.update_()
+
+    def test_file_save_cancelled_by_sheet_script_draft_dialog(self, monkeypatch):
+        """file_save should abort if draft-resolution dialog is cancelled."""
+
+        class _DraftDialog:
+            def __init__(self, _parent):
+                self.choice = None
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_drafts = list(code_array.macros_draft)
+        old_changed = main_window.settings.changed_since_save
+        called = {"save": 0}
+
+        def fake_save(_filepath):
+            called["save"] += 1
+            return True
+
+        try:
+            code_array.macros_draft[0] = "x = 3"
+            panel.current_table = 0
+            panel.update_()
+            main_window.settings.changed_since_save = False
+
+            monkeypatch.setitem(
+                self.workflows.file_save.__globals__,
+                "SheetScriptDraftDialog",
+                _DraftDialog,
+            )
+            monkeypatch.setattr(self.workflows, "_save", fake_save)
+
+            assert self.workflows.file_save() is False
+            assert called["save"] == 0
+        finally:
+            code_array.macros_draft = old_drafts
+            main_window.settings.changed_since_save = old_changed
+            panel.current_table = 0
+            panel.update_()
+
     def test_filepath_open_untrusted_defers_scripts_until_approve(self, tmp_path, monkeypatch):
         """Untrusted loads must stay in safe mode and defer script execution."""
 

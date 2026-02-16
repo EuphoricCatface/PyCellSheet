@@ -167,6 +167,35 @@ class DiscardDataDialog(DiscardChangesDialog):
         self.text = text
 
 
+class SheetScriptDraftDialog(DiscardChangesDialog):
+    """Modal dialog that asks how unapplied Sheet Script drafts are handled."""
+
+    title = "Unapplied Sheet Script drafts"
+    text = ("There are unapplied Sheet Script drafts.\n"
+            "Do you want to apply them before continuing?")
+    buttons = QMessageBox.StandardButton
+    choices = buttons.Apply | buttons.Discard | buttons.Cancel
+    default_choice = buttons.Apply
+
+    @property
+    def choice(self) -> str:
+        """User choice
+
+        Returns `"apply"` if the user chooses to apply drafts.
+        Returns `"discard"` if the user chooses to discard drafts.
+        Returns `None` if the user chooses to abort the operation.
+
+        """
+
+        button_approval = QMessageBox.warning(self.main_window, self.title,
+                                              self.text, self.choices,
+                                              self.default_choice)
+        if button_approval == QMessageBox.StandardButton.Apply:
+            return "apply"
+        if button_approval == QMessageBox.StandardButton.Discard:
+            return "discard"
+
+
 class ApproveWarningDialog:
     """Modal warning dialog for approving files to be evaled
 
