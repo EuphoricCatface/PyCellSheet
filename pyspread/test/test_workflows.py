@@ -28,6 +28,7 @@ Unit tests for workflows.py
 """
 
 from contextlib import contextmanager
+import os
 from os.path import abspath, dirname, join
 from pathlib import Path
 import sys
@@ -198,6 +199,129 @@ class TestWorkflows:
             assert executed == 0
             assert errors == 0
         finally:
+            main_window.safe_mode = old_safe_mode
+
+    def test_apply_all_sheet_scripts_counts_errors_and_updates_current_view(self, monkeypatch):
+        """apply_all_sheet_scripts should count errors and update current-table output."""
+
+        code_array = main_window.grid.model.code_array
+        old_shape = code_array.shape
+        old_safe_mode = main_window.safe_mode
+        old_current_table = main_window.sheet_script_panel.current_table
+
+        try:
+            main_window.safe_mode = False
+            main_window.grid.model.shape = (old_shape[0], old_shape[1], 3)
+            main_window.sheet_script_panel.current_table = 1
+
+            calls = {"updated": [], "gui": 0, "data_changed": 0}
+
+            def fake_execute_sheet_script(table):
+                if table == 1:
+                    return "ok-table-1", ""
+                if table == 2:
+                    return "", "boom"
+                return "ok-table-0", ""
+
+            def fake_update_result_viewer(result, err):
+                calls["updated"].append((result, err))
+
+            def fake_gui_update():
+                calls["gui"] += 1
+
+            def fake_emit_data_changed_all():
+                calls["data_changed"] += 1
+
+            monkeypatch.setattr(code_array, "execute_sheet_script",
+                                fake_execute_sheet_script)
+            monkeypatch.setattr(main_window.sheet_script_panel, "update_result_viewer",
+                                fake_update_result_viewer)
+            monkeypatch.setattr(main_window.grid, "gui_update", fake_gui_update)
+            monkeypatch.setattr(main_window.grid.model, "emit_data_changed_all",
+                                fake_emit_data_changed_all)
+
+            executed, errors = self.workflows.apply_all_sheet_scripts()
+
+            assert executed == 3
+            assert errors == 1
+            assert calls["updated"] == [("ok-table-1", "")]
+            assert calls["gui"] == 1
+            assert calls["data_changed"] == 1
+        finally:
+            main_window.grid.model.shape = old_shape
+            main_window.safe_mode = old_safe_mode
+            main_window.sheet_script_panel.current_table = old_current_table
+
+    def test_filepath_open_untrusted_defers_scripts_until_approve(self, tmp_path, monkeypatch):
+        """Untrusted loads must stay in safe mode and defer script execution."""
+
+        payload = (
+            "[PyCellSheet save file version]\n"
+            "0.0\n"
+            "[shape]\n"
+            "1\t1\t1\n"
+            "[sheet_names]\n"
+            "Sheet 0\n"
+            "[macros]\n"
+            "(macro:'Sheet 0') 1\n"
+            "VALUE = 7\n"
+            "[grid]\n"
+            "0\t0\t0\t'abc'\n"
+            "[attributes]\n"
+            "[row_heights]\n"
+            "[col_widths]\n"
+        )
+        filepath = tmp_path / "untrusted.pycsu"
+        filepath.write_text(payload, encoding="utf-8")
+
+        code_array = main_window.grid.model.code_array
+        apply_calls = {"count": 0}
+        exec_calls = {"count": 0}
+        old_safe_mode = main_window.safe_mode
+        old_cwd = os.getcwd()
+
+        def fake_file_progress_gen(_main_window, iterable, _title, _label, _lines):
+            for i, line in enumerate(iterable, start=1):
+                yield i, line
+
+        def fake_apply_all_sheet_scripts():
+            apply_calls["count"] += 1
+            return 1, 0
+
+        def fake_execute_sheet_script(table):
+            exec_calls["count"] += 1
+            return "", ""
+
+        class _ApproveDialog:
+            def __init__(self, _parent):
+                self.choice = True
+
+        try:
+            monkeypatch.setitem(
+                self.workflows.filepath_open.__globals__,
+                "file_progress_gen",
+                fake_file_progress_gen,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts", fake_apply_all_sheet_scripts)
+            monkeypatch.setattr(code_array, "execute_sheet_script", fake_execute_sheet_script)
+            monkeypatch.setitem(
+                main_window.on_approve.__globals__,
+                "ApproveWarningDialog",
+                _ApproveDialog,
+            )
+
+            self.workflows.filepath_open(filepath)
+
+            assert main_window.safe_mode is True
+            assert exec_calls["count"] == 0
+            assert apply_calls["count"] == 0
+
+            main_window.on_approve()
+
+            assert main_window.safe_mode is False
+            assert apply_calls["count"] == 1
+        finally:
+            os.chdir(old_cwd)
             main_window.safe_mode = old_safe_mode
 
     param_count_file_lines = [
