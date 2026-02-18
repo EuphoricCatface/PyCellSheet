@@ -83,7 +83,7 @@ html_css_files = [
 
 html_title = 'pycellsheet API docs'
 html_short_title = "pycellsheet"
-html_favicon = "_static/pycellsheet.png"
+html_favicon = "_static/pyspread.png"
 
 
 html_sidebars = {
