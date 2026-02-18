@@ -119,9 +119,19 @@ except ImportError:
 
 INITSCRIPT_DEFAULT = """
 try:
-    from pyspread.lib.spreadsheet import *
+    from pycellsheet.lib.spreadsheet import *
 except ImportError:
-    from lib.spreadsheet import *
+    try:
+        from pyspread.lib.spreadsheet import *
+    except ImportError:
+        from lib.spreadsheet import *
+
+import random as random_
+RANDOM_SEED = 0
+random = random_.Random(RANDOM_SEED)
+# For non-deterministic runs, uncomment and customize:
+# import datetime as datetime_
+# random.seed(datetime_.datetime.now().timestamp())
 # The above is equivalent to:
 # try:
 #     from pyspread.lib.spreadsheet.array import *

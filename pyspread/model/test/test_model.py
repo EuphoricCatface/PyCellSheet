@@ -46,7 +46,8 @@ pyspread_path = abspath(join(dirname(__file__) + "/../.."))
 sys.path.insert(0, pyspread_path)
 
 from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
-                         CodeArray, CellAttribute, DefaultCellAttributeDict)
+                         CodeArray, CellAttribute, DefaultCellAttributeDict,
+                         INITSCRIPT_DEFAULT)
 
 from lib.attrdict import AttrDict
 from lib.selection import Selection
@@ -635,6 +636,26 @@ class TestCodeArray(object):
         self.code_array.execute_macros(0)
         assert self.code_array._eval_cell((0, 0, 0), "a") == 5
         assert self.code_array._eval_cell((0, 0, 0), "f(2)") == 4
+
+    def test_init_script_default_has_deterministic_random_policy(self):
+        assert "from pycellsheet.lib.spreadsheet import *" in INITSCRIPT_DEFAULT
+        assert "RANDOM_SEED = 0" in INITSCRIPT_DEFAULT
+        assert "random = random_.Random(RANDOM_SEED)" in INITSCRIPT_DEFAULT
+
+    def test_sheet_script_random_seed_is_deterministic_after_reapply(self):
+        self.code_array.sheet_scripts = [
+            "import random as random_\n"
+            "RANDOM_SEED = 123\n"
+            "random = random_.Random(RANDOM_SEED)\n"
+        ]
+        self.code_array[0, 0, 0] = "random.random()"
+
+        self.code_array.execute_sheet_script(0)
+        first = self.code_array[0, 0, 0]
+        self.code_array.execute_sheet_script(0)
+        second = self.code_array[0, 0, 0]
+
+        assert first == second
 
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""
