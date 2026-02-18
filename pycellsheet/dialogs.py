@@ -1724,7 +1724,7 @@ class CsvExportDialog(QDialog):
 class TutorialDialog(QDialog):
     """Dialog for browsing the pycellsheet tutorial"""
 
-    window_title = "pycellsheet tutorial"
+    window_title = "PyCellSheet tutorial"
     size_hint = 1000, 800
     path: Path = TUTORIAL_PATH / 'tutorial.md'
 
@@ -1764,7 +1764,7 @@ class TutorialDialog(QDialog):
 class ManualDialog(TutorialDialog):
     """Dialog for browsing the pycellsheet manual"""
 
-    window_title = "pycellsheet manual"
+    window_title = "PyCellSheet manual"
     size_hint = 1000, 800
     title2path = {
         "Overview": MANUAL_PATH / 'overview.md',

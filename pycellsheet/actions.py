@@ -179,7 +179,7 @@ class MainWindowActions(AttrDict):
         self.preferences = Action(self.parent, "Preferences...",
                                   self.parent.on_preferences,
                                   icon=Icon.preferences,
-                                  statustip='Pyspread setup parameters',
+                                  statustip='PyCellSheet setup parameters',
                                   role=QAction.MenuRole.PreferencesRole)
 
         self.quit = Action(self.parent, "&Quit", self.parent.closeEvent,
@@ -826,22 +826,22 @@ class MainWindowActions(AttrDict):
                              self.parent.on_manual,
                              icon=Icon.help,
                              shortcut='F1' if self.shortcuts else "",
-                             statustip='Display the pycellsheet manual')
+                             statustip='Display the PyCellSheet manual')
 
         self.tutorial = Action(self.parent, "Tutorial...",
                                self.parent.on_tutorial,
                                icon=Icon.tutorial,
-                               statustip='Display a pycellsheet tutorial')
+                               statustip='Display a PyCellSheet tutorial')
 
         self.dependencies = Action(self.parent, "Dependencies...",
                                    self.parent.on_dependencies,
                                    icon=Icon.dependencies,
                                    statustip='List and install dependencies')
 
-        self.about = Action(self.parent, "About pycellsheet...",
+        self.about = Action(self.parent, "About PyCellSheet...",
                             self.parent.on_about,
                             icon=Icon.pycellsheet,
-                            statustip='About pycellsheet',
+                            statustip='About PyCellSheet',
                             role=QAction.MenuRole.AboutRole)
 
     def disable_unavailable(self):

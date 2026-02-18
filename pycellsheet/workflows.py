@@ -63,6 +63,7 @@ except ImportError:
     openpyxl = None
 
 try:
+    from pycellsheet.__init__ import APP_NAME
     from pycellsheet import commands
     from pycellsheet.dialogs \
         import (DiscardChangesDialog, SheetScriptDraftDialog,
@@ -83,6 +84,7 @@ try:
     from pycellsheet.lib.pycellsheet import EmptyCell
     from pycellsheet.model.model import CellAttribute, class_format_functions
 except ImportError:
+    from __init__ import APP_NAME
     import commands
     from dialogs \
         import (DiscardChangesDialog, SheetScriptDraftDialog,
@@ -226,9 +228,9 @@ class Workflows:
         # Get the current filepath
         filepath = self.main_window.settings.last_file_input_path
         if filepath == Path.home():
-            title = "pycellsheet"
+            title = APP_NAME
         else:
-            title = f"{filepath.name} - pycellsheet"
+            title = f"{filepath.name} - {APP_NAME}"
         self.main_window.setWindowTitle(title)
 
     def apply_all_sheet_scripts(self):
