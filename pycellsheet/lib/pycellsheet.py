@@ -25,12 +25,12 @@ import collections
 import threading
 
 try:
-    from pycellsheet.lib.exceptions import CircularRefError
+    from pycellsheet.lib.exceptions import CircularRefError, SpillRefError
 except ImportError:
     try:
-        from lib.exceptions import CircularRefError
+        from lib.exceptions import CircularRefError, SpillRefError
     except ImportError:
-        from .exceptions import CircularRefError
+        from .exceptions import CircularRefError, SpillRefError
 
 
 # Dependency tracking context manager
@@ -781,10 +781,11 @@ class PythonEvaluator:
             for co in range(range_output.width):
                 if ro == 0 and co == 0:
                     continue
+                target_key = (r1 + ro, c1 + co, current_table)
                 if code_array((r1 + ro, c1 + co, current_table)) == f"RangeOutput.OFFSET({ro}, {co})":
                     code_array[r1 + ro, c1 + co, current_table] = ""
                 if code_array[r1 + ro, c1 + co, current_table] != EmptyCell:
-                    raise ValueError("Cannot expand RangeOutput")
+                    raise SpillRefError(current_key, target_key)
         for ro in range(range_output.height):
             for co in range(range_output.width):
                 if ro == 0 and co == 0:
@@ -810,6 +811,8 @@ class Formatter:
     def display_formatter(value):
         if isinstance(value, RangeOutput):
             value = value.lst[0] if value.lst else "EMPTY_RANGEOUTPUT"
+        if isinstance(value, SpillRefError) or type(value).__name__ == "SpillRefError":
+            return "#REF!"
 
         if isinstance(value, Exception):
             return value.__class__.__name__

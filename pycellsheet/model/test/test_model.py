@@ -50,6 +50,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          INITSCRIPT_DEFAULT, _get_isolated_builtins)
 
 from lib.attrdict import AttrDict
+from lib.exceptions import SpillRefError
 from lib.selection import Selection
 from lib.pycellsheet import EmptyCell, ExpressionParser, PythonCode, SpreadSheetCode
 sys.path.pop(0)
@@ -765,6 +766,13 @@ class TestCodeArray(object):
         self.code_array.sheet_scripts = ["import math\nimport random as math"]
         _, errs = self.code_array.execute_sheet_script(0)
         assert "Duplicate import binding 'math'" in errs
+
+    def test_range_output_spill_conflict_returns_spill_ref_error(self):
+        self.code_array[0, 1, 0] = ">99"
+        self.code_array[0, 0, 0] = ">RangeOutput(2, [1, 2])"
+
+        result = self.code_array[0, 0, 0]
+        assert isinstance(result, SpillRefError)
 
     def test_execute_sheet_script_restores_streams_on_base_exception(self):
         old_stdout, old_stderr = sys.stdout, sys.stderr

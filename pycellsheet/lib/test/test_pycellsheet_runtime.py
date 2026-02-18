@@ -26,6 +26,11 @@ Focused contract tests for runtime helpers in pycellsheet.py.
 import pytest
 import random
 
+try:
+    from pycellsheet.lib.exceptions import SpillRefError
+except ImportError:
+    from ..exceptions import SpillRefError
+
 from ..pycellsheet import (
     CELL_META_GENERATOR,
     EmptyCell,
@@ -72,6 +77,9 @@ def test_helptext_query_formatting():
 def test_formatter_display_and_tooltip_contracts():
     assert Formatter.display_formatter(ValueError("bad")) == "ValueError"
     assert Formatter.tooltip_formatter(ValueError("bad")) == "bad"
+    spill_err = SpillRefError((0, 0, 0), (0, 1, 0))
+    assert Formatter.display_formatter(spill_err) == "#REF!"
+    assert "Spill conflict" in Formatter.tooltip_formatter(spill_err)
 
     help_text = HelpText((str,), "string help")
     assert Formatter.display_formatter(help_text) == "help(str)"

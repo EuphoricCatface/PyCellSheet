@@ -97,7 +97,7 @@ try:
     # Dependency tracking and smart caching
     from pycellsheet.lib.dependency_graph import DependencyGraph
     from pycellsheet.lib.smart_cache import SmartCache
-    from pycellsheet.lib.exceptions import CircularRefError
+    from pycellsheet.lib.exceptions import CircularRefError, SpillRefError
 
 except ImportError:
     from settings import Settings
@@ -114,7 +114,7 @@ except ImportError:
     # Dependency tracking and smart caching
     from lib.dependency_graph import DependencyGraph
     from lib.smart_cache import SmartCache
-    from lib.exceptions import CircularRefError
+    from lib.exceptions import CircularRefError, SpillRefError
 
 
 INITSCRIPT_DEFAULT = \
@@ -1624,6 +1624,9 @@ class CodeArray(DataArray):
 
         except CircularRefError as err:
             # Circular reference detected during evaluation
+            result = err
+
+        except SpillRefError as err:
             result = err
 
         except AttributeError as err:
