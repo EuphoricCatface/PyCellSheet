@@ -31,7 +31,7 @@
  * :func:`datetime`
  * :func:`time`
  * :func:`make_object`
- * :dict:`typehandlers`
+ * ``dict``: ``typehandlers``
 
 """
 

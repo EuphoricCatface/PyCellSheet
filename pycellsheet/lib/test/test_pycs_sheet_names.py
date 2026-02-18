@@ -27,7 +27,7 @@ import pytest
 project_path = abspath(join(dirname(__file__) + "/../.."))
 sys.path.insert(0, project_path)
 
-from interfaces.pycs import PycsReader, PycsWriter
+from interfaces.pycs import PycsReader, PycsWriter, wxcolor2rgb, qt52qt6_fontweights, qt62qt5_fontweights
 
 sys.path.pop(0)
 
@@ -248,3 +248,73 @@ def test_reader_macros_are_visible_via_sheet_scripts_alias():
 
     assert target.macros == ["x = 9"]
     assert target.sheet_scripts == ["x = 9"]
+
+
+def test_color_and_weight_conversion_helpers():
+    assert wxcolor2rgb(0x112233) == (0x11, 0x22, 0x33)
+    assert qt52qt6_fontweights(50) == 405
+    assert qt62qt5_fontweights(405) == 50
+
+
+def test_pycs_version_rejects_future_versions():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+    with pytest.raises(ValueError):
+        reader._pycs_version("1.0\n")
+
+
+def test_pycs2shape_rejects_non_positive_dimension():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+    with pytest.raises(ValueError):
+        reader._pycs2shape("0\t1\t1\n")
+
+
+def test_pycs2code_ignores_out_of_bounds_keys():
+    code_array = _DummyCodeArray(1)
+    code_array.shape = (1, 1, 1)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2code("0\t0\t0\tok\n")
+    reader._pycs2code("1\t0\t0\tnope\n")
+
+    assert code_array.dict_grid._grid == {(0, 0, 0): "ok"}
+
+
+def test_attr_convert_1to2_handles_known_transforms():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    assert reader._attr_convert_1to2("bordercolor_bottom", 0x010203) == ("bordercolor_bottom", (1, 2, 3))
+    assert reader._attr_convert_1to2("fontweight", 90) == ("fontweight", 50)
+    assert reader._attr_convert_1to2("fontstyle", 93) == ("fontstyle", 1)
+    assert reader._attr_convert_1to2("markup", True) == ("renderer", "markup")
+    assert reader._attr_convert_1to2("angle", -10) == ("angle", 350)
+    assert reader._attr_convert_1to2("merge_area", None) == (None, None)
+    assert reader._attr_convert_1to2("justification", "center") == ("justification", "justify_center")
+    assert reader._attr_convert_1to2("vertical_align", "middle") == ("vertical_align", "align_center")
+    assert reader._attr_convert_1to2("other", "x") == ("other", "x")
+
+
+def test_pycs2attributes_parses_cell_attribute_rows():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+    line = "[]\t[]\t[]\t[]\t[(0, 0)]\t0\t'angle'\t90\n"
+
+    reader._pycs2attributes(line)
+
+    assert len(code_array.cell_attributes) == 1
+    selection, table, attr = code_array.cell_attributes[0]
+    assert table == 0
+    assert (0, 0) in selection.cells
+    assert attr["angle"] == 90
+
+
+def test_pycs2sheet_scripts_nonsequential_numeric_header_falls_back_to_sequential():
+    code_array = _DummyCodeArray(2)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2sheet_scripts("(macro:2) 1\n")
+    reader._pycs2sheet_scripts("x = 1\n")
+
+    assert code_array.macros[0] == "x = 1"

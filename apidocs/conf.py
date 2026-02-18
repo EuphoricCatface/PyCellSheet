@@ -58,13 +58,16 @@ autodoc_member_order = "alphabetical"
 # Flags for the stuff to document..
 autodoc_default_flags = [
     'members',
-    'undoc-members',
     'private-members',
     #'special-members',
     'inherited-members',
     #"exclude-members ",
     'show-inheritance'
 ]
+
+autodoc_default_options = {
+    "exclude-members": "cell_to_update,gui_update,colorChanged,fontChanged,fontSizeChanged",
+}
 
 autoclass_content = "both"
 autosummary_generate = True
@@ -83,7 +86,7 @@ html_css_files = [
 
 html_title = 'pycellsheet API docs'
 html_short_title = "pycellsheet"
-html_favicon = "_static/pycellsheet.png"
+html_favicon = "_static/pyspread.png"
 
 
 html_sidebars = {
@@ -105,6 +108,21 @@ html_show_sphinx = False
 html_show_copyright = False
 
 html_context = {"git_repos_url": "https://github.com/EuphoricCatface/PyCellSheet"}
+
+# Normalize legacy docstring roles/links from upstream qimage2ndarray/matplotlib
+# docs so API builds stay stable while we keep source behavior unchanged.
+rst_epilog = """
+.. role:: mpltype(emphasis)
+.. _qimage: https://doc.qt.io/qt-6/qimage.html
+.. _numpy.ndarray: https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html
+.. _loading and saving images: https://doc.qt.io/qt-6/qimagereader.html
+"""
+
+# Keep API build signal-to-noise stable while we incrementally normalize
+# legacy type-hint forward references in vendored packaging helpers.
+suppress_warnings = [
+    "sphinx_autodoc_typehints.forward_reference",
+]
 
 intersphinx_mapping = {
     'python': ('http://docs.python.org/3', None),

@@ -1,7 +1,7 @@
-pyspread
-========
+pycellsheet
+===========
 
 .. toctree::
    :maxdepth: 4
 
-   pyspread
+   pycellsheet
