@@ -657,6 +657,16 @@ class TestCodeArray(object):
 
         assert first == second
 
+    def test_execute_sheet_script_warns_on_cell_like_globals(self):
+        self.code_array.sheet_scripts = ["A1 = 10\nvalue = 3"]
+        _, errs = self.code_array.execute_sheet_script(0)
+        assert "looks like a cell reference" in errs
+
+    def test_execute_sheet_script_warns_on_duplicate_import_bindings(self):
+        self.code_array.sheet_scripts = ["import math\nimport random as math"]
+        _, errs = self.code_array.execute_sheet_script(0)
+        assert "Duplicate import binding 'math'" in errs
+
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""
 

@@ -1304,6 +1304,56 @@ class CodeArray(DataArray):
         self._eval_warnings: dict[Tuple[int, int, int], list[str]] = {}
         self._format_warnings: dict[Tuple[int, int, int], str] = {}
 
+    @staticmethod
+    def _looks_like_cell_ref_name(name: str) -> bool:
+        """Return True if `name` resembles a spreadsheet cell reference."""
+
+        return bool(re.fullmatch(r"[A-Za-z]{1,4}[1-9][0-9]*", name))
+
+    @staticmethod
+    def _script_duplicate_import_warnings(sheet_script: str) -> list[str]:
+        """Collect duplicate import-binding warnings from a sheet script."""
+
+        warnings = []
+        try:
+            tree = ast.parse(sheet_script, mode="exec")
+        except Exception:
+            return warnings
+
+        bindings: dict[str, int] = defaultdict(int)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    bound = alias.asname or alias.name.split(".")[0]
+                    bindings[bound] += 1
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    bound = alias.asname or alias.name
+                    bindings[bound] += 1
+
+        for name in sorted(bindings):
+            if bindings[name] > 1:
+                warnings.append(
+                    f"WARNING: Duplicate import binding '{name}' appears {bindings[name]} times "
+                    f"in this Sheet Script."
+                )
+        return warnings
+
+    def _sheet_global_name_warnings(self, sheet_globals: dict[str, typing.Any]) -> list[str]:
+        """Collect warnings for risky global names."""
+
+        warnings = []
+        for name in sorted(sheet_globals):
+            if name == "__builtins__":
+                continue
+            if self._looks_like_cell_ref_name(name):
+                warnings.append(
+                    f"WARNING: Sheet global '{name}' looks like a cell reference and may be confusing."
+                )
+        return warnings
+
     def _clear_cell_warnings(self, key: Tuple[int, int, int]):
         self._eval_warnings.pop(key, None)
         self._format_warnings.pop(key, None)
@@ -1742,9 +1792,10 @@ class CodeArray(DataArray):
         sys.stdout = code_out
         sys.stderr = code_err
 
+        sheet_script = self.sheet_scripts[current_table]
         sheet_globals = {"__builtins__": _get_isolated_builtins()}
         try:
-            exec(self.sheet_scripts[current_table], sheet_globals)
+            exec(sheet_script, sheet_globals)
 
         except Exception:
             exc_info = sys.exc_info()
@@ -1756,6 +1807,10 @@ class CodeArray(DataArray):
 
         results = code_out.getvalue()
         errs = code_err.getvalue() + err_msg.getvalue()
+        diagnostics = self._script_duplicate_import_warnings(sheet_script)
+        diagnostics.extend(self._sheet_global_name_warnings(sheet_globals))
+        if diagnostics:
+            errs += "".join(msg + "\n" for msg in diagnostics)
 
         code_out.close()
         code_err.close()
@@ -1770,9 +1825,10 @@ class CodeArray(DataArray):
                 self.sheet_globals_copyable[current_table][k] = deepcopy(v)
             except TypeError:
                 if type(v) not in [types.ModuleType]:
-                    # TODO: proper warning
-                    errs += (f"WARNING: Per-sheet global variable {k}({type(v).__name__}) is not deepcopyable, "
-                             f"but is unknown if it can be safely used without doing so.\n")
+                    errs += (
+                        f"WARNING: Sheet global '{k}' ({type(v).__name__}) is not deepcopyable; "
+                        f"falling back to by-reference use.\n"
+                    )
                 self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
 
