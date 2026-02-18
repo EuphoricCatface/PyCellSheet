@@ -624,9 +624,33 @@ class ReferenceParser:
 
 class PythonEvaluator:
     @staticmethod
+    def _validate_no_top_level_return(block: ast.Module):
+        """Reject top-level return to keep sync-cell semantics explicit."""
+
+        parent_map = {}
+        for node in ast.walk(block):
+            for child in ast.iter_child_nodes(node):
+                parent_map[child] = node
+
+        def in_nested_function(node: ast.AST) -> bool:
+            cur = parent_map.get(node)
+            while cur is not None:
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                    return True
+                cur = parent_map.get(cur)
+            return False
+
+        for node in ast.walk(block):
+            if isinstance(node, ast.Return) and not in_nested_function(node):
+                raise SyntaxError(
+                    "Top-level 'return' is not allowed in sync cells. "
+                    "Use the last expression as the cell result."
+                )
+
+    @staticmethod
     def exec_then_eval(code: PythonCode,
                        _globals: dict = None, _locals: dict = None):
-        """execs multiline code and returns eval of last code line
+        """Execute suite and evaluate terminal expression if present.
 
         :param code: Code to be executed / evaled
         :param _globals: Globals dict for code execution and eval
@@ -641,15 +665,21 @@ class PythonEvaluator:
             _locals = {}
 
         block = ast.parse(code, mode='exec')
+        PythonEvaluator._validate_no_top_level_return(block)
 
-        # assumes last node is an expression
-        last_body = block.body.pop()
-        last = ast.Expression(last_body.value)
+        if block.body and isinstance(block.body[-1], ast.Expr):
+            expr = block.body[-1].value
+            stmt_block = ast.Module(body=block.body[:-1], type_ignores=[])
+            stmt_block = ast.fix_missing_locations(stmt_block)
+            expr_block = ast.Expression(body=expr)
+            expr_block = ast.fix_missing_locations(expr_block)
 
-        exec(compile(block, '<string>', mode='exec'), _globals, _locals)
-        res = eval(compile(last, '<string>', mode='eval'), _globals, _locals)
+            if stmt_block.body:
+                exec(compile(stmt_block, '<string>', mode='exec'), _globals, _locals)
+            return eval(compile(expr_block, '<string>', mode='eval'), _globals, _locals)
 
-        return res
+        exec(compile(ast.fix_missing_locations(block), '<string>', mode='exec'), _globals, _locals)
+        return None
 
     @staticmethod
     def range_output_handler(code_array, range_output: RangeOutput, current_key):
