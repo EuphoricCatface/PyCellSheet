@@ -51,7 +51,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
 
 from lib.attrdict import AttrDict
 from lib.selection import Selection
-from lib.pycellsheet import EmptyCell, ExpressionParser, PythonCode
+from lib.pycellsheet import EmptyCell, ExpressionParser, PythonCode, SpreadSheetCode
 sys.path.pop(0)
 
 
@@ -353,7 +353,18 @@ class TestDataArray(object):
 
         assert data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
         assert data_array.exp_parser.parse("42") == 42
-        assert data_array.exp_parser.parse("=1+1") == PythonCode("1+1")
+        assert data_array.exp_parser.parse("=1+1") == SpreadSheetCode("1+1")
+
+    def test_exp_parser_mode_id_contract(self):
+        data_array = DataArray((2, 2, 1), Settings())
+        assert data_array.exp_parser_mode_id == "pure_spreadsheet"
+
+        data_array.set_exp_parser_mode("mixed")
+        assert data_array.exp_parser_mode_id == "mixed"
+        assert data_array.exp_parser.parse("=A1+1") == SpreadSheetCode("A1+1")
+
+        data_array.exp_parser_code = "return cell.strip()"
+        assert data_array.exp_parser_mode_id is None
 
     param_get_last_filled_cell = [
         ({(0, 0, 0): "2"}, 0, (0, 0)),
@@ -435,11 +446,12 @@ class TestDataArray(object):
         assert self.data_array.cell_attributes == cell_attributes
 
     def test_default_expression_parser_mode_contract(self):
-        """DataArray currently defaults to the Mixed parser workaround."""
+        """DataArray defaults to Pure Spreadsheet mode."""
 
-        assert self.data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Mixed"]
-        assert self.data_array.exp_parser.parse("'hello") == "hello"
-        assert self.data_array.exp_parser.parse("1 + 2") == PythonCode("1 + 2")
+        assert self.data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        assert self.data_array.exp_parser_mode_id == "pure_spreadsheet"
+        assert self.data_array.exp_parser.parse(">1 + 2") == PythonCode("1 + 2")
+        assert self.data_array.exp_parser.parse("=SUM(A1:A2)") == SpreadSheetCode("SUM(A1:A2)")
 
     param_adjust_cell_attributes = [
         (0, 5, 0, (4, 3, 0), (9, 3, 0)),

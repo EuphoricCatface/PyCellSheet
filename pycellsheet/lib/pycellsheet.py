@@ -143,6 +143,10 @@ class PythonCode(str):
     pass
 
 
+class SpreadSheetCode(str):
+    pass
+
+
 def safe_deepcopy(value, _memo=None):
     """Best-effort deepcopy that preserves container isolation.
 
@@ -320,19 +324,16 @@ class ExpressionParser:
             "# Inspired by the spreadsheet string marker\n"
             "if cell.startswith('\\''):\n"
             "    return cell[1:]\n"
+            "elif cell.startswith('='):\n"
+            "    return SpreadSheetCode(cell[1:])\n"
             "return PythonCode(cell)\n"
         ),
-        "Reverse Mixed": (
+        "Pure Spreadsheet": (
             "# Inspired by the python shell prompt `>>>`\n"
             "if cell.startswith('>'):\n"
             "    return PythonCode(cell[1:])\n"
-            "if cell.startswith('\\''):\n"
-            "    cell = cell[1:]\n"
-            "return cell\n"
-        ),
-        "Pure Spreadsheet": (
-            "if cell.startswith('='):\n"
-            "    return PythonCode(cell[1:])\n"
+            "elif cell.startswith('='):\n"
+            "    return SpreadSheetCode(cell[1:])\n"
             "try:\n"
             "    return int(cell)\n"
             "except ValueError:\n"
@@ -345,6 +346,24 @@ class ExpressionParser:
             "    cell = cell[1:]\n"
             "return cell\n"
         )
+    }
+    LEGACY_PARSERS = {
+        "Reverse Mixed": (
+            "# Inspired by the python shell prompt `>>>`\n"
+            "if cell.startswith('>'):\n"
+            "    return PythonCode(cell[1:])\n"
+            "if cell.startswith('\\''):\n"
+            "    cell = cell[1:]\n"
+            "return cell\n"
+        ),
+    }
+    MODE_ID_TO_LABEL = {
+        "pure_pythonic": "Pure Pythonic",
+        "mixed": "Mixed",
+        "pure_spreadsheet": "Pure Spreadsheet",
+    }
+    LEGACY_MODE_ID_TO_LABEL = {
+        "reverse_mixed_legacy": "Reverse Mixed",
     }
 
     def __init__(self):
@@ -366,6 +385,31 @@ class ExpressionParser:
         if cell is None or cell == "":
             return True
         return False
+
+    @classmethod
+    def list_modes(cls) -> list[dict[str, str]]:
+        return [
+            {"id": mode_id, "label": label, "code": cls.DEFAULT_PARSERS[label]}
+            for mode_id, label in cls.MODE_ID_TO_LABEL.items()
+        ]
+
+    @classmethod
+    def get_mode_code(cls, mode_id: str) -> str:
+        try:
+            label = cls.MODE_ID_TO_LABEL[mode_id]
+        except KeyError as err:
+            raise ValueError(f"Unknown expression parser mode id: {mode_id}") from err
+        return cls.DEFAULT_PARSERS[label]
+
+    @classmethod
+    def detect_mode_id(cls, parser_code: str) -> typing.Optional[str]:
+        for mode_id, label in cls.MODE_ID_TO_LABEL.items():
+            if cls.DEFAULT_PARSERS[label] == parser_code:
+                return mode_id
+        for mode_id, label in cls.LEGACY_MODE_ID_TO_LABEL.items():
+            if cls.LEGACY_PARSERS[label] == parser_code:
+                return mode_id
+        return None
 
 
 def flatten_args(*args: list | Range | typing.Any) -> list:

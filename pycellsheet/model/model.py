@@ -91,7 +91,7 @@ try:
     from pycellsheet.lib.selection import Selection
     from pycellsheet.lib.string_helpers import ZEN
     from pycellsheet.lib.sheet_name import generate_unique_sheet_name
-    from pycellsheet.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
+    from pycellsheet.lib.pycellsheet import EmptyCell, PythonCode, SpreadSheetCode, Range, HelpText, ExpressionParser, \
         ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
 
     # Dependency tracking and smart caching
@@ -108,7 +108,7 @@ except ImportError:
     from lib.selection import Selection
     from lib.string_helpers import ZEN
     from lib.sheet_name import generate_unique_sheet_name
-    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
+    from lib.pycellsheet import EmptyCell, PythonCode, SpreadSheetCode, Range, HelpText, ExpressionParser, \
         ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
 
     # Dependency tracking and smart caching
@@ -510,7 +510,7 @@ class DataArray:
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
 
         self.exp_parser = ExpressionParser()
-        self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Mixed"]  # Workaround until we make a UI
+        self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
@@ -698,6 +698,17 @@ class DataArray:
 
         self.dict_grid.exp_parser_code = exp_parser_code
         self.exp_parser.set_parser(exp_parser_code)
+
+    @property
+    def exp_parser_mode_id(self) -> typing.Optional[str]:
+        """Returns the canonical parser mode id if this is a built-in parser."""
+
+        return ExpressionParser.detect_mode_id(self.exp_parser_code)
+
+    def set_exp_parser_mode(self, mode_id: str):
+        """Sets parser mode using a canonical parser mode id."""
+
+        self.exp_parser_code = ExpressionParser.get_mode_code(mode_id)
 
     @property
     def shape(self) -> Tuple[int, int, int]:
