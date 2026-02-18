@@ -572,3 +572,89 @@ class TestWorkflows:
         assert main_window.grid.model.code_array((0, 0, 0)) == "3"
         assert main_window.grid.model.code_array((1, 0, 0)) == "2"
         assert main_window.grid.model.code_array((2, 1, 0)) == "12"
+
+    def test_file_open_recent_delegates_to_filepath_open(self, monkeypatch):
+        """file_open_recent should forward to filepath_open with Path argument."""
+
+        called = {"path": None}
+
+        def fake_filepath_open(path):
+            called["path"] = path
+
+        monkeypatch.setattr(self.workflows, "filepath_open", fake_filepath_open)
+
+        self.workflows.file_open_recent("relative/test.pycsu")
+
+        assert isinstance(called["path"], Path)
+        assert called["path"] == Path("relative/test.pycsu")
+
+    def test_sign_file_skips_signing_in_safe_mode(self, monkeypatch, tmp_path):
+        """sign_file should not sign files while safe mode is enabled."""
+
+        filepath = tmp_path / "data.pycsu"
+        filepath.write_text("payload", encoding="utf-8")
+        old_safe_mode = main_window.safe_mode
+
+        called = {"sign": 0}
+
+        def fake_sign(_data, _key):
+            called["sign"] += 1
+            return b"sig"
+
+        try:
+            main_window.safe_mode = True
+            monkeypatch.setitem(self.workflows.sign_file.__globals__, "sign", fake_sign)
+
+            self.workflows.sign_file(filepath)
+
+            assert called["sign"] == 0
+            assert main_window.statusBar().currentMessage() == \
+                "File saved but not signed because it is unapproved."
+            assert not filepath.with_suffix(".pycsu.sig").exists()
+        finally:
+            main_window.safe_mode = old_safe_mode
+
+    def test_sign_file_reports_error_when_signature_generation_fails(self, monkeypatch, tmp_path):
+        """sign_file should report signing error when signer returns no signature."""
+
+        filepath = tmp_path / "data.pycsu"
+        filepath.write_text("payload", encoding="utf-8")
+        old_safe_mode = main_window.safe_mode
+
+        def fake_sign(_data, _key):
+            return None
+
+        try:
+            main_window.safe_mode = False
+            monkeypatch.setitem(self.workflows.sign_file.__globals__, "sign", fake_sign)
+
+            self.workflows.sign_file(filepath)
+
+            assert main_window.statusBar().currentMessage() == "Error signing file."
+            assert not filepath.with_suffix(".pycsu.sig").exists()
+        finally:
+            main_window.safe_mode = old_safe_mode
+
+    def test_sign_file_writes_signature_and_reports_success(self, monkeypatch, tmp_path):
+        """sign_file should write .sig file and report success when signing works."""
+
+        filepath = tmp_path / "data.pycsu"
+        filepath.write_bytes(b"payload")
+        old_safe_mode = main_window.safe_mode
+
+        def fake_sign(data, _key):
+            assert data == b"payload"
+            return b"signed-data"
+
+        try:
+            main_window.safe_mode = False
+            monkeypatch.setitem(self.workflows.sign_file.__globals__, "sign", fake_sign)
+
+            self.workflows.sign_file(filepath)
+
+            sig_path = filepath.with_suffix(".pycsu.sig")
+            assert sig_path.exists()
+            assert sig_path.read_bytes() == b"signed-data"
+            assert main_window.statusBar().currentMessage() == "File saved and signed."
+        finally:
+            main_window.safe_mode = old_safe_mode
