@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.euphoriccatface.pycellsheet</id>
+  <metadata_license>FSFAP</metadata_license>
+  <name>PyCellSheet</name>
+  <summary>PyCellSheet is a non-traditional spreadsheet application that is based on and written in the programming language Python</summary>
+
+  <icon type="stock">pycellsheet</icon>
+  
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <description>
+    <p>
+      <em>PyCellSheet</em> is a non-traditional spreadsheet application that is based on and written in the programming language Python. The goal of <em>PyCellSheet</em> is to be the most pythonic spreadsheet.
+    </p>
+    <p>
+      <em>PyCellSheet</em> expects Python expressions in its grid cells, which makes a spreadsheet specific language obsolete. Each cell returns a Python object that can be accessed from other cells. These objects can represent anything including lists or matrices.
+    </p>
+    <p>
+      <em>PyCellSheet</em> is free software. It is released under the GPL v3 licence.
+    </p>
+  </description>
+  <categories>
+      <category>Office</category>
+      <category>Spreadsheet</category>
+  </categories>
+  <url type="homepage">https://github.com/EuphoricCatface/PyCellSheet</url>
+  <url type="bugtracker">https://github.com/EuphoricCatface/PyCellSheet/issues</url>
+  <url type="help">https://github.com/EuphoricCatface/PyCellSheet/tree/development/pycellsheet/share/doc/manual</url>
+  <launchable type="desktop-id">io.github.euphoriccatface.pycellsheet.desktop</launchable>
+  
+  <releases>
+    <release version="2.0.2" date="2021-12-16">
+      <description>
+        <p>This is a bugfix release for PyCellSheet 2.0 for Python 3.10 compatibility.</p>
+      </description>
+    </release>
+    <release version="2.0.1" date="2021-11-27" />
+    <release version="2.0" date="2021-11-19" />
+  </releases>
+  
+  <provides>
+    <mediatype>application/x-pycellsheet-spreadsheet</mediatype>
+    <mediatype>application/x-pycellsheet-bz-spreadsheet</mediatype>
+  </provides>
+  <content_rating type="oars-1.0" />
+  <screenshots>
+    <screenshot type="default">
+      <caption>PyCellSheet example with text, an image and a chart</caption>
+      <image>https://raw.githubusercontent.com/EuphoricCatface/PyCellSheet/development/pycellsheet/share/doc/manual/images/screenshot_main_window.png</image>
+    </screenshot>
+  </screenshots>
+</component>
