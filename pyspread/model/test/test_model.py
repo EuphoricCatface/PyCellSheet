@@ -595,6 +595,39 @@ class TestCodeArray(object):
         legacy = self.code_array._eval_cell((4, 0, 0), self.code_array((4, 0, 0)))
         assert isinstance(legacy, NameError)
 
+    def test_parser_emptycell_warning_contract(self):
+        """Parser returning EmptyCell for non-empty code should warn."""
+
+        self.code_array.exp_parser_code = "return EmptyCell"
+        self.code_array[0, 0, 0] = "nonempty"
+
+        result = self.code_array[0, 0, 0]
+        warnings = self.code_array.get_cell_warnings((0, 0, 0))
+
+        assert result is EmptyCell
+        assert any("Expression parser returned EmptyCell" in warning for warning in warnings)
+
+    def test_execute_button_cell_updates_cache_and_dependents(self):
+        """Button cell execution should not bypass cache/dirty lifecycle."""
+
+        key = (0, 0, 0)
+        dependent = (1, 0, 0)
+        self.code_array[key] = "2"
+
+        selection = Selection([(0, 0)], [(0, 0)], [], [], [])
+        attr = AttrDict([("button_cell", "Run")])
+        self.code_array.cell_attributes.append(CellAttribute(selection, 0, attr))
+
+        self.code_array.smart_cache.set(key, 1)
+        self.code_array.smart_cache.set(dependent, 99)
+        self.code_array.dep_graph.dependents[key] = {dependent}
+
+        result = self.code_array.execute_button_cell(key)
+
+        assert result == 2
+        assert self.code_array.smart_cache.get_raw(key) == 2
+        assert self.code_array.dep_graph.is_dirty(dependent)
+
     def test_execute_macros(self):
         """Unit test for execute_macros"""
 

@@ -1971,9 +1971,19 @@ class GridTableModel(QAbstractTableModel):
             value = self.code_array[key]
             renderer = self.code_array.cell_attributes[key].renderer
             if renderer == "image":
+                self.code_array.set_format_warning(key, None)
                 return ""
             value = Formatter.display_formatter(value)
-            return safe_str(value)
+            display = safe_str(value)
+            code = self.code_array(key)
+            if code not in (None, "") and display.strip() == "":
+                self.code_array.set_format_warning(
+                    key,
+                    "Formatter produced empty display output for non-empty cell contents.",
+                )
+            else:
+                self.code_array.set_format_warning(key, None)
+            return display
 
         if role == Qt.ItemDataRole.ToolTipRole:
             value = self.code_array[key]
@@ -2521,6 +2531,26 @@ class GridCellDelegate(QStyledItemDelegate):
                 Qt.AlignmentFlag.AlignCenter
             )
 
+    def _render_warning_marker(self, painter: QPainter, rect: QRectF):
+        """Renders warning red-dot on top-left corner."""
+
+        min_cell_size = min(rect.width(), rect.height())
+        if min_cell_size < 8:
+            return
+
+        radius = max(2.0, min(4.0, min_cell_size * 0.12))
+        marker_rect = QRectF(
+            rect.left() + 1.5,
+            rect.top() + 1.5,
+            radius * 2.0,
+            radius * 2.0,
+        )
+
+        with painter_save(painter):
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(220, 40, 40))
+            painter.drawEllipse(marker_rect)
+
     def paint_(self, painter: QPainter, rect: QRectF,
                option: QStyleOptionViewItem, index: QModelIndex):
         """Calls the overloaded paint function or creates html delegate
@@ -2566,6 +2596,9 @@ class GridCellDelegate(QStyledItemDelegate):
         if is_dirty:
             logger.debug("paint_() rendering icon for dirty cell %s", key)
             self._render_dirty_icon(painter, rect)
+
+        if self.code_array.has_cell_warnings(key):
+            self._render_warning_marker(painter, rect)
 
         option.rect = old_rect
 

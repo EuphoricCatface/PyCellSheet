@@ -1291,6 +1291,35 @@ class CodeArray(DataArray):
 
         self.dep_graph = DependencyGraph()
         self.smart_cache = SmartCache(self.dep_graph)
+        self._eval_warnings: dict[Tuple[int, int, int], list[str]] = {}
+        self._format_warnings: dict[Tuple[int, int, int], str] = {}
+
+    def _clear_cell_warnings(self, key: Tuple[int, int, int]):
+        self._eval_warnings.pop(key, None)
+        self._format_warnings.pop(key, None)
+
+    def _set_eval_warnings(self, key: Tuple[int, int, int], warnings: list[str]):
+        if warnings:
+            self._eval_warnings[key] = list(warnings)
+            return
+        self._eval_warnings.pop(key, None)
+
+    def set_format_warning(self, key: Tuple[int, int, int], warning: typing.Optional[str]):
+        if warning:
+            self._format_warnings[key] = warning
+            return
+        self._format_warnings.pop(key, None)
+
+    def get_cell_warnings(self, key: Tuple[int, int, int]) -> list[str]:
+        warnings = []
+        warnings.extend(self._eval_warnings.get(key, []))
+        fmt = self._format_warnings.get(key)
+        if fmt:
+            warnings.append(fmt)
+        return warnings
+
+    def has_cell_warnings(self, key: Tuple[int, int, int]) -> bool:
+        return bool(self._eval_warnings.get(key) or self._format_warnings.get(key))
 
     def __setitem__(self, key: Tuple[int, int, int], value: str):
         """Sets cell code and resets result cache
@@ -1317,6 +1346,7 @@ class CodeArray(DataArray):
         unchanged = (old_value == value) or (old_empty and new_empty)
 
         super().__setitem__(key, value)
+        self._clear_cell_warnings(key)
 
         if not unchanged:
             # Invalidate cache for this cell and its dependents
@@ -1363,17 +1393,20 @@ class CodeArray(DataArray):
             self.smart_cache.set(key, EmptyCell)
             # Clear dirty flag
             self.dep_graph.clear_dirty(key)
+            self._set_eval_warnings(key, [])
             return EmptyCell
 
         # Button cell handling
         if self.cell_attributes[key].button_cell is not False:
+            self._set_eval_warnings(key, [])
             return
 
         # Normal cell handling - evaluate the cell
-        result = self._eval_cell(key, code)
+        result, eval_warnings = self._eval_cell(key, code, return_warnings=True)
 
         # Store in smart cache
         self.smart_cache.set(key, result)
+        self._set_eval_warnings(key, eval_warnings)
 
         # Clear dirty flag after successful evaluation
         self.dep_graph.clear_dirty(key)
@@ -1401,13 +1434,15 @@ class CodeArray(DataArray):
 
         return res
 
-    def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str) -> Any:
+    def _eval_cell(self, key: Tuple[int, int, int], cell_contents: str,
+                   return_warnings: bool = False) -> Any:
         """Evaluates one cell and returns its result
 
         :param key: Key of cell to be evaled
         :param cell_contents: Whatever the user typed in
 
         """
+        eval_warnings: list[str] = []
 
         # Help helper function that fixes help being displayed in stdout
         def help(*args) -> HelpText:
@@ -1420,13 +1455,23 @@ class CodeArray(DataArray):
 
         if self.safe_mode:
             # Safe mode is active
+            if return_warnings:
+                return cell_contents, eval_warnings
             return cell_contents
 
         #  --- ExpParser START ---  #
         if self.exp_parser.handle_empty(cell_contents):
+            if return_warnings:
+                return EmptyCell, eval_warnings
             return EmptyCell
         exp_parsed = self.exp_parser.parse(cell_contents)
+        if exp_parsed is EmptyCell and cell_contents.strip():
+            eval_warnings.append(
+                "Expression parser returned EmptyCell for non-empty cell contents."
+            )
         if not isinstance(exp_parsed, PythonCode):
+            if return_warnings:
+                return exp_parsed, eval_warnings
             return exp_parsed
         #  --- ExpParser END ---  #
 
@@ -1434,6 +1479,8 @@ class CodeArray(DataArray):
         try:
             ref_parsed = self.ref_parser.parser(exp_parsed)
         except Exception as err:
+            if return_warnings:
+                return err, eval_warnings
             return err
 
         # Rebuild this cell's forward dependency set on each evaluation.
@@ -1445,6 +1492,8 @@ class CodeArray(DataArray):
         try:
             self.dep_graph.check_for_cycles(key)
         except CircularRefError as err:
+            if return_warnings:
+                return err, eval_warnings
             return err
 
         #  --- PythonEval START ---  #
@@ -1493,6 +1542,8 @@ class CodeArray(DataArray):
         # Change back cell value for evaluation from other cells
         # self.dict_grid[key] = _old_code
 
+        if return_warnings:
+            return result, eval_warnings
         return result
 
     def pop(self, key: Tuple[int, int, int]):
@@ -1507,6 +1558,7 @@ class CodeArray(DataArray):
         # when the cell is re-added
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
+        self._clear_cell_warnings(key)
 
         return super().pop(key)
 
@@ -1601,6 +1653,42 @@ class CodeArray(DataArray):
                     self.dep_graph.mark_dirty(dependent)
 
         return 1
+
+    def execute_button_cell(self, key: Tuple[int, int, int]) -> Any:
+        """Execute button-cell code with cache and dependency lifecycle handling."""
+
+        if self.cell_attributes[key].button_cell is False:
+            return self[key]
+
+        code = self(key)
+        if code is None:
+            self._set_eval_warnings(key, [])
+            return None
+
+        old = self.smart_cache.get_raw(key)
+        changed = old is SmartCache.INVALID
+
+        result, eval_warnings = self._eval_cell(key, code, return_warnings=True)
+        self.smart_cache.set(key, result)
+        self._set_eval_warnings(key, eval_warnings)
+        self.dep_graph.clear_dirty(key)
+
+        if old is not SmartCache.INVALID:
+            try:
+                changed = (result != old)
+            except Exception:
+                changed = True
+
+        if changed:
+            direct_dependents = self.dep_graph.dependents.get(key, set())
+            if self.settings.recalc_mode == "auto":
+                for dependent in direct_dependents:
+                    self.smart_cache.invalidate(dependent)
+            else:
+                for dependent in direct_dependents:
+                    self.dep_graph.mark_dirty(dependent)
+
+        return result
 
     def recalculate_ancestors(self, key: Tuple[int, int, int]) -> int:
         """Recalculate a cell and all transitive dependencies"""

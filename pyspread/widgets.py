@@ -783,8 +783,7 @@ class CellButton(QPushButton):
     def on_clicked(self):
         """Clicked event handler, executes cell code"""
 
-        code = self.grid.model.code_array(self.key)
-        result = self.grid.model.code_array._eval_cell(self.key, code)
+        result = self.grid.model.code_array.execute_button_cell(self.key)
         self.grid.model.emit_data_changed_all()
 
 

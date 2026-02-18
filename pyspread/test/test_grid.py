@@ -1015,6 +1015,23 @@ class TestGridTableModel:
         assert (0, 0) in emitted
         assert (1, 1) in emitted
 
+    def test_display_role_sets_format_warning_for_whitespace_output(self):
+        """Whitespace-only formatted display should raise a cell warning."""
+
+        key = (0, 0, 0)
+        index = self.model.index(0, 0)
+        self.model.code_array[key] = "'   "
+
+        display = self.model.data(index, Qt.ItemDataRole.DisplayRole)
+        warnings = self.model.code_array.get_cell_warnings(key)
+
+        assert display == "   "
+        assert any("Formatter produced empty display output" in warning for warning in warnings)
+
+        self.model.code_array[key] = "123"
+        _ = self.model.data(index, Qt.ItemDataRole.DisplayRole)
+        assert not self.model.code_array.get_cell_warnings(key)
+
     param_test_insertRows = [
         (0, 5, (0, 0, 0), "0", (5, 0, 0), "0"),
         (0, 5, (0, 0, 0), "0", (0, 0, 0), None),
@@ -1169,6 +1186,34 @@ class TestGridCellDelegate:
         painter = QPainter(image)
         try:
             self.delegate._render_dirty_icon(painter, QRectF(0, 0, 48, 24))
+        finally:
+            painter.end()
+
+        assert calls["count"] == 1
+
+    def test_render_warning_marker_skips_small_cells(self):
+        image = QImage(16, 16, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_warning_marker(painter, QRectF(0, 0, 6, 6))
+        finally:
+            painter.end()
+
+    def test_render_warning_marker_paints_normal_cells(self, monkeypatch):
+        calls = {"count": 0}
+
+        original_draw = QPainter.drawEllipse
+
+        def counting_draw_ellipse(self, *args, **kwargs):
+            calls["count"] += 1
+            return original_draw(self, *args, **kwargs)
+
+        monkeypatch.setattr(QPainter, "drawEllipse", counting_draw_ellipse)
+
+        image = QImage(48, 24, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_warning_marker(painter, QRectF(0, 0, 48, 24))
         finally:
             painter.end()
 
