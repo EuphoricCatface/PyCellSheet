@@ -53,10 +53,10 @@ Do not add a full optional matrix during v0.3.0 unless policy is explicitly upda
 
 Fill this section when the first full required-check run is green:
 
-- Date (UTC): `TBD`
-- Commit SHA: `TBD`
-- Workflow run URL: `TBD`
-- Trigger type: `TBD` (`pull_request`, `push`, or `workflow_dispatch`)
+- Date (UTC): `2026-02-18T00:17:46Z`
+- Commit SHA: `f19926c4a2252b836dfa916a1981f7edc0ec0b95`
+- Workflow run URL: `https://github.com/EuphoricCatface/PyCellSheet/actions/runs/22121127567`
+- Trigger type: `push`
 
 ## Local Commands
 
