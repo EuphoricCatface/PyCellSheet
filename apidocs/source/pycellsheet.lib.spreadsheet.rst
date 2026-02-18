@@ -131,11 +131,3 @@ pycellsheet.lib.spreadsheet.web module
    :members:
    :show-inheritance:
    :undoc-members:
-
-Module contents
----------------
-
-.. automodule:: pycellsheet.lib.spreadsheet
-   :members:
-   :show-inheritance:
-   :undoc-members:
