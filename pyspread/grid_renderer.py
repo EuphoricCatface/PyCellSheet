@@ -34,10 +34,7 @@
 """
 
 from contextlib import contextmanager
-try:
-    from dataclasses import dataclass
-except ImportError:
-    from pyspread.lib.dataclasses import dataclass  # Python 3.6 compatibility
+from dataclasses import dataclass
 from typing import List, Tuple
 
 from PyQt6.QtCore import Qt, QModelIndex, QRectF, QPointF

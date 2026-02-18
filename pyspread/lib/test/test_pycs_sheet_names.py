@@ -1,5 +1,23 @@
 # -*- coding: utf-8 -*-
 
+# Copyright Seongyong Park (EuphCat)
+# Distributed under the terms of the GNU General Public License
+
+# --------------------------------------------------------------------
+# pyspread is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# pyspread is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with pyspread.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
 from io import BytesIO
 from os.path import abspath, dirname, join
 import sys
@@ -9,7 +27,7 @@ import pytest
 pyspread_path = abspath(join(dirname(__file__) + "/../.."))
 sys.path.insert(0, pyspread_path)
 
-from interfaces.pycs import PycsReader
+from interfaces.pycs import PycsReader, PycsWriter
 
 sys.path.pop(0)
 
@@ -41,6 +59,14 @@ class _DummyCodeArray:
         self.row_heights = {}
         self.col_widths = {}
         self.cell_attributes = []
+
+    @property
+    def sheet_scripts(self):
+        return self.macros
+
+    @sheet_scripts.setter
+    def sheet_scripts(self, value):
+        self.macros = value
 
 
 class _DummyWriterCodeArray:
@@ -83,10 +109,6 @@ def test_finalize_sheet_names_fills_missing_defaults():
 
 
 def test_writer_normalizes_sheet_names_for_output():
-    sys.path.insert(0, pyspread_path)
-    from interfaces.pycs import PycsWriter
-    sys.path.pop(0)
-
     code_array = _DummyWriterCodeArray(
         ["Good", " ", "Bad\tName", "Good"],
         ["a=1", "b=2", "c=3", "d=4"],
@@ -184,10 +206,6 @@ def test_pycs2macros_raises_for_invalid_header():
 
 
 def test_writer_macros_section_uses_normalized_sheet_names():
-    sys.path.insert(0, pyspread_path)
-    from interfaces.pycs import PycsWriter
-    sys.path.pop(0)
-
     code_array = _DummyWriterCodeArray(
         ["Main", " ", "Main"],
         ["a = 1", "b = 2", "c = 3"],
@@ -202,10 +220,6 @@ def test_writer_macros_section_uses_normalized_sheet_names():
 
 
 def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
-    sys.path.insert(0, pyspread_path)
-    from interfaces.pycs import PycsWriter
-    sys.path.pop(0)
-
     source = _DummyWriterCodeArray(
         ["Revenue", "Revenue", " "],
         ["a = 1", "b = 2", "c = 3"],
@@ -220,3 +234,17 @@ def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
 
     assert target.dict_grid.sheet_names == ["Revenue", "Revenue_1", "Sheet 2"]
     assert target.macros == ["a = 1", "b = 2", "c = 3"]
+
+
+def test_reader_macros_are_visible_via_sheet_scripts_alias():
+    source = _DummyWriterCodeArray(
+        ["Main"],
+        ["x = 9"],
+    )
+
+    serialized = "".join(list(PycsWriter(source))).encode("utf-8")
+    target = _DummyCodeArray(1)
+    list(PycsReader(BytesIO(serialized), target))
+
+    assert target.macros == ["x = 9"]
+    assert target.sheet_scripts == ["x = 9"]

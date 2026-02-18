@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -64,7 +65,8 @@ except ImportError:
 try:
     from pyspread import commands
     from pyspread.dialogs \
-        import (DiscardChangesDialog, FileOpenDialog, GridShapeDialog,
+        import (DiscardChangesDialog, SheetScriptDraftDialog,
+                FileOpenDialog, GridShapeDialog,
                 FileSaveDialog, ImageFileOpenDialog, ChartDialog,
                 CellKeyDialog, FindDialog, ReplaceDialog, CsvFileImportDialog,
                 CsvImportDialog, CsvExportDialog, CsvExportAreaDialog,
@@ -78,11 +80,13 @@ try:
     from pyspread.lib.csv import csv_reader, convert
     from pyspread.lib.file_helpers import \
         (linecount, file_progress_gen, ProgressDialogCanceled)
+    from pyspread.lib.pycellsheet import EmptyCell
     from pyspread.model.model import CellAttribute, class_format_functions
 except ImportError:
     import commands
     from dialogs \
-        import (DiscardChangesDialog, FileOpenDialog, GridShapeDialog,
+        import (DiscardChangesDialog, SheetScriptDraftDialog,
+                FileOpenDialog, GridShapeDialog,
                 FileSaveDialog, ImageFileOpenDialog, ChartDialog,
                 CellKeyDialog, FindDialog, ReplaceDialog, CsvFileImportDialog,
                 CsvImportDialog, CsvExportDialog, CsvExportAreaDialog,
@@ -96,6 +100,7 @@ except ImportError:
     from lib.csv import csv_reader, convert
     from lib.file_helpers import \
         (linecount, file_progress_gen, ProgressDialogCanceled)
+    from lib.pycellsheet import EmptyCell
     from model.model import CellAttribute, class_format_functions
 
 
@@ -148,6 +153,9 @@ class Workflows:
         def function_wrapper(self, *args, **kwargs):
             """Check changes and display and handle the dialog"""
 
+            if not self._resolve_unapplied_sheet_script_drafts():
+                return
+
             if self.main_window.settings.changed_since_save:
                 choice = DiscardChangesDialog(self.main_window).choice
                 if choice is None:
@@ -165,6 +173,46 @@ class Workflows:
             self.update_main_window_title()
 
         return function_wrapper
+
+    def _resolve_unapplied_sheet_script_drafts(self) -> bool:
+        """Resolve unapplied Sheet Script drafts before transition workflows."""
+
+        panel = self.main_window.sheet_script_panel
+        if not panel.has_unapplied_drafts():
+            return True
+
+        choice = SheetScriptDraftDialog(self.main_window).choice
+        if choice is None:
+            return False
+
+        if choice == "discard":
+            panel.discard_all_drafts()
+            self.main_window.statusBar().showMessage(
+                "Discarded unapplied Sheet Script drafts.",
+                5000
+            )
+            return True
+
+        updated_tables = panel.apply_all_drafts_to_scripts()
+        if updated_tables:
+            self.main_window.settings.changed_since_save = True
+
+        if self.main_window.safe_mode:
+            self.main_window.statusBar().showMessage(
+                f"Applied drafts for {updated_tables} sheet scripts. "
+                "Execution skipped in safe mode.",
+                5000
+            )
+            return True
+
+        tables_executed, tables_with_errors = self.apply_all_sheet_scripts()
+        if tables_executed:
+            self.main_window.statusBar().showMessage(
+                f"Applied {tables_executed} sheet scripts "
+                f"({tables_with_errors} with errors).",
+                5000
+            )
+        return True
 
     def reset_changed_since_save(self):
         """Sets changed_since_save to False and updates the window title"""
@@ -569,6 +617,9 @@ class Workflows:
     def file_save(self):
         """File save workflow"""
 
+        if not self._resolve_unapplied_sheet_script_drafts():
+            return False
+
         filepath = self.main_window.settings.last_file_output_path
         if filepath.suffix and self._save(filepath) is not False:
             return
@@ -580,6 +631,9 @@ class Workflows:
 
     def file_save_as(self):
         """File save as workflow"""
+
+        if not self._resolve_unapplied_sheet_script_drafts():
+            return False
 
         # Get filepath from user
         dial = FileSaveDialog(self.main_window)
@@ -1732,7 +1786,14 @@ class Workflows:
         if top == bottom:
             return
 
-        data = grid.model.code_array[top:bottom+1, left:right+1, table].copy()
+        data = numpy.array([
+            [
+                None if (value := grid.model.code_array[row, column, table]) == EmptyCell
+                else value
+                for column in range(left, right + 1)
+            ]
+            for row in range(top, bottom + 1)
+        ], dtype="O")
         if ascending:
             data[data == None] = numpy.inf  # `is` does not work here
         else:

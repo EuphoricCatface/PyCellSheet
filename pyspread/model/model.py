@@ -56,6 +56,7 @@ from copy import copy, deepcopy
 from inspect import isgenerator
 import io
 from itertools import product
+from pydoc import plaintext, render_doc
 import re
 import sys
 from traceback import print_exception
@@ -745,84 +746,45 @@ class DataArray:
                 and 0 <= column <= columns
                 and 0 <= table <= tables)
 
-    # Slice support
+    def __getitem__(self, key: Tuple[int, int, int]) -> str:
+        """Cell code retrieval for a single key
 
-    def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
-                                     Union[int, slice]]
-                    ) -> Union[str, Iterable[str], Iterable[Iterable[str]],
-                               Iterable[Iterable[Iterable[str]]]]:
-        """Adds slicing access to cell code retrieval
-
-        The cells are returned as a generator of generators, of ... of unicode.
-
-        :param key: Keys of the cell code that is returned
-
-        Note
-        ----
-        Classical Excel type addressing (A$1, ...) may be added here later
+        :param key: Cell key(s) that shall be set
+        :return: Cell code
 
         """
 
-        for key_ele in key:
-            if isinstance(key_ele, slice):
-                # We have something slice-like here
-                return self.cell_array_generator(key)
+        if any(isinstance(key_ele, slice) for key_ele in key):
+            raise NotImplementedError("Slice-based cell access is no longer supported.")
 
-            if is_stringlike(key_ele):
-                # We have something string-like here
-                msg = "Cell string based access not implemented"
-                raise NotImplementedError(msg)
-
-        # key_ele should be a single cell
+        if any(is_stringlike(key_ele) for key_ele in key):
+            raise NotImplementedError("Cell string based access not implemented")
 
         return self.dict_grid[key]
 
-    def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
-                                     Union[int, slice]], value: str):
-        """Accepts index and slice keys
+    def __setitem__(self, key: Tuple[int, int, int], value: str):
+        """Accepts index keys
 
-        :param key: Cell key(s) that shall be set
-        :param value: Code for cell(s) to be set
+        :param key: Cell key that shall be set
+        :param value: Code for the key
 
         """
+        if any(isinstance(key_ele, slice) for key_ele in key):
+            raise NotImplementedError("Slice-based cell assignment is no longer supported.")
+        if any(is_stringlike(key_ele) for key_ele in key):
+            raise NotImplementedError("Cell string based assignment not implemented")
 
-        single_keys_per_dim = []
+        if value:
+            merging_cell = self.cell_attributes.get_merging_cell(key)
+            if ((merging_cell is None or merging_cell == key)
+                    and isinstance(value, str)):
+                self.dict_grid[key] = value
+            return
 
-        for axis, key_ele in enumerate(key):
-            if isinstance(key_ele, slice):
-                # We have something slice-like here
-
-                length = self.shape[axis]
-                slice_range = range(*key_ele.indices(length))
-                single_keys_per_dim.append(slice_range)
-
-            elif is_stringlike(key_ele):
-                # We have something string-like here
-
-                raise NotImplementedError
-
-            else:
-                # key_ele is a single cell
-
-                single_keys_per_dim.append((key_ele, ))
-
-        single_keys = product(*single_keys_per_dim)
-
-        for single_key in single_keys:
-            if value:
-                # Never change merged cells
-                merging_cell = \
-                    self.cell_attributes.get_merging_cell(single_key)
-                if ((merging_cell is None or merging_cell == single_key) and
-                        isinstance(value, str)):
-                    self.dict_grid[single_key] = value
-            else:
-                # Value is empty --> delete cell
-                try:
-                    self.pop(key)
-
-                except (KeyError, TypeError):
-                    pass
+        try:
+            self.pop(key)
+        except (KeyError, TypeError):
+            pass
 
     # Pickle support
 
@@ -893,41 +855,6 @@ class DataArray:
                 maxcol = max(col, maxcol)
 
         return maxrow, maxcol, table
-
-    def cell_array_generator(self,
-                             key: Tuple[Union[int, slice], Union[int, slice],
-                                        Union[int, slice]]) -> Iterable[str]:
-        """Generator traversing cells specified in key
-
-        Yields cells' contents.
-
-        :param key: Specifies the cell keys of the generator
-
-        """
-
-        for i, key_ele in enumerate(key):
-
-            # Recursively replace first element of key that is a slice
-            if isinstance(key_ele, slice):
-                slc_keys = range(*key_ele.indices(self.dict_grid.shape[i]))
-                key_list = list(key)
-
-                key_list[i] = None
-
-                has_subslice = any(isinstance(ele, slice) for ele in key_list)
-
-                for slc_key in slc_keys:
-                    key_list[i] = slc_key
-
-                    if has_subslice:
-                        # If there is a slice left yield generator
-                        yield self.cell_array_generator(key_list)
-
-                    else:
-                        # No slices? Yield value
-                        yield self[tuple(key_list)]
-
-                break
 
     def _shift_rowcol(self, insertion_point: int, no_to_insert: int):
         """Shifts row and column sizes when a table is inserted or deleted
@@ -1365,14 +1292,16 @@ class CodeArray(DataArray):
         self.dep_graph = DependencyGraph()
         self.smart_cache = SmartCache(self.dep_graph)
 
-    def __setitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
-                                     Union[int, slice]], value: str):
+    def __setitem__(self, key: Tuple[int, int, int], value: str):
         """Sets cell code and resets result cache
 
         :param key: Cell key(s) that shall be set
         :param value: Code for cell(s) to be set
 
         """
+
+        if any(isinstance(key_ele, slice) for key_ele in key):
+            raise NotImplementedError("Slice-based cell assignment is no longer supported.")
 
         # Change numpy array repr function for grid cell results
         try:
@@ -1404,13 +1333,15 @@ class CodeArray(DataArray):
             # Reverse edges are preserved by default for cycle detection
             self.dep_graph.remove_cell(key)
 
-    def __getitem__(self, key: Tuple[Union[int, slice], Union[int, slice],
-                                     Union[int, slice]]) -> Any:
+    def __getitem__(self, key: Tuple[int, int, int]) -> Any:
         """Returns _eval_cell
 
         :param key: Cell key for result retrieval (code if in safe mode)
 
         """
+
+        if any(isinstance(key_ele, slice) for key_ele in key):
+            raise NotImplementedError("Slice-based cell access is no longer supported.")
 
         code = self(key)
 
@@ -1434,10 +1365,9 @@ class CodeArray(DataArray):
             self.dep_graph.clear_dirty(key)
             return EmptyCell
 
-        if not any(isinstance(k, slice) for k in key):
-            # Button cell handling
-            if self.cell_attributes[key].button_cell is not False:
-                return
+        # Button cell handling
+        if self.cell_attributes[key].button_cell is not False:
+            return
 
         # Normal cell handling - evaluate the cell
         result = self._eval_cell(key, code)
@@ -1486,7 +1416,6 @@ class CodeArray(DataArray):
             if not args:
                 return HelpText(args, ZEN)
 
-            from pydoc import render_doc, plaintext
             return HelpText(args, render_doc(*args, renderer=plaintext))
 
         if self.safe_mode:
