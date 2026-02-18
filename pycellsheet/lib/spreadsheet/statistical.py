@@ -50,8 +50,7 @@ __all__ = _STATISTICAL_FUNCTIONS + ["_STATISTICAL_FUNCTIONS"]
 
 def AVEDEV(*args):
     """
-    Average absolute deviation of the data points from their mean.
-    AveDev = sum( |x - mean(x)| ) / n
+    Returns the average absolute deviation of data points from their mean.
     """
     values = flatten_args(*args)
     if not values:
@@ -106,12 +105,7 @@ def AVERAGEA(*args):
 
 def AVERAGEIF(range_: Range, criterion: typing.Callable[[typing.Any], bool], average_range: typing.Optional[Range] = None):
     """
-    AVERAGEIF(range_, criterion, [average_range]):
-      - range_: the data to test with the criterion_func
-      - criterion_func: a callable that returns True/False
-      - average_range: the data to average (optional)
-
-    If average_range is None, we average over the same range.
+    Returns the average of values whose aligned entries satisfy criterion; average_range defaults to the input range.
     """
     if average_range is None:
         average_range = range_
@@ -130,10 +124,7 @@ def AVERAGEIF(range_: Range, criterion: typing.Callable[[typing.Any], bool], ave
 
 def AVERAGEIFS(average_range, *range_crit_pairs):
     """
-    AVERAGEIFS(average_range, (range1, crit1), (range2, crit2), ...)
-      Example usage:
-        =AVERAGEIFS(B1:B10, (A1:A10, lambda x: x>5), (C1:C10, lambda x: x=='Yes'))
-      Returns the average of items in average_range that pass all criteria in each range_crit pair.
+    Returns the average of values in average_range whose aligned entries satisfy all provided (range, criterion) pairs.
     """
     avg_vals = average_range.lst
     if not range_crit_pairs:
@@ -478,10 +469,7 @@ class FORECAST:
     @staticmethod
     def LINEAR(x0, y_range, x_range):
         """
-        FORECAST(x, known_y, known_x):
-          Basic linear regression formula: y = a + b*x
-          where b = COV(x,y) / VAR(x), a = mean(y) - b*mean(x).
-        This returns the predicted y for a given x.
+        Predicts y at x0 using simple linear regression over known y and known x values.
         """
         x_vals = x_range.flatten()
         y_vals = y_range.flatten()
@@ -531,11 +519,7 @@ def GAUSS(a, b):
 
 def GEOMEAN(*args):
     """
-    GEOMEAN(...) returns the geometric mean of all numeric values in args.
-    Geometric Mean = (Product of all values)^(1/Count)
-    - We skip negative/zero checks here. If there's a non-positive number,
-      math.prod(...) might yield zero or negative, and that affects the result or raises.
-    - Some spreadsheets raise an error if any value <= 0 in GEOMEAN.
+    Returns the geometric mean of numeric values; all values must be strictly positive.
     """
     vals = flatten_args(*args)
     if any(v <= 0 for v in vals):
@@ -697,11 +681,7 @@ class MODE:
 
 class NEGBINOM:
     """
-    NEGBINOM.DIST(k, r, p, cumulative=False)
-    Interpreted as:
-      Probability of k-th success on a certain trial, or the distribution
-      of number of failures before r successes, etc.
-    SciPy uses n, p => # successes, success prob => distribution.
+    Namespace for negative binomial distribution functions compatible with spreadsheet-style calls.
     """
     def __new__(cls, *args):
         raise NameError("NEGBINOM cannot be called directly. Use NEGBINOM.DIST(...)")
@@ -850,11 +830,7 @@ class PERCENTRANK:
     @staticmethod
     def EXC(data, x, significance=3):
         """
-        PERCENTRANK.EXC(data, x, significance=3):
-          - Returns percentile rank in (0,1), exclusive of endpoints.
-          - Similar logic but excludes 0 or 1 for min/max if x exactly matches extremes.
-          Real spreadsheets do more precise interpolation;
-          this is a simplified version for demonstration.
+        Returns an exclusive percentile rank in the open interval (0, 1), rounded to significance digits.
         """
         vals = sorted(flatten_args(data))
         n = len(vals)
@@ -876,13 +852,7 @@ class PERCENTRANK:
     @staticmethod
     def INC(data, x, significance=3):
         """
-        PERCENTRANK.INC(data, x, significance=3):
-          - Return the percentile rank of x in data, from 0..1 inclusive.
-          - 'significance' is how many decimal places to round to.
-          This is a simplified approach:
-            rank = (# of values <= x) / (n - 1)
-          Then clamp to [0,1].
-          In real spreadsheets, there's interpolation for values not exactly in data.
+        Returns an inclusive percentile rank in [0, 1], rounded to significance digits.
         """
         vals = sorted(flatten_args(data))
         n = len(vals)
@@ -941,13 +911,7 @@ class QUARTILE:
     @staticmethod
     def EXC(data, quartile_number):
         """
-        QUARTILE.EXC(data, quart)
-        quart in {1, 2, 3} typically, ignoring 0..4 or skipping them as "exclusive".
-        Some spreadsheets treat 0/4 differently (like min/max).
-        We'll do a partial approach:
-            - 1 => 25% (exclusive)
-            - 2 => 50% (exclusive)
-            - 3 => 75% (exclusive)
+        Returns exclusive quartiles for quartile_number 1..3 using PERCENTILE.EXC under the hood.
         """
         if quartile_number not in [1, 2, 3]:
             raise ValueError("QUARTILE.EXC quart must be 1..3")
@@ -1197,13 +1161,7 @@ class T_STAT:
     @staticmethod
     def TEST(range1, range2, tails=2, type_=2):
         """
-        TTEST(range1, range2, tails, type):
-          - tails=1 or 2 (one-tailed or two-tailed).
-          - type=1..3 (paired, two-sample equal var, two-sample unequal var).
-          We'll do a minimal approach using scipy.stats:
-            - type=1 => paired => ttest_rel
-            - type=2 => two-sample equal var => ttest_ind(..., equal_var=True)
-            - type=3 => two-sample unequal var => ttest_ind(..., equal_var=False)
+        Returns p-value for a t-test over two samples using scipy (paired, equal-var, or unequal-var variants).
         """
         if scipy is None:
             raise RuntimeError("SciPy is missing. Cannot compute TTEST.")

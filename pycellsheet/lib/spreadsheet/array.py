@@ -114,16 +114,7 @@ def FLATTEN(a, b):
 
 
 def FREQUENCY(data, bins):
-    """
-    FREQUENCY(data, bins):
-      data: numeric values
-      bins: sorted 'breakpoints' for binning
-    Returns a list of counts for each bin, plus one extra for values above the last bin.
-    E.g., FREQUENCY([1,2,3,4,5], [2,4]) => [2, 2, 1]
-      - 2 items <=2,
-      - 2 items >2 and <=4,
-      - 1 item >4
-    """
+    """Count values into bins and return len(bins)+1 bucket counts."""
     data_vals = flatten_args(data)
     bin_vals = flatten_args(bins)
     # If bins is empty, you might decide how to handle. Let's just do normal logic.

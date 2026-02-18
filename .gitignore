@@ -8,6 +8,7 @@
 *.pyc
 dist
 build
+apidocs/_build/
 MANIFEST
 
 *.psproj
