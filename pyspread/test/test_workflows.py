@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -28,6 +29,7 @@ Unit tests for workflows.py
 """
 
 from contextlib import contextmanager
+import os
 from os.path import abspath, dirname, join
 from pathlib import Path
 import sys
@@ -200,6 +202,309 @@ class TestWorkflows:
         finally:
             main_window.safe_mode = old_safe_mode
 
+    def test_apply_all_sheet_scripts_counts_errors_and_updates_current_view(self, monkeypatch):
+        """apply_all_sheet_scripts should count errors and update current-table output."""
+
+        code_array = main_window.grid.model.code_array
+        old_shape = code_array.shape
+        old_safe_mode = main_window.safe_mode
+        old_current_table = main_window.sheet_script_panel.current_table
+
+        try:
+            main_window.safe_mode = False
+            main_window.grid.model.shape = (old_shape[0], old_shape[1], 3)
+            main_window.sheet_script_panel.current_table = 1
+
+            calls = {"updated": [], "gui": 0, "data_changed": 0}
+
+            def fake_execute_sheet_script(table):
+                if table == 1:
+                    return "ok-table-1", ""
+                if table == 2:
+                    return "", "boom"
+                return "ok-table-0", ""
+
+            def fake_update_result_viewer(result, err):
+                calls["updated"].append((result, err))
+
+            def fake_gui_update():
+                calls["gui"] += 1
+
+            def fake_emit_data_changed_all():
+                calls["data_changed"] += 1
+
+            monkeypatch.setattr(code_array, "execute_sheet_script",
+                                fake_execute_sheet_script)
+            monkeypatch.setattr(main_window.sheet_script_panel, "update_result_viewer",
+                                fake_update_result_viewer)
+            monkeypatch.setattr(main_window.grid, "gui_update", fake_gui_update)
+            monkeypatch.setattr(main_window.grid.model, "emit_data_changed_all",
+                                fake_emit_data_changed_all)
+
+            executed, errors = self.workflows.apply_all_sheet_scripts()
+
+            assert executed == 3
+            assert errors == 1
+            assert calls["updated"] == [("ok-table-1", "")]
+            assert calls["gui"] == 1
+            assert calls["data_changed"] == 1
+        finally:
+            main_window.grid.model.shape = old_shape
+            main_window.safe_mode = old_safe_mode
+            main_window.sheet_script_panel.current_table = old_current_table
+
+    def test_resolve_sheet_script_drafts_cancel_blocks_transition(self, monkeypatch):
+        """Cancelling draft resolution should block transition workflow actions."""
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_shape = code_array.shape
+        old_drafts = list(code_array.macros_draft)
+        old_safe_mode = main_window.safe_mode
+        old_changed = main_window.settings.changed_since_save
+
+        class _DraftDialog:
+            def __init__(self, _parent):
+                self.choice = None
+
+        called = {"count": 0}
+
+        def fake_apply_all_sheet_scripts():
+            called["count"] += 1
+            return 0, 0
+
+        try:
+            main_window.safe_mode = False
+            main_window.settings.changed_since_save = False
+            code_array.shape = (old_shape[0], old_shape[1], 1)
+            code_array.macros_draft = [None]
+            code_array.macros_draft[0] = "x = 1"
+            panel.current_table = 0
+            panel.update_()
+
+            monkeypatch.setitem(
+                self.workflows.file_new.__globals__,
+                "SheetScriptDraftDialog",
+                _DraftDialog,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                                fake_apply_all_sheet_scripts)
+            monkeypatch.setattr(GridShapeDialog, "shape", (5, 5, 1))
+
+            self.workflows.file_new()
+
+            assert called["count"] == 0
+            assert code_array.shape == (old_shape[0], old_shape[1], 1)
+            assert code_array.macros_draft[0] == "x = 1"
+        finally:
+            code_array.shape = old_shape
+            code_array.macros_draft = old_drafts
+            main_window.safe_mode = old_safe_mode
+            main_window.settings.changed_since_save = old_changed
+            panel.current_table = 0
+            panel.update_()
+
+    def test_resolve_sheet_script_drafts_apply_promotes_and_executes(self, monkeypatch):
+        """Applying draft resolution should promote drafts and execute scripts."""
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_shape = code_array.shape
+        old_macros = list(code_array.macros)
+        old_drafts = list(code_array.macros_draft)
+        old_safe_mode = main_window.safe_mode
+        old_changed = main_window.settings.changed_since_save
+
+        class _DraftDialog:
+            def __init__(self, _parent):
+                self.choice = "apply"
+
+        called = {"count": 0}
+
+        def fake_apply_all_sheet_scripts():
+            called["count"] += 1
+            return 1, 0
+
+        try:
+            main_window.safe_mode = False
+            main_window.settings.changed_since_save = False
+            code_array.shape = (old_shape[0], old_shape[1], 1)
+            code_array.macros = [""]
+            code_array.macros_draft = ["x = 11"]
+            panel.current_table = 0
+            panel.update_()
+
+            monkeypatch.setitem(
+                self.workflows._resolve_unapplied_sheet_script_drafts.__globals__,
+                "SheetScriptDraftDialog",
+                _DraftDialog,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                                fake_apply_all_sheet_scripts)
+
+            assert self.workflows._resolve_unapplied_sheet_script_drafts()
+            assert called["count"] == 1
+            assert code_array.macros[0] == "x = 11"
+            assert code_array.macros_draft[0] is None
+            assert main_window.settings.changed_since_save is True
+        finally:
+            code_array.shape = old_shape
+            code_array.macros = old_macros
+            code_array.macros_draft = old_drafts
+            main_window.safe_mode = old_safe_mode
+            main_window.settings.changed_since_save = old_changed
+            panel.current_table = 0
+            panel.update_()
+
+    def test_file_save_cancelled_by_sheet_script_draft_dialog(self, monkeypatch):
+        """file_save should abort if draft-resolution dialog is cancelled."""
+
+        class _DraftDialog:
+            def __init__(self, _parent):
+                self.choice = None
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_drafts = list(code_array.macros_draft)
+        old_changed = main_window.settings.changed_since_save
+        called = {"save": 0}
+
+        def fake_save(_filepath):
+            called["save"] += 1
+            return True
+
+        try:
+            code_array.macros_draft[0] = "x = 3"
+            panel.current_table = 0
+            panel.update_()
+            main_window.settings.changed_since_save = False
+
+            monkeypatch.setitem(
+                self.workflows.file_save.__globals__,
+                "SheetScriptDraftDialog",
+                _DraftDialog,
+            )
+            monkeypatch.setattr(self.workflows, "_save", fake_save)
+
+            assert self.workflows.file_save() is False
+            assert called["save"] == 0
+        finally:
+            code_array.macros_draft = old_drafts
+            main_window.settings.changed_since_save = old_changed
+            panel.current_table = 0
+            panel.update_()
+
+    def test_default_sheet_script_template_does_not_trigger_draft_warning(self, monkeypatch):
+        """Untouched default template draft should not prompt warning."""
+
+        code_array = main_window.grid.model.code_array
+        panel = main_window.sheet_script_panel
+        old_drafts = list(code_array.macros_draft)
+        old_macros = list(code_array.macros)
+
+        class _FailIfCalledDialog:
+            def __init__(self, _parent):
+                raise AssertionError("SheetScriptDraftDialog should not be shown")
+
+        called = {"count": 0}
+
+        def fake_apply_all_sheet_scripts():
+            called["count"] += 1
+            return 0, 0
+
+        try:
+            code_array.macros = ["" for _ in range(code_array.shape[2])]
+            panel.current_table = 0
+            panel.update_()
+
+            monkeypatch.setitem(
+                self.workflows._resolve_unapplied_sheet_script_drafts.__globals__,
+                "SheetScriptDraftDialog",
+                _FailIfCalledDialog,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                                fake_apply_all_sheet_scripts)
+
+            assert self.workflows._resolve_unapplied_sheet_script_drafts()
+            assert called["count"] == 0
+        finally:
+            code_array.macros = old_macros
+            code_array.macros_draft = old_drafts
+            panel.current_table = 0
+            panel.update_()
+
+    def test_filepath_open_untrusted_defers_scripts_until_approve(self, tmp_path, monkeypatch):
+        """Untrusted loads must stay in safe mode and defer script execution."""
+
+        payload = (
+            "[PyCellSheet save file version]\n"
+            "0.0\n"
+            "[shape]\n"
+            "1\t1\t1\n"
+            "[sheet_names]\n"
+            "Sheet 0\n"
+            "[macros]\n"
+            "(macro:'Sheet 0') 1\n"
+            "VALUE = 7\n"
+            "[grid]\n"
+            "0\t0\t0\t'abc'\n"
+            "[attributes]\n"
+            "[row_heights]\n"
+            "[col_widths]\n"
+        )
+        filepath = tmp_path / "untrusted.pycsu"
+        filepath.write_text(payload, encoding="utf-8")
+
+        code_array = main_window.grid.model.code_array
+        apply_calls = {"count": 0}
+        exec_calls = {"count": 0}
+        old_safe_mode = main_window.safe_mode
+        old_cwd = os.getcwd()
+
+        def fake_file_progress_gen(_main_window, iterable, _title, _label, _lines):
+            for i, line in enumerate(iterable, start=1):
+                yield i, line
+
+        def fake_apply_all_sheet_scripts():
+            apply_calls["count"] += 1
+            return 1, 0
+
+        def fake_execute_sheet_script(table):
+            exec_calls["count"] += 1
+            return "", ""
+
+        class _ApproveDialog:
+            def __init__(self, _parent):
+                self.choice = True
+
+        try:
+            monkeypatch.setitem(
+                self.workflows.filepath_open.__globals__,
+                "file_progress_gen",
+                fake_file_progress_gen,
+            )
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts", fake_apply_all_sheet_scripts)
+            monkeypatch.setattr(code_array, "execute_sheet_script", fake_execute_sheet_script)
+            monkeypatch.setitem(
+                main_window.on_approve.__globals__,
+                "ApproveWarningDialog",
+                _ApproveDialog,
+            )
+
+            self.workflows.filepath_open(filepath)
+
+            assert main_window.safe_mode is True
+            assert exec_calls["count"] == 0
+            assert apply_calls["count"] == 0
+
+            main_window.on_approve()
+
+            assert main_window.safe_mode is False
+            assert apply_calls["count"] == 1
+        finally:
+            os.chdir(old_cwd)
+            main_window.safe_mode = old_safe_mode
+
     param_count_file_lines = [
         ("", 0, "counttest.txt", None),
         ("\n"*100, 100, "counttest.txt", None),
@@ -223,6 +528,9 @@ class TestWorkflows:
     def test_edit_sort_ascending(self):
         """Unit test for test_edit_sort_ascending"""
 
+        main_window.grid.model.shape = (1000, 100, 3)
+        main_window.grid.model.reset()
+
         main_window.grid.model.code_array[0, 0, 0] = "1"
         main_window.grid.model.code_array[1, 0, 0] = "3"
         main_window.grid.model.code_array[2, 0, 0] = "2"
@@ -243,6 +551,9 @@ class TestWorkflows:
 
     def test_edit_sort_descending(self):
         """Unit test for test_edit_sort_descending"""
+
+        main_window.grid.model.shape = (1000, 100, 3)
+        main_window.grid.model.reset()
 
         main_window.grid.model.code_array[0, 0, 0] = "1"
         main_window.grid.model.code_array[1, 0, 0] = "3"

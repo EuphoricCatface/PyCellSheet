@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -167,4 +168,47 @@ class TestMainWindow:
             code_array.dep_graph.remove_cell((0, 0, 0))
             code_array.dep_graph.remove_cell((0, 1, 0))
             code_array.dep_graph.dirty.clear()
+            main_window.settings.recalc_mode = old_mode
+
+    def test_recalculate_actions_show_scope_and_count_status(self, monkeypatch):
+        """Recalculate actions should report consistent scope/count status text."""
+
+        code_array = main_window.grid.model.code_array
+        old_mode = main_window.settings.recalc_mode
+        main_window.settings.recalc_mode = "manual"
+
+        refresh_calls = {"count": 0}
+
+        try:
+            monkeypatch.setattr(code_array, "recalculate_dirty", lambda: 2)
+            monkeypatch.setattr(code_array, "recalculate_cell_only", lambda _key: 1)
+            monkeypatch.setattr(code_array, "recalculate_ancestors", lambda _key: 0)
+            monkeypatch.setattr(code_array, "recalculate_children", lambda _key: 3)
+            monkeypatch.setattr(code_array, "recalculate_all", lambda: 4)
+            monkeypatch.setattr(main_window, "_refresh_grid",
+                                lambda: refresh_calls.__setitem__("count", refresh_calls["count"] + 1))
+
+            main_window.on_recalculate()
+            assert main_window.statusBar().currentMessage() == \
+                "Recalculated 2 cells (scope: Dirty cells, mode: Manual)"
+
+            main_window.on_recalculate_cell_only()
+            assert main_window.statusBar().currentMessage() == \
+                "Recalculated 1 cell (scope: Current cell, mode: Manual)"
+
+            main_window.on_recalculate_ancestors()
+            assert main_window.statusBar().currentMessage() == \
+                "No cells needed recalculation (scope: Current cell + ancestors, mode: Manual)"
+
+            main_window.on_recalculate_children()
+            assert main_window.statusBar().currentMessage() == \
+                "Recalculated 3 cells (scope: Current cell + children, mode: Manual)"
+
+            main_window.on_recalculate_all()
+            assert main_window.statusBar().currentMessage() == \
+                "Recalculated 4 cells (scope: Entire workspace, mode: Manual)"
+
+            # on_recalculate_ancestors returns 0 and should not trigger refresh
+            assert refresh_calls["count"] == 4
+        finally:
             main_window.settings.recalc_mode = old_mode

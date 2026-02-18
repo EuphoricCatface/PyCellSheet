@@ -4,7 +4,7 @@
 
 PyCellSheet is a fork of pyspread v2.3.1 that aims to be a comfortable middle ground between a conventional spreadsheet and pyspread's purely Pythonic approach. The key philosophical difference from pyspread is **copy-priority semantics**: cell references return `deepcopy`'d values by default, so cells behave like independent values in a normal spreadsheet, rather than pyspread's reference-priority system where cells share mutable objects.
 
-The project is at an early proof-of-concept stage (v0.0.5). It has been dormant for a couple of years.
+v0.1.0 is released. Current development is on the v0.2.0 stabilization cycle.
 
 ## Design Philosophy
 
@@ -153,8 +153,8 @@ The grid is currently a 3D dict keyed by `(row, col, table)` where the key forma
 - Expression parser currently hardcoded to "Mixed" mode as a workaround until UI is built (see `DataArray.__init__`)
 - ~~No dependency graph or recalculation ordering yet~~ ✅ **DONE** - DependencyGraph implemented with smart caching
 - ~~No circular reference detection~~ ✅ **DONE** - Circular references detected via DFS during evaluation
-- No UI for dirty cell visualization yet (refresh icon, recalc mode, F9 shortcuts)
-- Sheet names are currently numeric indices (string `"0"`, `"1"`, ...) - named sheets are a later goal
+- Dirty visualization/recalc baseline is implemented (dirty indicator + recalc actions), but dependency-inspector-style UI is still a later goal
+- Named sheets and sheet renaming are implemented; persistence remains backward-compatible with legacy `[macros]` sections
 
 ## Build and Run
 
@@ -170,10 +170,12 @@ python pyspread/__main__.py
 
 ## Testing
 
-**Dependency Tracking Tests** (62 tests total, all passing):
-- `pyspread/lib/test/test_dependency_graph.py` - 27 tests for DependencyGraph (add/remove, cycles, dirty flags, transitive closure)
+**Dependency Tracking Tests** (67 tests total):
+- `pyspread/lib/test/test_dependency_graph.py` - 30 tests for DependencyGraph (add/remove, cycles, dirty flags, transitive closure)
 - `pyspread/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
-- `pyspread/model/test/test_dependency_integration.py` - 15 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection)
+- `pyspread/model/test/test_dependency_integration.py` - 17 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection, dynamic refs)
+
+As of 2026-02-16, `pytest --collect-only` discovers 750 tests across `pyspread/lib/test`, `pyspread/model/test`, and `pyspread/test`.
 
 **Legacy pyspread tests** exist in `pyspread/test/` and `pyspread/lib/test/` but have not been updated for PyCellSheet changes.
 
@@ -183,7 +185,6 @@ python pyspread/__main__.py
 - ~~Dependency graph, update chaining, circular reference detection~~ ✅ **DONE**
 - `compile()` caching for cell code
 - UI for dirty cell visualization (refresh icon, recalc mode, F9 shortcuts)
-- Named sheets (currently numeric)
 - Custom function scripts per workbook
 - Configurable Formatter (per-workspace and per-cell scope; basic static version now exists)
 - `FILTER`/`COUNTIF`-style lambda-based range operations

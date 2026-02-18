@@ -26,6 +26,7 @@ public/
 # coverage
 *.coverage
 htmlcov
+.tox/
 
 # planning documents (local only)
 PLANS/

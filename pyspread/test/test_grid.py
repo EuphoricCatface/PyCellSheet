@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
@@ -33,9 +34,9 @@ import sys
 
 import pytest
 
-from PyQt6.QtCore import QItemSelectionModel, QItemSelection, Qt
+from PyQt6.QtCore import QItemSelectionModel, QItemSelection, Qt, QRectF
 from PyQt6.QtWidgets import QApplication, QAbstractItemView
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtGui import QFont, QColor, QImage, QPainter
 
 
 PYSPREADPATH = abspath(join(dirname(__file__) + "/.."))
@@ -63,6 +64,11 @@ with insert_path(PYSPREADPATH):
     from ..commands import MakeButtonCell, RemoveButtonCell
     from ..lib.selection import Selection
     from ..interfaces.pycs import qt62qt5_fontweights
+    from ..grid import Icon
+
+
+def _is_empty_cell(value) -> bool:
+    return repr(value) == "EmptyCell"
 
 
 app = QApplication.instance()
@@ -133,7 +139,7 @@ class TestGrid:
 
     param_test_row_heights = [
         ({0: 23}, {0: 23}),
-        ({1: 3}, {1: 3.0}),
+        ({1: 3}, {1: 10.0}),
         ({0: 23, 12: 200}, {0: 23, 12: 200}),
     ]
 
@@ -150,7 +156,7 @@ class TestGrid:
 
     param_test_column_widths = [
         ({0: 23}, {0: 23}),
-        ({1: 3}, {1: 3.0}),
+        ({1: 3}, {1: 10.0}),
         ({0: 23, 12: 200}, {0: 23, 12: 200}),
     ]
 
@@ -845,13 +851,13 @@ class TestGrid:
         self.grid.model.code_array[1, 0, 0] = "'Test data'"
         self.grid.selectRow(0)
         self.grid.on_insert_rows()
-        assert self.grid.model.code_array[1, 0, 0] is None
-        assert self.grid.model.code_array[2, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[1, 0, 0])
+        assert self.grid.model.code_array[2, 0, 0] == "Test data'"
 
         self.grid.clearSelection()
         self.grid.selectRow(1)
         self.grid.on_insert_rows()
-        assert self.grid.model.code_array[3, 0, 0] == "Test data"
+        assert self.grid.model.code_array[3, 0, 0] == "Test data'"
 
     def test_on_delete_rows(self):
         """Unit test for on_delete_rows"""
@@ -863,8 +869,8 @@ class TestGrid:
         self.grid.model.code_array[1, 0, 0] = "'Test data'"
         self.grid.selectRow(0)
         self.grid.on_delete_rows()
-        assert self.grid.model.code_array[1, 0, 0] is None
-        assert self.grid.model.code_array[0, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[1, 0, 0])
+        assert self.grid.model.code_array[0, 0, 0] == "Test data'"
 
     def test_on_insert_columns(self):
         """Unit test for on_insert_columns"""
@@ -876,13 +882,13 @@ class TestGrid:
         self.grid.model.code_array[0, 1, 0] = "'Test data'"
         self.grid.selectColumn(0)
         self.grid.on_insert_columns()
-        assert self.grid.model.code_array[0, 1, 0] is None
-        assert self.grid.model.code_array[0, 2, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 1, 0])
+        assert self.grid.model.code_array[0, 2, 0] == "Test data'"
 
         self.grid.clearSelection()
         self.grid.selectColumn(1)
         self.grid.on_insert_columns()
-        assert self.grid.model.code_array[0, 3, 0] == "Test data"
+        assert self.grid.model.code_array[0, 3, 0] == "Test data'"
 
     def test_on_delete_columns(self):
         """Unit test for on_delete_columns"""
@@ -894,8 +900,8 @@ class TestGrid:
         self.grid.model.code_array[0, 1, 0] = "'Test data'"
         self.grid.selectColumn(0)
         self.grid.on_delete_columns()
-        assert self.grid.model.code_array[0, 1, 0] is None
-        assert self.grid.model.code_array[0, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 1, 0])
+        assert self.grid.model.code_array[0, 0, 0] == "Test data'"
 
     def test_on_insert_table(self):
         """Unit test for on_insert_table"""
@@ -906,8 +912,8 @@ class TestGrid:
         self.current = 0, 0, 0
         self.grid.model.code_array[0, 0, 1] = "'Test data'"
         self.grid.on_insert_table()
-        assert self.grid.model.code_array[0, 0, 1] is None
-        assert self.grid.model.code_array[0, 0, 2] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 0, 1])
+        assert self.grid.model.code_array[0, 0, 2] == "Test data'"
 
     def test_on_delete_table(self):
         """Unit test for on_delete_table"""
@@ -918,8 +924,8 @@ class TestGrid:
         self.current = 0, 0, 0
         self.grid.model.code_array[0, 0, 1] = "'Test data'"
         self.grid.on_delete_table()
-        assert self.grid.model.code_array[0, 0, 1] is None
-        assert self.grid.model.code_array[0, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 0, 1])
+        assert self.grid.model.code_array[0, 0, 0] == "Test data'"
 
 
 class TestGridHeaderView:
@@ -1124,6 +1130,49 @@ class TestGridTableModel:
 
 class TestGridCellDelegate:
     """Unit tests for GridCellDelegate in grid.py"""
+
+    grid = main_window.grid
+    delegate = grid.itemDelegate()
+
+    def test_render_dirty_icon_skips_small_cells(self, monkeypatch):
+        """Dirty icon should not paint when the cell is too small."""
+
+        calls = {"count": 0}
+
+        class _DummyIcon:
+            def paint(self, *_args, **_kwargs):
+                calls["count"] += 1
+
+        monkeypatch.setattr(Icon, "refresh", _DummyIcon())
+
+        image = QImage(16, 16, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_dirty_icon(painter, QRectF(0, 0, 9, 9))
+        finally:
+            painter.end()
+
+        assert calls["count"] == 0
+
+    def test_render_dirty_icon_paints_normal_cells(self, monkeypatch):
+        """Dirty icon should paint once when the cell has enough room."""
+
+        calls = {"count": 0}
+
+        class _DummyIcon:
+            def paint(self, *_args, **_kwargs):
+                calls["count"] += 1
+
+        monkeypatch.setattr(Icon, "refresh", _DummyIcon())
+
+        image = QImage(48, 24, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            self.delegate._render_dirty_icon(painter, QRectF(0, 0, 48, 24))
+        finally:
+            painter.end()
+
+        assert calls["count"] == 1
 
 
 class TestTableChoice:

@@ -3,10 +3,29 @@ PyCellSheet Changelog
 
 Base upstream: pyspread 2.3.1 (forked November 2024)
 
+v0.2.0
+-----------------------
+
+Summary:
+- 37 files changed, 1610 insertions, 180 deletions
+
+Features:
+- Improved recalc UX baseline with clearer status feedback and dirty-indicator rendering consistency.
+- Expanded sheet-script workflow behavior: apply-all execution at workflow boundaries, trusted/untrusted load handling, and safe-mode approval path consistency.
+
+Fixes:
+- Stabilization pass for dependency/recalculation behavior, including dynamic-reference dependency correctness and transitive dependency traversal hardening.
+- Save/load robustness improvements for sheet names and per-sheet script headers, including stricter parsing/normalization and round-trip coverage.
+- Terminology and UI consistency cleanup around `Sheet Script` and `Tools -> Macro` paths in user-facing docs/UI touchpoints.
+
+Tests:
+- Broader stabilization test coverage across dependency integration, workflows, dirty-indicator rendering, and `.pycs` sheet-name/script edge cases.
+
+Maintenance:
+- Codebase hygiene updates: inline-import cleanup in touched paths and attribution/GPL header normalization for user-created modules.
+
 v0.1.0
 ------
-
-Period: December 2024 to February 2026
 
 Summary:
 - 61 files changed, 6415 insertions, 1628 deletions
@@ -26,8 +45,6 @@ Highlights:
 
 v0.0.5 Proof-of-Concept
 -----------------------
-
-Period: November 2024 to December 2024
 
 Summary:
 - 35 files changed, 3607 insertions, 1106 deletions
