@@ -3,6 +3,27 @@ PyCellSheet Changelog
 
 Base upstream: pyspread 2.3.1 (forked November 2024)
 
+v0.3.0 (Unreleased)
+-------------------
+
+Summary:
+- Release-engineering and safety-baseline cycle in progress.
+
+Features:
+- Added multi-version test gate support (`tox` matrix + CI workflow + runbook).
+- Hardened Sheet Script draft lifecycle behavior for save/new/open/quit transitions.
+
+Fixes:
+- Improved release-line docs consistency for active development status and baseline policy references.
+
+Tests:
+- Expanded baseline test contracts for expression-parser modes, slice-migration compatibility, and macro/sheet-script alias parity.
+- Added targeted workflow coverage for file-open delegation and file-signing branches.
+- Current branch baseline passes on active interpreter (`792 passed`).
+
+Maintenance:
+- Added CI gate runbook linkage and release-engineering notes to reduce drift between process docs and shipped behavior.
+
 v0.2.0
 -----------------------
 
