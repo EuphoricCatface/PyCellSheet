@@ -143,6 +143,55 @@ class PythonCode(str):
     pass
 
 
+def safe_deepcopy(value, _memo=None):
+    """Best-effort deepcopy that preserves container isolation.
+
+    Falls back to by-reference values for uncopyable objects (e.g. modules)
+    while still copying container shells where possible.
+    """
+
+    if _memo is None:
+        _memo = {}
+
+    obj_id = id(value)
+    if obj_id in _memo:
+        return _memo[obj_id]
+
+    try:
+        copied = copy.deepcopy(value)
+        _memo[obj_id] = copied
+        return copied
+    except Exception:
+        pass
+
+    if isinstance(value, dict):
+        copied = {}
+        _memo[obj_id] = copied
+        for key, item in value.items():
+            copied_key = safe_deepcopy(key, _memo)
+            copied[copied_key] = safe_deepcopy(item, _memo)
+        return copied
+
+    if isinstance(value, list):
+        copied = []
+        _memo[obj_id] = copied
+        copied.extend(safe_deepcopy(item, _memo) for item in value)
+        return copied
+
+    if isinstance(value, tuple):
+        copied = tuple(safe_deepcopy(item, _memo) for item in value)
+        _memo[obj_id] = copied
+        return copied
+
+    if isinstance(value, set):
+        copied = {safe_deepcopy(item, _memo) for item in value}
+        _memo[obj_id] = copied
+        return copied
+
+    _memo[obj_id] = value
+    return value
+
+
 class HelpText:
     def __init__(self, query, contents):
         if len(query) == 0:
@@ -367,7 +416,7 @@ class ReferenceParser:
                 else:
                     raise ValueError(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
 
-            self.sheet_global_var = copy.deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
+            self.sheet_global_var = safe_deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
             self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
 
         def cell_single_ref(self, addr: str):
@@ -384,7 +433,7 @@ class ReferenceParser:
                 self.code_array.dep_graph.check_for_cycles(current_cell)
                 # If check_for_cycles raises CircularRefError, it will propagate
 
-            return copy.deepcopy(self.code_array[row, col, self.sheet_idx])
+            return safe_deepcopy(self.code_array[row, col, self.sheet_idx])
 
         def cell_range_ref(self, addr1: str, addr2: str) -> Range:
             coord1 = spreadsheet_ref_to_coord(addr1)
@@ -409,7 +458,7 @@ class ReferenceParser:
                         self.code_array.dep_graph.check_for_cycles(current_cell)
                         # If check_for_cycles raises CircularRefError, it will propagate
 
-                    rtn.append(copy.deepcopy(self.code_array[row, col, self.sheet_idx]))
+                    rtn.append(safe_deepcopy(self.code_array[row, col, self.sheet_idx]))
 
             return rtn
 

@@ -92,7 +92,7 @@ try:
     from pycellsheet.lib.string_helpers import ZEN
     from pycellsheet.lib.sheet_name import generate_unique_sheet_name
     from pycellsheet.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
 
     # Dependency tracking and smart caching
     from pycellsheet.lib.dependency_graph import DependencyGraph
@@ -109,7 +109,7 @@ except ImportError:
     from lib.string_helpers import ZEN
     from lib.sheet_name import generate_unique_sheet_name
     from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
 
     # Dependency tracking and smart caching
     from lib.dependency_graph import DependencyGraph
@@ -1466,13 +1466,13 @@ class CodeArray(DataArray):
            and self.dep_graph.is_dirty(key):
             cached = self.smart_cache.get_raw(key)
             if cached is not SmartCache.INVALID:
-                return deepcopy(cached)
+                return safe_deepcopy(cached)
 
         # Smart cache handling (check even for empty cells)
         cached = self.smart_cache.get(key)
         if cached is not SmartCache.INVALID:
             # Cache hit! Return deepcopied value (cache stores original)
-            return deepcopy(cached)
+            return safe_deepcopy(cached)
 
         # Empty cells still need to be cached and have dirty flag cleared
         if code is None:
@@ -1584,7 +1584,7 @@ class CodeArray(DataArray):
             return err
 
         #  --- PythonEval START ---  #
-        env = deepcopy(self.sheet_globals_copyable[key[2]])
+        env = safe_deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
         # Keep eval globals isolated from module/runtime globals.
         env["__builtins__"] = _get_isolated_builtins()

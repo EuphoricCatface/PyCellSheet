@@ -580,6 +580,34 @@ class TestCodeArray(object):
         else:
             assert result == res
 
+    def test_globals_result_with_modules_survives_cache_hit(self):
+        """globals() result should not crash on cached deepcopy fallback."""
+
+        self.code_array.sheet_scripts[0] = INITSCRIPT_DEFAULT
+        self.code_array.execute_sheet_script(0)
+        self.code_array[0, 0, 0] = "globals()"
+
+        first = self.code_array[0, 0, 0]
+        second = self.code_array[0, 0, 0]
+
+        assert isinstance(first, dict)
+        assert isinstance(second, dict)
+        assert "random_" in second
+
+    def test_locals_result_with_modules_survives_cache_hit(self):
+        """locals() result should not crash on cached deepcopy fallback."""
+
+        self.code_array.sheet_scripts[0] = INITSCRIPT_DEFAULT
+        self.code_array.execute_sheet_script(0)
+        self.code_array[0, 0, 0] = "locals()"
+
+        first = self.code_array[0, 0, 0]
+        second = self.code_array[0, 0, 0]
+
+        assert isinstance(first, dict)
+        assert isinstance(second, dict)
+        assert "C" in second
+
     def test_legacy_slice_replacement_helpers(self):
         """Reference helpers replace legacy slice-style references."""
 
