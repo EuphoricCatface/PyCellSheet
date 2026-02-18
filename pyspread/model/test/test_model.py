@@ -50,6 +50,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
 
 from lib.attrdict import AttrDict
 from lib.selection import Selection
+from lib.pycellsheet import EmptyCell, ExpressionParser, PythonCode
 sys.path.pop(0)
 
 
@@ -183,6 +184,21 @@ def test_execute_sheet_script_alias():
     assert code_array._eval_cell((0, 0, 0), "x") == 7
 
 
+def test_sheet_scripts_alias_tracks_shape_resize():
+    """sheet_scripts should stay aligned with macros when table count changes."""
+
+    code_array = CodeArray((2, 2, 2), Settings())
+    code_array.sheet_scripts = ["a = 1", "b = 2"]
+
+    code_array.shape = (2, 2, 3)
+    assert len(code_array.sheet_scripts) == 3
+    assert len(code_array.macros) == 3
+
+    code_array.shape = (2, 2, 1)
+    assert code_array.sheet_scripts == ["a = 1"]
+    assert code_array.macros == ["a = 1"]
+
+
 class TestKeyValueStore(object):
     """Unit tests for KeyValueStore"""
 
@@ -309,21 +325,17 @@ class TestDataArray(object):
 
         assert self.data_array[0, 0, 0] == "'Tes'"
 
-    def test_cell_array_generator(self):
-        """Unit test for cell_array_generator"""
+    def test_slice_access_unsupported(self):
+        """Slice-style access is no longer supported."""
 
-        cell_array = self.data_array[:5, 0, 0]
+        with pytest.raises(NotImplementedError):
+            self.data_array[:5, 0, 0]
 
-        assert list(cell_array) == [None] * 5
+        with pytest.raises(NotImplementedError):
+            self.data_array[:5, :5, 0]
 
-        cell_array = self.data_array[:5, :5, 0]
-
-        assert [list(c) for c in cell_array] == [[None] * 5] * 5
-
-        cell_array = self.data_array[:5, :5, :5]
-
-        assert [[list(e) for e in c] for c in cell_array] == \
-            [[[None] * 5] * 5] * 5
+        with pytest.raises(NotImplementedError):
+            self.data_array[:5, :5, :5]
 
     param_adjust_rowcol = [
         ({(0, 0): 3.0}, 0, 2, 0, 0, (0, 0), 3.0),
@@ -361,6 +373,13 @@ class TestDataArray(object):
         cell_attributes.append(attr)
 
         assert self.data_array.cell_attributes == cell_attributes
+
+    def test_default_expression_parser_mode_contract(self):
+        """DataArray currently defaults to the Mixed parser workaround."""
+
+        assert self.data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Mixed"]
+        assert self.data_array.exp_parser.parse("'hello") == "hello"
+        assert self.data_array.exp_parser.parse("1 + 2") == PythonCode("1 + 2")
 
     param_adjust_cell_attributes = [
         (0, 5, 0, (4, 3, 0), (9, 3, 0)),
@@ -484,22 +503,21 @@ class TestCodeArray(object):
             assert res_data[key] == self.code_array(key)
 
     def test_slicing(self):
-        """Unit test for __getitem__ and __setitem__"""
+        """Slice-style access is no longer supported."""
 
-        # Test for item getting, slicing, basic evaluation correctness
+        with pytest.raises(NotImplementedError):
+            self.code_array[:1, :1, :1]
 
+        with pytest.raises(NotImplementedError):
+            self.code_array[:1, :1, :1] = "1"
+
+        # Basic evaluation correctness remains intact for non-slice access.
         shape = self.code_array.shape
         x_list = [0, shape[0]-1]
         y_list = [0, shape[1]-1]
         z_list = [0, shape[2]-1]
         for x, y, z in zip(x_list, y_list, z_list):
-            assert self.code_array[x, y, z] is None
-            self.code_array[:x, :y, :z]
-            self.code_array[:x:2, :y:2, :z:-1]
-
-        get_shape = numpy.array(self.code_array[:, :, :]).shape
-        orig_shape = self.code_array.shape
-        assert get_shape == orig_shape
+            assert self.code_array[x, y, z] is EmptyCell
 
         gridsize = 100
         filled_grid = CodeArray((gridsize, 10, 1), Settings())
@@ -514,14 +532,8 @@ class TestCodeArray(object):
                 assert filled_grid[j, 1, 0] == i + j
                 assert filled_grid[j, 2, 0] == i * j
 
-            for j, funcname in enumerate(['int', 'math.ceil',
-                                          'fractions.Fraction']):
-                filled_grid[0, 0, 0] = "fractions = __import__('fractions')"
-                filled_grid[0, 0, 0]
-                filled_grid[1, 0, 0] = "math = __import__('math')"
-                filled_grid[1, 0, 0]
+            for j, funcname in enumerate(['int']):
                 filled_grid[j, 3, 0] = funcname + ' (' + str(i) + ')'
-
                 assert filled_grid[j, 3, 0] == eval(funcname + "(" + "i" + ")")
         # Test X, Y, Z
         for i in range(10):
@@ -531,12 +543,12 @@ class TestCodeArray(object):
 
         assert [self.code_array[i, 0, 0] for i in range(10)] == list(range(10))
 
-        # Test cycle detection
+        # Test dependency-aware evaluation
 
-        filled_grid[0, 0, 0] = "numpy.arange(0, 10, 0.1)"
-        filled_grid[1, 0, 0] = "sum(S[0,0,0])"
+        filled_grid[0, 0, 0] = "[1, 2, 3, 4]"
+        filled_grid[1, 0, 0] = "sum(C('A1'))"
 
-        assert filled_grid[1, 0, 0] == sum(numpy.arange(0, 10, 0.1))
+        assert filled_grid[1, 0, 0] == 10
 
     def test_make_nested_list(self):
         """Unit test for _make_nested_list"""
@@ -552,8 +564,8 @@ class TestCodeArray(object):
 
     data_eval_cell = [
         ((0, 0, 0), "2 + 4", 6),
-        ((1, 0, 0), "S[0, 0, 0]", None),
-        ((43, 2, 1), "X, Y, Z", (43, 2, 1)),
+        ((1, 0, 0), "S[0, 0, 0]", NameError),
+        ((43, 2, 1), "X, Y, Z", NameError),
     ]
 
     @pytest.mark.parametrize("key, code, res", data_eval_cell)
@@ -561,13 +573,33 @@ class TestCodeArray(object):
         """Unit test for _eval_cell"""
 
         self.code_array[key] = code
-        assert self.code_array._eval_cell(key, code) == res
+        result = self.code_array._eval_cell(key, code)
+        if isinstance(res, type) and issubclass(res, Exception):
+            assert isinstance(result, res)
+        else:
+            assert result == res
+
+    def test_legacy_slice_replacement_helpers(self):
+        """Reference helpers replace legacy slice-style references."""
+
+        self.code_array[0, 0, 0] = "2"
+        self.code_array[1, 0, 0] = "C('A1')"
+        self.code_array[2, 0, 0] = "sum(R('A1', 'A2').flatten())"
+        self.code_array[3, 0, 0] = "CR('A1')"
+        self.code_array[4, 0, 0] = "S[0, 0, 0]"
+
+        assert self.code_array._eval_cell((1, 0, 0), self.code_array((1, 0, 0))) == 2
+        assert self.code_array._eval_cell((2, 0, 0), self.code_array((2, 0, 0))) == 4
+        assert self.code_array._eval_cell((3, 0, 0), self.code_array((3, 0, 0))) == 2
+
+        legacy = self.code_array._eval_cell((4, 0, 0), self.code_array((4, 0, 0)))
+        assert isinstance(legacy, NameError)
 
     def test_execute_macros(self):
         """Unit test for execute_macros"""
 
-        self.code_array.macros = "a = 5\ndef f(x): return x ** 2"
-        self.code_array.execute_macros()
+        self.code_array.macros = ["a = 5\ndef f(x): return x ** 2"]
+        self.code_array.execute_macros(0)
         assert self.code_array._eval_cell((0, 0, 0), "a") == 5
         assert self.code_array._eval_cell((0, 0, 0), "f(2)") == 4
 

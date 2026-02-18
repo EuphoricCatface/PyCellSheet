@@ -70,7 +70,10 @@ def sniff(filepath: Path, sniff_size: int, encoding: str) -> csv.Dialect:
     setattr(dialect, "encoding", encoding)
     if dialect.escapechar is None:
         setattr(dialect, "quoting", csv.QUOTE_NONE)
-        setattr(dialect, "escapechar", '"')
+        # Python 3.14 csv is stricter for QUOTE_NONE dialects.
+        # Use a conventional escape character and disable quotechar.
+        setattr(dialect, "escapechar", "\\")
+        setattr(dialect, "quotechar", None)
 
     return dialect
 

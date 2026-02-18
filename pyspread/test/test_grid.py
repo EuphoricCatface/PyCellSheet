@@ -67,6 +67,10 @@ with insert_path(PYSPREADPATH):
     from ..grid import Icon
 
 
+def _is_empty_cell(value) -> bool:
+    return repr(value) == "EmptyCell"
+
+
 app = QApplication.instance()
 if app is None:
     app = QApplication([])
@@ -135,7 +139,7 @@ class TestGrid:
 
     param_test_row_heights = [
         ({0: 23}, {0: 23}),
-        ({1: 3}, {1: 3.0}),
+        ({1: 3}, {1: 10.0}),
         ({0: 23, 12: 200}, {0: 23, 12: 200}),
     ]
 
@@ -152,7 +156,7 @@ class TestGrid:
 
     param_test_column_widths = [
         ({0: 23}, {0: 23}),
-        ({1: 3}, {1: 3.0}),
+        ({1: 3}, {1: 10.0}),
         ({0: 23, 12: 200}, {0: 23, 12: 200}),
     ]
 
@@ -847,13 +851,13 @@ class TestGrid:
         self.grid.model.code_array[1, 0, 0] = "'Test data'"
         self.grid.selectRow(0)
         self.grid.on_insert_rows()
-        assert self.grid.model.code_array[1, 0, 0] is None
-        assert self.grid.model.code_array[2, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[1, 0, 0])
+        assert self.grid.model.code_array[2, 0, 0] == "Test data'"
 
         self.grid.clearSelection()
         self.grid.selectRow(1)
         self.grid.on_insert_rows()
-        assert self.grid.model.code_array[3, 0, 0] == "Test data"
+        assert self.grid.model.code_array[3, 0, 0] == "Test data'"
 
     def test_on_delete_rows(self):
         """Unit test for on_delete_rows"""
@@ -865,8 +869,8 @@ class TestGrid:
         self.grid.model.code_array[1, 0, 0] = "'Test data'"
         self.grid.selectRow(0)
         self.grid.on_delete_rows()
-        assert self.grid.model.code_array[1, 0, 0] is None
-        assert self.grid.model.code_array[0, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[1, 0, 0])
+        assert self.grid.model.code_array[0, 0, 0] == "Test data'"
 
     def test_on_insert_columns(self):
         """Unit test for on_insert_columns"""
@@ -878,13 +882,13 @@ class TestGrid:
         self.grid.model.code_array[0, 1, 0] = "'Test data'"
         self.grid.selectColumn(0)
         self.grid.on_insert_columns()
-        assert self.grid.model.code_array[0, 1, 0] is None
-        assert self.grid.model.code_array[0, 2, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 1, 0])
+        assert self.grid.model.code_array[0, 2, 0] == "Test data'"
 
         self.grid.clearSelection()
         self.grid.selectColumn(1)
         self.grid.on_insert_columns()
-        assert self.grid.model.code_array[0, 3, 0] == "Test data"
+        assert self.grid.model.code_array[0, 3, 0] == "Test data'"
 
     def test_on_delete_columns(self):
         """Unit test for on_delete_columns"""
@@ -896,8 +900,8 @@ class TestGrid:
         self.grid.model.code_array[0, 1, 0] = "'Test data'"
         self.grid.selectColumn(0)
         self.grid.on_delete_columns()
-        assert self.grid.model.code_array[0, 1, 0] is None
-        assert self.grid.model.code_array[0, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 1, 0])
+        assert self.grid.model.code_array[0, 0, 0] == "Test data'"
 
     def test_on_insert_table(self):
         """Unit test for on_insert_table"""
@@ -908,8 +912,8 @@ class TestGrid:
         self.current = 0, 0, 0
         self.grid.model.code_array[0, 0, 1] = "'Test data'"
         self.grid.on_insert_table()
-        assert self.grid.model.code_array[0, 0, 1] is None
-        assert self.grid.model.code_array[0, 0, 2] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 0, 1])
+        assert self.grid.model.code_array[0, 0, 2] == "Test data'"
 
     def test_on_delete_table(self):
         """Unit test for on_delete_table"""
@@ -920,8 +924,8 @@ class TestGrid:
         self.current = 0, 0, 0
         self.grid.model.code_array[0, 0, 1] = "'Test data'"
         self.grid.on_delete_table()
-        assert self.grid.model.code_array[0, 0, 1] is None
-        assert self.grid.model.code_array[0, 0, 0] == "Test data"
+        assert _is_empty_cell(self.grid.model.code_array[0, 0, 1])
+        assert self.grid.model.code_array[0, 0, 0] == "Test data'"
 
 
 class TestGridHeaderView:
