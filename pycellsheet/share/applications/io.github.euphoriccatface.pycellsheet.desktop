@@ -1,15 +1,15 @@
 [Desktop Entry]
 Categories=Office;Spreadsheet;
-Comment[en_US]=pycellsheet is a non-traditional spreadsheet application that is based on and written in the programming language Python
-Comment=pycellsheet is a non-traditional spreadsheet application that is based on and written in the programming language Python
+Comment[en_US]=PyCellSheet is a non-traditional spreadsheet application that is based on and written in the programming language Python
+Comment=PyCellSheet is a non-traditional spreadsheet application that is based on and written in the programming language Python
 Exec=pycellsheet %U
 GenericName[en_US]=Python based Spreadsheet
 GenericName=Python based Spreadsheet
 Keywords=python;spreadsheet;matplotlib;math;
 Icon=pyspread.svg
 MimeType=application/x-pycellsheet-spreadsheet;application/x-pycellsheet-bz-spreadsheet
-Name[en_US]=pycellsheet
-Name=pycellsheet
+Name[en_US]=PyCellSheet
+Name=PyCellSheet
 StartupNotify=false
 StartupWMClass=io.github.euphoriccatface.pycellsheet
 Terminal=false

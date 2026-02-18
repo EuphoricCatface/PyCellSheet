@@ -2,8 +2,8 @@
 <component type="desktop-application">
   <id>io.github.euphoriccatface.pycellsheet</id>
   <metadata_license>FSFAP</metadata_license>
-  <name>pycellsheet</name>
-  <summary>pycellsheet is a non-traditional spreadsheet application that is based on and written in the programming language Python</summary>
+  <name>PyCellSheet</name>
+  <summary>PyCellSheet is a non-traditional spreadsheet application that is based on and written in the programming language Python</summary>
 
   <icon type="stock">pycellsheet</icon>
   
@@ -11,13 +11,13 @@
 
   <description>
     <p>
-      <em>pycellsheet</em> is a non-traditional spreadsheet application that is based on and written in the programming language Python. The goal of <em>pycellsheet</em> is to be the most pythonic spreadsheet.
+      <em>PyCellSheet</em> is a non-traditional spreadsheet application that is based on and written in the programming language Python. The goal of <em>PyCellSheet</em> is to be the most pythonic spreadsheet.
     </p>
     <p>
-      <em>pycellsheet</em> expects Python expressions in its grid cells, which makes a spreadsheet specific language obsolete. Each cell returns a Python object that can be accessed from other cells. These objects can represent anything including lists or matrices.
+      <em>PyCellSheet</em> expects Python expressions in its grid cells, which makes a spreadsheet specific language obsolete. Each cell returns a Python object that can be accessed from other cells. These objects can represent anything including lists or matrices.
     </p>
     <p>
-      <em>pycellsheet</em> is free software. It is released under the GPL v3 licence.
+      <em>PyCellSheet</em> is free software. It is released under the GPL v3 licence.
     </p>
   </description>
   <categories>
@@ -32,7 +32,7 @@
   <releases>
     <release version="2.0.2" date="2021-12-16">
       <description>
-        <p>This is a bugfix release for pycellsheet 2.0 for Python 3.10 compatibility.</p>
+        <p>This is a bugfix release for PyCellSheet 2.0 for Python 3.10 compatibility.</p>
       </description>
     </release>
     <release version="2.0.1" date="2021-11-27" />
@@ -46,7 +46,7 @@
   <content_rating type="oars-1.0" />
   <screenshots>
     <screenshot type="default">
-      <caption>pycellsheet example with text, an image and a chart</caption>
+      <caption>PyCellSheet example with text, an image and a chart</caption>
       <image>https://raw.githubusercontent.com/EuphoricCatface/PyCellSheet/development/pycellsheet/share/doc/manual/images/screenshot_main_window.png</image>
     </screenshot>
   </screenshots>
