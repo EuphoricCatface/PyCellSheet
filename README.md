@@ -9,25 +9,25 @@ The core design choice is copy-priority semantics: cell references return deep-c
 ## Project status
 
 - Base fork point: `01500b4` (pyspread 2.3.1)
-- Current development phase: RC for v0.3.0
+- Current development phase: v0.3.0 released
 
 ## Key changes
 
-### v0.3.0
+### v0.3.0 (Release Engineering)
 
 - Release-engineering/safety baseline completion for the release line.
 - Multi-version CI gate and tox matrix formalized as required checks.
 - Sheet Script draft lifecycle safeguards stabilized across save/new/open/quit transitions.
 - Baseline contract coverage expanded for parser modes, migration/alias compatibility, workflows, and runtime helper behavior.
 
-### v0.2.0
+### v0.2.0 (Stabilization)
 
 - Recalc UX baseline improvements (clearer status feedback and dirty-indicator consistency).
 - Sheet Script workflow expansion (apply-all behavior, trusted/untrusted load handling, safe-mode approval consistency).
 - Dependency/recalculation stabilization (dynamic-reference correctness and transitive traversal hardening).
 - Save/load robustness for sheet names and per-sheet script headers, plus broader stabilization test coverage.
 
-### v0.1.0
+### v0.1.0 (Core Feature Release)
 
 - Dependency-aware recalculation (`DependencyGraph` + `SmartCache`)
 - Circular reference detection with explicit error handling
@@ -45,7 +45,6 @@ The core design choice is copy-priority semantics: cell references return deep-c
 
 ## Roadmap
 
-- `v0.3.0`: release-engineering and safety baselines (cross-version tests, sheet-script draft lifecycle, parser/alias contracts).
 - `v0.4.0`: internal semantics cleanup (naming/refactor, warning contracts, reproducibility policy, button-cell cache/dependency contract).
 - `v0.5.0`: parser and spill expansion (parser selector/migrator, RangeOutput conflict semantics, staged `pycel` integration).
 - `v0.6.0`: architecture upgrades (data model rewrite, compile caching, dynamic row/column sizing, recalc/warning UX completion).
