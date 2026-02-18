@@ -726,6 +726,16 @@ class TestCodeArray(object):
         _, errs = self.code_array.execute_sheet_script(0)
         assert "Duplicate import binding 'math'" in errs
 
+    def test_execute_sheet_script_restores_streams_on_base_exception(self):
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        self.code_array.sheet_scripts = ["raise KeyboardInterrupt('stop')"]
+
+        with pytest.raises(KeyboardInterrupt):
+            self.code_array.execute_sheet_script(0)
+
+        assert sys.stdout is old_stdout
+        assert sys.stderr is old_stderr
+
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""
 
