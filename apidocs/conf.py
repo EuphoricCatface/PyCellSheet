@@ -104,7 +104,7 @@ html_show_sphinx = False
 #
 html_show_copyright = False
 
-html_context = {"git_repos_url": "https://gitlab.com/pyspread/pyspread"}
+html_context = {"git_repos_url": "https://github.com/EuphoricCatface/PyCellSheet"}
 
 intersphinx_mapping = {
     'python': ('http://docs.python.org/3', None),

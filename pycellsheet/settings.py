@@ -52,7 +52,7 @@ ICON_PATH = PYCELLSHEET_PATH / 'pycellsheet/share/icons'
 ACTION_PATH = ICON_PATH / 'actions'
 STATUS_PATH = ICON_PATH / 'status'
 CHARTS_PATH = ICON_PATH / 'charts'
-WEB_URL = "https://pyspread.gitlab.io"  # Official Web page
+WEB_URL = "https://github.com/EuphoricCatface/PyCellSheet"  # Official Web page
 
 
 class Settings:
@@ -212,7 +212,7 @@ class Settings:
         """Saves application state to QSettings"""
 
         if system() == "Darwin":
-            settings = QSettings(APP_NAME+".gitlab.io", APP_NAME)
+            settings = QSettings("io.github.euphoriccatface", APP_NAME)
         else:
             settings = QSettings(APP_NAME, APP_NAME)
 
@@ -285,7 +285,7 @@ class Settings:
             return
 
         if system() == "Darwin":
-            settings = QSettings(APP_NAME+".gitlab.io", APP_NAME)
+            settings = QSettings("io.github.euphoriccatface", APP_NAME)
         else:
             settings = QSettings(APP_NAME, APP_NAME)
 
