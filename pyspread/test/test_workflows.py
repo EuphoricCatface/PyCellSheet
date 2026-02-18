@@ -577,16 +577,21 @@ class TestWorkflows:
         """file_open_recent should forward to filepath_open with Path argument."""
 
         called = {"path": None}
+        old_changed = main_window.settings.changed_since_save
 
         def fake_filepath_open(path):
             called["path"] = path
 
-        monkeypatch.setattr(self.workflows, "filepath_open", fake_filepath_open)
+        try:
+            main_window.settings.changed_since_save = False
+            monkeypatch.setattr(self.workflows, "filepath_open", fake_filepath_open)
 
-        self.workflows.file_open_recent("relative/test.pycsu")
+            self.workflows.file_open_recent("relative/test.pycsu")
 
-        assert isinstance(called["path"], Path)
-        assert called["path"] == Path("relative/test.pycsu")
+            assert isinstance(called["path"], Path)
+            assert called["path"] == Path("relative/test.pycsu")
+        finally:
+            main_window.settings.changed_since_save = old_changed
 
     def test_sign_file_skips_signing_in_safe_mode(self, monkeypatch, tmp_path):
         """sign_file should not sign files while safe mode is enabled."""
