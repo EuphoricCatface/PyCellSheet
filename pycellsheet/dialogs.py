@@ -561,7 +561,7 @@ class TupleValidator(QValidator):
 
 
 class PreferencesDialog(DataEntryDialog):
-    """Modal dialog for entering pycellsheet preferences"""
+    """Modal dialog for entering PyCellSheet preferences"""
 
     def __init__(self, parent: QWidget):
         """
@@ -705,7 +705,7 @@ class FileDialogBase:
 
 
 class FileOpenDialog(FileDialogBase):
-    """Modal dialog for opening a pycellsheet file"""
+    """Modal dialog for opening a PyCellSheet file"""
 
     title = "Open"
 
@@ -720,7 +720,7 @@ class FileOpenDialog(FileDialogBase):
 
 
 class FileSaveDialog(FileDialogBase):
-    """Modal dialog for saving a pycellsheet file"""
+    """Modal dialog for saving a PyCellSheet file"""
 
     title = "Save"
 
@@ -1722,7 +1722,7 @@ class CsvExportDialog(QDialog):
 
 
 class TutorialDialog(QDialog):
-    """Dialog for browsing the pycellsheet tutorial"""
+    """Dialog for browsing the PyCellSheet tutorial"""
 
     window_title = "PyCellSheet tutorial"
     size_hint = 1000, 800
@@ -1762,7 +1762,7 @@ class TutorialDialog(QDialog):
 
 
 class ManualDialog(TutorialDialog):
-    """Dialog for browsing the pycellsheet manual"""
+    """Dialog for browsing the PyCellSheet manual"""
 
     window_title = "PyCellSheet manual"
     size_hint = 1000, 800
