@@ -47,7 +47,7 @@ sys.path.insert(0, project_path)
 
 from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          CodeArray, CellAttribute, DefaultCellAttributeDict,
-                         INITSCRIPT_DEFAULT)
+                         INITSCRIPT_DEFAULT, _get_isolated_builtins)
 
 from lib.attrdict import AttrDict
 from lib.selection import Selection
@@ -60,6 +60,18 @@ class Settings:
 
     timeout = 1000
     recalc_mode = "auto"
+
+
+def test_get_isolated_builtins_returns_detached_mapping():
+    builtins_map = _get_isolated_builtins()
+    sentinel_key = "__pycellsheet_test_sentinel__"
+
+    assert isinstance(builtins_map, dict)
+    assert sentinel_key not in builtins_map
+
+    builtins_map[sentinel_key] = 1
+    fresh_map = _get_isolated_builtins()
+    assert sentinel_key not in fresh_map
 
 
 class TestCellAttributes(object):
@@ -295,6 +307,53 @@ class TestDataArray(object):
 
         self.data_array.shape = (10000, 100, 100)
         assert self.data_array.shape == (10000, 100, 100)
+
+    def test_shape_resize_updates_sheet_scoped_lists_and_names(self):
+        data_array = DataArray((2, 2, 2), Settings())
+        data_array.sheet_scripts = ["a=1", "b=2"]
+        data_array.sheet_scripts_draft = [None, "draft"]
+        data_array.sheet_globals_copyable = [{"x": 1}, {"y": 2}]
+        data_array.sheet_globals_uncopyable = [{"u": 1}, {"v": 2}]
+        data_array.dict_grid.sheet_names = ["Main", "Main"]
+
+        data_array.shape = (2, 2, 4)
+        assert len(data_array.sheet_scripts) == 4
+        assert len(data_array.sheet_scripts_draft) == 4
+        assert len(data_array.sheet_globals_copyable) == 4
+        assert len(data_array.sheet_globals_uncopyable) == 4
+        assert data_array.dict_grid.sheet_names == ["Main", "Main", "Sheet 2", "Sheet 3"]
+
+        data_array.shape = (2, 2, 1)
+        assert data_array.sheet_scripts == ["a=1"]
+        assert data_array.sheet_scripts_draft == [None]
+        assert data_array.dict_grid.sheet_names == ["Main"]
+
+    def test_data_setter_prefers_sheet_scripts_and_falls_back_to_macros(self):
+        data_array = DataArray((2, 2, 1), Settings())
+        DataArray.data.fset(
+            data_array,
+            shape=(1, 1, 1),
+            grid={(0, 0, 0): "x"},
+            row_heights={(0, 0): 10.0},
+            col_widths={(0, 0): 12.0},
+            sheet_scripts=["script=1"],
+            macros=["legacy=1"],
+        )
+        assert data_array.shape == (1, 1, 1)
+        assert data_array.sheet_scripts == ["script=1"]
+        assert data_array.row_heights[(0, 0)] == 10.0
+        assert data_array.col_widths[(0, 0)] == 12.0
+
+        DataArray.data.fset(data_array, macros=["legacy_only=1"])
+        assert data_array.sheet_scripts == ["legacy_only=1"]
+
+    def test_exp_parser_code_setter_updates_parser_behavior(self):
+        data_array = DataArray((2, 2, 1), Settings())
+        data_array.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+
+        assert data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        assert data_array.exp_parser.parse("42") == 42
+        assert data_array.exp_parser.parse("=1+1") == PythonCode("1+1")
 
     param_get_last_filled_cell = [
         ({(0, 0, 0): "2"}, 0, (0, 0)),
@@ -694,6 +753,16 @@ class TestCodeArray(object):
         self.code_array.sheet_scripts = ["import math\nimport random as math"]
         _, errs = self.code_array.execute_sheet_script(0)
         assert "Duplicate import binding 'math'" in errs
+
+    def test_execute_sheet_script_restores_streams_on_base_exception(self):
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        self.code_array.sheet_scripts = ["raise KeyboardInterrupt('stop')"]
+
+        with pytest.raises(KeyboardInterrupt):
+            self.code_array.execute_sheet_script(0)
+
+        assert sys.stdout is old_stdout
+        assert sys.stderr is old_stderr
 
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""

@@ -225,3 +225,14 @@ class TestMainWindow:
             assert refresh_calls["count"] == 4
         finally:
             main_window.settings.recalc_mode = old_mode
+
+    def test_help_and_preferences_action_branding(self):
+        """User-facing action labels/tips should use PyCellSheet branding."""
+
+        actions = main_window.main_window_actions
+
+        assert actions.about.text() == "About PyCellSheet..."
+        assert actions.about.statusTip() == "About PyCellSheet"
+        assert actions.manual.statusTip() == "Display the PyCellSheet manual"
+        assert actions.tutorial.statusTip() == "Display a PyCellSheet tutorial"
+        assert actions.preferences.statusTip() == "PyCellSheet setup parameters"

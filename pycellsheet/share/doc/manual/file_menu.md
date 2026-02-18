@@ -146,7 +146,7 @@ The preferences dialog allows changing:
 
 ![Preferences dialog 2](images/screenshot_preferences_dialog.png)
 
-On *nix, configuration is stored in `~/.config/pyspread/pyspread.conf`
+On *nix, configuration is stored in `~/.config/PyCellSheet/PyCellSheet.conf`
 - This file is created when PyCellSheet is started the first time
 - Removing it resets configuration.
 

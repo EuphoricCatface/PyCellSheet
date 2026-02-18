@@ -35,8 +35,8 @@ XlsReader and XlsWriter classed are structured into the following sections:
 **Provides**
 
  * :func:`wxcolor2rgb`
- * :dict:`wx2qt_fontweights`
- * :dict:`wx2qt_fontstyles`
+ * ``dict``: ``wx2qt_fontweights``
+ * ``dict``: ``wx2qt_fontstyles``
  * :class:`XlsReader`
  * :class:`XlsWriter`
 

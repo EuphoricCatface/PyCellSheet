@@ -441,15 +441,13 @@ class CellRenderer:
     """Paints cells
 
     Cell rendering governs the area of a cell inside its borders.
-    It is done in a  vector oriented way.
-    Therefore, the following conventions shall apply:
-     * Cell borders of width 1 shall be painted so that they appear only in the
-       bottom and right edge of the cell.
-     * Cell borders of all widths have the same center line.
-     * Cell borders that are thicker than 1 are painted on all borders.
-     * At the edges, borders are painted in the following order:
-        1. Thin borders are painted first
-        2. If border width is equal, lighter colors are painted first
+    It is done in a vector-oriented way.
+    Conventions:
+    - Width-1 borders appear only on bottom/right edges.
+    - Borders of all widths share the same center line.
+    - Borders thicker than 1 are painted on all edges.
+    - At edges, thin borders are painted first.
+    - For equal border width, lighter colors are painted first.
 
     """
 
@@ -686,13 +684,6 @@ class CellRenderer:
 
         :param rect: Cell rect of cell, for which the edge is painted
         :param clip_path: Clip rectangle that is requuired for QtSVG clipping
-
-                  top
-               TL  |  T
-        left ------------ right
-               L   |  C
-                 bottom
-
         """
 
         center = QPointF(rect.x(), rect.y())
@@ -735,13 +726,6 @@ class CellRenderer:
 
         :param rect: Cell rect of cell, for which the edge is painted
         :param clip_path: Clip rectangle that is requuired for QtSVG clipping
-
-                  top
-                T  |  TR
-        left ------------ right
-                C  |  R
-                 bottom
-
         """
 
         center = QPointF(rect.x() + rect.width(), rect.y())
@@ -782,13 +766,6 @@ class CellRenderer:
 
         :param rect: Cell rect of cell, for which the edge is painted
         :param clip_path: Clip rectangle that is requuired for QtSVG clipping
-
-                  top
-               L   |  C
-        left ------------ right
-               BL  |  B
-                 bottom
-
         """
 
         center = QPointF(rect.x(), rect.y() + rect.height())
@@ -830,13 +807,6 @@ class CellRenderer:
 
         :param rect: Cell rect of cell, for which the edge is painted
         :param clip_path: Clip rectangle that is requuired for QtSVG clipping
-
-                 top
-               C  |  R
-        left ----------- right
-               B  |  BR
-                bottom
-
         """
 
         center = QPointF(rect.x() + rect.width(), rect.y() + rect.height())

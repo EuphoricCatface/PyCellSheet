@@ -177,15 +177,7 @@ def NA():
 
 
 def TYPE(value) -> int:
-    """
-    TYPE(value):
-      1 => number
-      2 => text
-      4 => logical
-      16 => error
-      64 => range/array reference (depending on your design)
-    If none of the above, might mimic Excel's #VALUE! or return 0 or something.
-    """
+    """Return spreadsheet TYPE code (number/text/logical/error/range)."""
     if isinstance(value, (errors.SpreadsheetErrorBase, Exception)):
         return 16
     if isinstance(value, (int, float)):

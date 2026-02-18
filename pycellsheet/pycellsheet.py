@@ -23,7 +23,7 @@
 """
 
 PyCellSheet
-========
+===========
 
 - Main Python spreadsheet application
 - Run this script to start the application.

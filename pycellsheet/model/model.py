@@ -1815,22 +1815,23 @@ class CodeArray(DataArray):
         code_err = io.StringIO()
         err_msg = io.StringIO()
 
-        # Capture output and errors
-        sys.stdout = code_out
-        sys.stderr = code_err
-
         sheet_script = self.sheet_scripts[current_table]
         sheet_globals = {"__builtins__": _get_isolated_builtins()}
+        old_stdout, old_stderr = sys.stdout, sys.stderr
         try:
-            exec(sheet_script, sheet_globals)
-
-        except Exception:
-            exc_info = sys.exc_info()
-            user_tb = get_user_codeframe(exc_info[2]) or exc_info[2]
-            print_exception(exc_info[0], exc_info[1], user_tb, None, err_msg)
-        # Restore stdout and stderr
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
+            # Capture output and errors during script execution only.
+            sys.stdout = code_out
+            sys.stderr = code_err
+            try:
+                exec(sheet_script, sheet_globals)
+            except Exception:
+                exc_info = sys.exc_info()
+                user_tb = get_user_codeframe(exc_info[2]) or exc_info[2]
+                print_exception(exc_info[0], exc_info[1], user_tb, None, err_msg)
+        finally:
+            # Always restore process streams, even for BaseException paths.
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
         results = code_out.getvalue()
         errs = code_err.getvalue() + err_msg.getvalue()

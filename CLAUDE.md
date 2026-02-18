@@ -4,7 +4,7 @@
 
 PyCellSheet is a fork of pyspread v2.3.1 that aims to be a comfortable middle ground between a conventional spreadsheet and pyspread's purely Pythonic approach. The key philosophical difference from pyspread is **copy-priority semantics**: cell references return `deepcopy`'d values by default, so cells behave like independent values in a normal spreadsheet, rather than pyspread's reference-priority system where cells share mutable objects.
 
-v0.1.0 and v0.2.0 are released. Current development is on the v0.3.0 release-engineering cycle.
+v0.1.0, v0.2.0, and v0.3.0 are released. Current development is on the v0.4.0 internal-semantics cleanup cycle.
 
 ## Design Philosophy
 
@@ -82,25 +82,25 @@ def some_method(self):
 ```
 
 ### PyCellSheet additions (where most development happens)
-- `pyspread/lib/pycellsheet.py` - Core types and parsers: `Empty`/`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`, `ExpressionParser`, `ReferenceParser`, `PythonEvaluator`, `Formatter`, `HelpText`, `CELL_META_GENERATOR`, `DependencyTracker`, `flatten_args()`
-- `pyspread/lib/dependency_graph.py` - Dependency tracking with forward/reverse edges, dirty flags, and circular reference detection via DFS
-- `pyspread/lib/smart_cache.py` - Dependency-aware cache with INVALID sentinel and transitive dirty checking
-- `pyspread/lib/exceptions.py` - Custom exceptions: `PyCellSheetError`, `CircularRefError`
-- `pyspread/lib/spreadsheet/` - Spreadsheet function library (UPPERCASE functions). `math.py` (~60 functions), `engineering.py`, `filter.py`, `info.py`, `logical.py` are largely implemented. `statistical.py` has basic functions (AVERAGE, COUNT, MAX, MIN, MEDIAN, etc.) but ~60 stubs remain. Other modules (financial, text, etc.) are mostly stubs.
-- `pyspread/lib/spreadsheet/__init__.py` - Re-exports all function modules via `__all__`
+- `pycellsheet/lib/pycellsheet.py` - Core types and parsers: `Empty`/`EmptyCell`, `PythonCode`, `Range`, `RangeOutput`, `ExpressionParser`, `ReferenceParser`, `PythonEvaluator`, `Formatter`, `HelpText`, `CELL_META_GENERATOR`, `DependencyTracker`, `flatten_args()`
+- `pycellsheet/lib/dependency_graph.py` - Dependency tracking with forward/reverse edges, dirty flags, and circular reference detection via DFS
+- `pycellsheet/lib/smart_cache.py` - Dependency-aware cache with INVALID sentinel and transitive dirty checking
+- `pycellsheet/lib/exceptions.py` - Custom exceptions: `PyCellSheetError`, `CircularRefError`
+- `pycellsheet/lib/spreadsheet/` - Spreadsheet function library (UPPERCASE functions). `math.py` (~60 functions), `engineering.py`, `filter.py`, `info.py`, `logical.py` are largely implemented. `statistical.py` has basic functions (AVERAGE, COUNT, MAX, MIN, MEDIAN, etc.) but ~60 stubs remain. Other modules (financial, text, etc.) are mostly stubs.
+- `pycellsheet/lib/spreadsheet/__init__.py` - Re-exports all function modules via `__all__`
 
-### Modified pyspread files
-- `pyspread/model/model.py` - Data model layers (DictGrid -> DataArray -> CodeArray). `_eval_cell()` runs the full pipeline. `execute_macros()` runs init scripts and separates globals into copyable/uncopyable dicts.
-- `pyspread/panels.py` - Init script editor UI with draft/applied buffer and AST validation
-- `pyspread/grid.py` - Cell display: `DisplayRole` and `ToolTipRole` delegate to `Formatter` class
-- `pyspread/interfaces/pycs.py` - File format: `[macros]` section stores per-sheet init scripts as `(macro:X) linecount`
-- `pyspread/lib/string_helpers.py` - Modified `wrap_text()` to preserve newlines (for tooltips)
+### Modified core files
+- `pycellsheet/model/model.py` - Data model layers (DictGrid -> DataArray -> CodeArray). `_eval_cell()` runs the full pipeline. `execute_sheet_script()` is canonical and compatibility alias `execute_macros()` is retained.
+- `pycellsheet/panels.py` - Sheet Script editor UI with draft/applied buffer and AST validation
+- `pycellsheet/grid.py` - Cell display: `DisplayRole` and `ToolTipRole` delegate to `Formatter` class
+- `pycellsheet/interfaces/pycs.py` - File format: `[macros]` section stores per-sheet init scripts as `(macro:X) linecount` for compatibility
+- `pycellsheet/lib/string_helpers.py` - Modified `wrap_text()` to preserve newlines (for tooltips)
 
-### Inherited pyspread (largely unchanged)
-- `pyspread/grid_renderer.py` - Cell painting and border rendering
-- `pyspread/workflows.py`, `pyspread/actions.py`, `pyspread/commands.py` - UI workflow logic
-- `pyspread/main_window.py` - Main application window
-- `pyspread/settings.py` - Application settings
+### Inherited pyspread lineage (largely unchanged architecture)
+- `pycellsheet/grid_renderer.py` - Cell painting and border rendering
+- `pycellsheet/workflows.py`, `pycellsheet/actions.py`, `pycellsheet/commands.py` - UI workflow logic
+- `pycellsheet/main_window.py` - Main application window
+- `pycellsheet/settings.py` - Application settings
 
 ## Data Model Architecture
 
@@ -174,13 +174,13 @@ python pycellsheet/__main__.py
 ## Testing
 
 **Dependency Tracking Tests** (67 tests total):
-- `pyspread/lib/test/test_dependency_graph.py` - 30 tests for DependencyGraph (add/remove, cycles, dirty flags, transitive closure)
-- `pyspread/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
-- `pyspread/model/test/test_dependency_integration.py` - 17 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection, dynamic refs)
+- `pycellsheet/lib/test/test_dependency_graph.py` - 30 tests for DependencyGraph (add/remove, cycles, dirty flags, transitive closure)
+- `pycellsheet/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
+- `pycellsheet/model/test/test_dependency_integration.py` - 17 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection, dynamic refs)
 
-As of 2026-02-18, `pytest -q` passes with 792 tests on the active interpreter.
+As of 2026-02-19, `QT_QPA_PLATFORM=offscreen PYTHONPATH=pycellsheet pytest -q` passes with 848 tests on the active interpreter.
 
-Legacy test suites under `pyspread/test/` and `pyspread/lib/test/` are part of the active regression baseline and should remain aligned with shipped PyCellSheet behavior.
+Legacy test suites under `pycellsheet/test/` and `pycellsheet/lib/test/` are part of the active regression baseline and should remain aligned with shipped PyCellSheet behavior.
 
 ## Later Goals (from design note, not yet implemented)
 
