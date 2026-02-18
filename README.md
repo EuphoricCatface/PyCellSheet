@@ -14,6 +14,12 @@ The core design choice is copy-priority semantics: cell references return deep-c
 
 ## Key changes
 
+### v0.4.0 (In Progress)
+
+- Continued internal semantics cleanup and docs/test alignment.
+- Added high-impact test coverage for command undo/redo paths, `.pycs` parser/writer edge cases, and model metadata/parser contracts.
+- API docs pass cleaned normal-build warnings; strict cross-reference cleanup remains a later docs-quality task.
+
 ### v0.3.0 (Release Engineering)
 
 - Release-engineering/safety baseline completion for the release line.
@@ -78,3 +84,5 @@ tox -e py310,py311,py312,py313,py314
 # Optional dependency coverage (latest line)
 tox -e py314-optional
 ```
+
+Current active-interpreter baseline: `867 passed`.

@@ -23,7 +23,10 @@ Fixes:
 
 Tests:
 - Added evaluator semantics regression coverage and expanded Sheet Script isolation coverage for uncopyable globals.
-- Current development baseline passes on active interpreter (`848 passed`).
+- Added targeted non-UI command coverage for undo/redo edge paths (`SetGridSize`, row/column sizing, merge warnings, sheet rename, button-cell lifecycle).
+- Expanded `.pycs` reader/writer coverage for version/shape validation, attribute conversion, macro-header fallback, and bounds handling.
+- Expanded model metadata/parser contract coverage for builtins isolation, shape-resize sheet metadata behavior, and expression-parser mode updates.
+- Current development baseline passes on active interpreter (`867 passed`).
 
 v0.3.0
 ------
