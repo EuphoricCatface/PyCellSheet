@@ -40,15 +40,15 @@ try:
 except ImportError:
     from __init__ import VERSION, APP_NAME
 
-PYSPREAD_DIRNAME = abspath(join(dirname(__file__), ".."))
-PYSPREAD_PATH = Path(PYSPREAD_DIRNAME)
-DOC_PATH = PYSPREAD_PATH / "pycellsheet/share/doc"
+PYCELLSHEET_DIRNAME = abspath(join(dirname(__file__), ".."))
+PYCELLSHEET_PATH = Path(PYCELLSHEET_DIRNAME)
+DOC_PATH = PYCELLSHEET_PATH / "pycellsheet/share/doc"
 TUTORIAL_PATH = DOC_PATH / "tutorial"
 MANUAL_PATH = DOC_PATH / "manual"
-MPL_TEMPLATE_PATH = PYSPREAD_PATH / 'pycellsheet/share/templates/matplotlib'
-RPY2_TEMPLATE_PATH = PYSPREAD_PATH / 'pycellsheet/share/templates/rpy2'
-PLOT9_TEMPLATE_PATH = PYSPREAD_PATH / 'pycellsheet/share/templates/plotnine'
-ICON_PATH = PYSPREAD_PATH / 'pycellsheet/share/icons'
+MPL_TEMPLATE_PATH = PYCELLSHEET_PATH / 'pycellsheet/share/templates/matplotlib'
+RPY2_TEMPLATE_PATH = PYCELLSHEET_PATH / 'pycellsheet/share/templates/rpy2'
+PLOT9_TEMPLATE_PATH = PYCELLSHEET_PATH / 'pycellsheet/share/templates/plotnine'
+ICON_PATH = PYCELLSHEET_PATH / 'pycellsheet/share/icons'
 ACTION_PATH = ICON_PATH / 'actions'
 STATUS_PATH = ICON_PATH / 'status'
 CHARTS_PATH = ICON_PATH / 'charts'

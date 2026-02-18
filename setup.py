@@ -32,7 +32,7 @@ setup(
     version=VERSION,
     author='Seongyong Park',
     author_email='euphoriccatface@gmail.com',
-    description='Pyspread is a non-traditional spreadsheet application'
+    description='PyCellSheet is a non-traditional spreadsheet application'
     ' that is based on and written in the programming language Python.',
     long_description=long_description,
     long_description_content_type="text/markdown",

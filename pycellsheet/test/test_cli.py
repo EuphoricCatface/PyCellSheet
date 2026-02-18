@@ -36,8 +36,8 @@ from pathlib import Path, PosixPath
 
 import pytest
 
-PYSPREADPATH = abspath(join(dirname(__file__) + "/.."))
-LIBPATH = abspath(PYSPREADPATH + "/lib")
+PYCELLSHEETPATH = abspath(join(dirname(__file__) + "/.."))
+LIBPATH = abspath(PYCELLSHEETPATH + "/lib")
 
 
 @contextmanager
@@ -47,8 +47,8 @@ def insert_path(path):
     sys.path.pop(0)
 
 
-with insert_path(PYSPREADPATH):
-    from ..cli import PyspreadArgumentParser
+with insert_path(PYCELLSHEETPATH):
+    from ..cli import PyCellSheetArgumentParser
 
 param_test_cli = [
     (['pycellsheet'],
@@ -72,7 +72,7 @@ param_test_cli = [
 @pytest.mark.parametrize("argv, res", param_test_cli)
 def test_cli(argv, res):
     with patch('argparse._sys.argv', argv):
-        parser = PyspreadArgumentParser()
+        parser = PyCellSheetArgumentParser()
         if res is None:
             with pytest.raises(SystemExit) as exc:
                 args, unknown = parser.parse_known_args()

@@ -80,7 +80,7 @@ def check_mandatory_dependencies():
         dependency_warning(msg)
 
 
-class PyspreadArgumentParser(ArgumentParser):
+class PyCellSheetArgumentParser(ArgumentParser):
     """Parser for the command line"""
 
     def __init__(self):

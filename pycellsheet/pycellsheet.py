@@ -44,11 +44,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 try:
-    from pycellsheet.cli import PyspreadArgumentParser
+    from pycellsheet.cli import PyCellSheetArgumentParser
     from pycellsheet.main_window import MainWindow
 
 except ImportError:
-    from cli import PyspreadArgumentParser
+    from cli import PyCellSheetArgumentParser
     from main_window import MainWindow
 
 
@@ -71,7 +71,7 @@ def main():
 
     sys.excepthook = excepthook
 
-    parser = PyspreadArgumentParser()
+    parser = PyCellSheetArgumentParser()
     args, _ = parser.parse_known_args()
 
     logging.basicConfig(level=args.loglevel)
