@@ -1,0 +1,91 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+# Copyright Martin Manns
+# Modified by Seongyong Park (EuphCat)
+# Distributed under the terms of the GNU General Public License
+
+# --------------------------------------------------------------------
+# pycellsheet is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# pycellsheet is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with pycellsheet.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+"""
+
+PyCellSheet
+========
+
+- Main Python spreadsheet application
+- Run this script to start the application.
+
+**Provides**
+
+* MainApplication: Initial command line operations and application launch
+* :class:`MainWindow`: Main windows class
+
+"""
+
+import logging
+import os
+import sys
+import traceback
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+
+try:
+    from pycellsheet.cli import PyCellSheetArgumentParser
+    from pycellsheet.main_window import MainWindow
+
+except ImportError:
+    from cli import PyCellSheetArgumentParser
+    from main_window import MainWindow
+
+
+LICENSE = "GNU GENERAL PUBLIC LICENSE Version 3"
+
+os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+
+
+def excepthook(exception_type, exception_value, exception_traceback):
+    """Exception hook that prevents PyCellSheet from crashing on exceptions"""
+
+    traceback_msg = "".join(traceback.format_exception(exception_type,
+                                                       exception_value,
+                                                       exception_traceback))
+    logging.error("Unhandled exception:\n%s", traceback_msg)
+
+
+def main():
+    """PyCellSheet main"""
+
+    sys.excepthook = excepthook
+
+    parser = PyCellSheetArgumentParser()
+    args, _ = parser.parse_known_args()
+
+    logging.basicConfig(level=args.loglevel)
+
+    app = QApplication(sys.argv)
+    app.setDesktopFileName("io.github.euphoriccatface.pycellsheet")
+    main_window = MainWindow(args.file, default_settings=args.default_settings)
+
+    main_window.show()
+
+    app.exec()
+
+    sys.exit()
+
+
+if __name__ == '__main__':
+    main()

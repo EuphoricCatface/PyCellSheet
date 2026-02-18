@@ -5,50 +5,44 @@
 # Distributed under the terms of the GNU General Public License
 
 # --------------------------------------------------------------------
-# pyspread is free software: you can redistribute it and/or modify
+# pycellsheet is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# pyspread is distributed in the hope that it will be useful,
+# pycellsheet is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with pyspread.  If not, see <http://www.gnu.org/licenses/>.
+# along with pycellsheet.  If not, see <http://www.gnu.org/licenses/>.
 # --------------------------------------------------------------------
 
 
 from setuptools import setup, find_packages
 
-from pyspread import VERSION
+from pycellsheet import VERSION
 
 with open("README.md", "r", encoding='utf8') as readme_file:
     long_description = readme_file.read()
 
 setup(
-    name='pyspread',
+    name='pycellsheet',
     version=VERSION,
-    author='Martin Manns',
-    author_email='mmanns@gmx.net',
-    description='Pyspread is a non-traditional spreadsheet application'
+    author='Seongyong Park',
+    author_email='euphoriccatface@gmail.com',
+    description='PyCellSheet is a non-traditional spreadsheet application'
     ' that is based on and written in the programming language Python.',
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://pyspread.gitlab.io",
-    project_urls={
-        "Bug Tracker": "https://gitlab.com/pyspread/pyspread/issues",
-        "Documentation": "https://pyspread.gitlab.io/docs.html",
-        "Source Code": "https://gitlab.com/pyspread/pyspread",
-    },
     packages=find_packages(),
     entry_points={
         'console_scripts': {
-            'pyspread = pyspread.pyspread:main'
+            'pycellsheet = pycellsheet.pycellsheet:main'
         }
     },
-    package_data={'pyspread': [
+    package_data={'pycellsheet': [
             'share/*',
             'share/*/*',
             'share/*/*/*',
@@ -57,11 +51,11 @@ setup(
         ]
     },
     data_files=[
-        ('pyspread/share/applications',
-         ['pyspread/share/applications/io.gitlab.pyspread.pyspread.desktop']),
+        ('pycellsheet/share/applications',
+         ['pycellsheet/share/applications/io.github.euphoriccatface.pycellsheet.desktop']),
     ],
     license='GPL v3 :: GNU General Public License',
-    keywords=['spreadsheet', 'pyspread'],
+    keywords=['spreadsheet', 'pycellsheet'],
     python_requires='>=3.6',
     install_requires=['numpy (>=1.1)',
                       'PyQt6 (>=6.4)',
