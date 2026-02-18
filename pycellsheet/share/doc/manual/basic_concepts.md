@@ -186,7 +186,7 @@ data to third parties over the Internet.
 The risk is similar to other office applications, which is why precautions are
 provided. The model is that you, the user, are trusted and outside files are
 not. When starting PyCellSheet for the first time, a secret key is generated
-and stored in `~/.config/pyspread/pyspread.conf` (on many Linux systems). You
+and stored in `~/.config/PyCellSheet/PyCellSheet.conf` (on many Linux systems). You
 can edit this key in the Preferences dialog (`File -> Preferences...`).
 
 If you save a file then a signature is saved with it (suffix `.sig` for

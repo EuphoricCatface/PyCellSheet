@@ -11,14 +11,14 @@ title: The Workspace
 
 Type
 
-`$ pyspread`
+`$ python -m pycellsheet`
 
 from the command prompt. 
 
 If you want to run PyCellSheet without installation, change into the project
 directory and type
 
-`$ ./pyspread/pyspread.py`
+`$ python pycellsheet/__main__.py`
 
 You can also launch the file via a file manager (for example Windows Explorer).
 
@@ -43,8 +43,8 @@ The main window comprises the following components (see Figure):
 ## Title bar
 
 When PyCellSheet is started, or when a new spreadsheet is created, the title
-bar displays `pyspread`. When a file is opened or saved, the filename is shown
-in front of ` - pyspread`.
+bar displays `PyCellSheet`. When a file is opened or saved, the filename is
+shown in front of ` - PyCellSheet`.
 
 Whenever a spreadsheet is changed, an asterisk `*` is displayed in front of the
 title text.
