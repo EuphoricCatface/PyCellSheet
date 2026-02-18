@@ -606,7 +606,7 @@ class Workflows:
         self.main_window.settings.last_file_output_path = filepath
 
         # Change the main window title
-        self.main_window.setWindowTitle(f"{filepath.name} - pycellsheet")
+        self.main_window.setWindowTitle(f"{filepath.name} - {APP_NAME}")
 
         # Add to file history
         self.main_window.settings.add_to_file_history(filepath.as_posix())
