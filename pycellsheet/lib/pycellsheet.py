@@ -333,8 +333,8 @@ def flatten_args(*args: list | Range | typing.Any) -> list:
 
 
 class ReferenceParser:
-    COMPILED_RANGE_RE = re.compile(r"[A-Z]+[1-9][0-9]*:[A-Z][1-9][0-9]*")
-    COMPILED_CELL_RE = re.compile(r"[A-Z]+[1-9][0-9]*")
+    COMPILED_RANGE_RE = re.compile(r"[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}")
+    COMPILED_CELL_RE = re.compile(r"[A-Z]{1,3}[1-9][0-9]{0,6}")
 
     def __init__(self, code_array):
         self.code_array = code_array

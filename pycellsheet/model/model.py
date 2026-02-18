@@ -1335,7 +1335,7 @@ class CodeArray(DataArray):
     def _looks_like_cell_ref_name(name: str) -> bool:
         """Return True if `name` resembles a spreadsheet cell reference."""
 
-        return bool(re.fullmatch(r"[A-Za-z]{1,4}[1-9][0-9]*", name))
+        return bool(re.fullmatch(r"[A-Za-z]{1,3}[1-9][0-9]{0,6}", name))
 
     @staticmethod
     def _script_duplicate_import_warnings(sheet_script: str) -> list[str]:
