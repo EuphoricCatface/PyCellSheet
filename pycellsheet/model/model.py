@@ -117,32 +117,32 @@ except ImportError:
     from lib.exceptions import CircularRefError
 
 
-INITSCRIPT_DEFAULT = """
-try:
-    from pycellsheet.lib.spreadsheet import *
-except ImportError:
-    try:
-        from pycellsheet.lib.spreadsheet import *
-    except ImportError:
-        from lib.spreadsheet import *
-
-import random as random_
+INITSCRIPT_DEFAULT = \
+"""import random as random_
 RANDOM_SEED = 0
 random = random_.Random(RANDOM_SEED)
 # For non-deterministic runs, uncomment and customize:
 # import datetime as datetime_
 # random.seed(datetime_.datetime.now().timestamp())
-# The above is equivalent to:
+
+try:
+    from pycellsheet.lib.spreadsheet import *
+except ImportError:
+    from lib.spreadsheet import *
+## The above is equivalent to:
 # try:
 #     from pycellsheet.lib.spreadsheet.array import *
 #     from pycellsheet.lib.spreadsheet.database import *
-#     from pycellsheet.lib.spreadsheet.date import *
 #     ...
 # except ImportError:
 #     from lib.spreadsheet.array import *
 #     from lib.spreadsheet.database import *
-#     from lib.spreadsheet.date import *
 #     ...
+## If you want more pythonic namespaced imports, you can also go:
+# try:
+#     from pycellsheet.lib import spreadsheet
+# except:
+#     from lib import spreadsheet
 """
 
 
