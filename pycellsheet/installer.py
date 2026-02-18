@@ -32,9 +32,22 @@ from dataclasses import dataclass
 import os
 
 try:
+    from importlib.metadata import PackageNotFoundError, version as metadata_version
+except ImportError:
+    try:
+        from importlib_metadata import (  # type: ignore
+            PackageNotFoundError,
+            version as metadata_version,
+        )
+    except ImportError:
+        PackageNotFoundError = None
+        metadata_version = None
+
+try:
     from pkg_resources import get_distribution, DistributionNotFound
 except ImportError:
     get_distribution = None
+    DistributionNotFound = None
 from PyQt6.QtCore import QProcess, QSize
 from PyQt6.QtGui import QColor, QTextCursor
 from PyQt6.QtWidgets import (
@@ -68,8 +81,15 @@ class Module:
     def version(self) -> version:
         """Currently installed version number, False if not installed"""
 
+        if metadata_version is not None:
+            try:
+                return version.parse(metadata_version(self.name))
+            except PackageNotFoundError:
+                pass
+
         if get_distribution is None:
-            return
+            return None
+
         try:
             return version.parse(get_distribution(self.name).version)
         except DistributionNotFound:
