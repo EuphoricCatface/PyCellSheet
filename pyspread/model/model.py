@@ -1710,12 +1710,8 @@ class CodeArray(DataArray):
         keys = self._filter_recalc_keys(list(self.dict_grid.keys()))
         return self._recalculate_keys(keys)
 
-    def execute_macros(self, current_table) -> Tuple[str, str]:
-        """Executes all macros and returns result string and error string
-
-        Executes macros only when not in safe_mode
-
-        """
+    def execute_sheet_script(self, current_table) -> Tuple[str, str]:
+        """Executes a sheet script and returns result string and error string."""
 
         if self.safe_mode:
             return '', "Safe mode activated. Code not executed."
@@ -1725,7 +1721,7 @@ class CodeArray(DataArray):
             self[key]
 
         # Windows exec does not like Windows newline
-        self.macros[current_table] = self.macros[current_table].replace('\r\n', '\n')
+        self.sheet_scripts[current_table] = self.sheet_scripts[current_table].replace('\r\n', '\n')
 
         # Create file-like string to capture output
         code_out = io.StringIO()
@@ -1738,7 +1734,7 @@ class CodeArray(DataArray):
 
         sheet_globals = {"__builtins__": _get_isolated_builtins()}
         try:
-            exec(self.macros[current_table], sheet_globals)
+            exec(self.sheet_scripts[current_table], sheet_globals)
 
         except Exception:
             exc_info = sys.exc_info()
@@ -1770,10 +1766,10 @@ class CodeArray(DataArray):
                 self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
 
-    def execute_sheet_script(self, current_table) -> Tuple[str, str]:
-        """Alias of execute_macros() with Sheet Script terminology."""
+    def execute_macros(self, current_table) -> Tuple[str, str]:
+        """Compatibility alias for execute_sheet_script()."""
 
-        return self.execute_macros(current_table)
+        return self.execute_sheet_script(current_table)
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
                      startkey: Tuple[int, int, int],

@@ -198,7 +198,7 @@ class SheetScriptPanel(QDialog):
         """
 
         try:
-            ast.parse(self.code_array.macros[current_table])
+            ast.parse(self.code_array.sheet_scripts[current_table])
 
         except Exception:
             # Grab the traceback and return it
@@ -215,13 +215,13 @@ class SheetScriptPanel(QDialog):
     def on_apply(self):
         """Event handler for Apply button"""
 
-        self.code_array.macros[self.current_table] = self.macro_editor.toPlainText()
+        self.code_array.sheet_scripts[self.current_table] = self.macro_editor.toPlainText()
 
         err = self._is_invalid_code(self.current_table)
         if err:
             self.update_result_viewer(err=err)
         else:
-            self.update_result_viewer(*self.code_array.execute_macros(self.current_table))
+            self.update_result_viewer(*self.code_array.execute_sheet_script(self.current_table))
             self.code_array.macros_draft[self.current_table] = None
             self.applied_indicator.applied = True
             self.parent.grid.model.emit_data_changed_all()
@@ -236,7 +236,7 @@ class SheetScriptPanel(QDialog):
             self.macro_editor.setPlainText(self.code_array.macros_draft[self.current_table])
             self.applied_indicator.applied = False
         else:
-            self.macro_editor.setPlainText(self.code_array.macros[self.current_table])
+            self.macro_editor.setPlainText(self.code_array.sheet_scripts[self.current_table])
             self.applied_indicator.applied = True
 
     def update_current_table(self, current):
@@ -259,14 +259,14 @@ class SheetScriptPanel(QDialog):
                 continue
             if self._is_implicit_default_draft(idx, draft):
                 continue
-            if draft != self.code_array.macros[idx]:
+            if draft != self.code_array.sheet_scripts[idx]:
                 return True
         return False
 
     def _is_implicit_default_draft(self, table: int, draft: str) -> bool:
         """True for untouched default template drafts."""
 
-        return self.code_array.macros[table] == "" and draft == self._implicit_default_draft
+        return self.code_array.sheet_scripts[table] == "" and draft == self._implicit_default_draft
 
     def discard_all_drafts(self):
         """Discard all unapplied drafts across all tables."""
@@ -286,7 +286,7 @@ class SheetScriptPanel(QDialog):
         for idx, draft in enumerate(self.code_array.macros_draft):
             if draft is None:
                 continue
-            self.code_array.macros[idx] = draft
+            self.code_array.sheet_scripts[idx] = draft
             self.code_array.macros_draft[idx] = None
             updated += 1
         self.update_()
@@ -311,5 +311,5 @@ class SheetScriptPanel(QDialog):
 
     def on_reset(self):
         self.code_array.macros_draft[self.current_table] = None
-        self.macro_editor.setPlainText(self.code_array.macros[self.current_table])
+        self.macro_editor.setPlainText(self.code_array.sheet_scripts[self.current_table])
         self.applied_indicator.applied = True

@@ -2141,8 +2141,8 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.row_heights.clear()
             self.code_array.col_widths.clear()
 
-            # Clear macros
-            self.code_array.macros = ["" for _ in range(self.shape[2])]
+            # Clear sheet scripts
+            self.code_array.sheet_scripts = ["" for _ in range(self.shape[2])]
             self.code_array.macros_draft = [None for _ in range(self.shape[2])]
             self.code_array.sheet_globals_uncopyable = [dict() for _ in range(self.shape[2])]
             self.code_array.sheet_globals_copyable = [dict() for _ in range(self.shape[2])]
