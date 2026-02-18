@@ -9,9 +9,18 @@ The core design choice is copy-priority semantics: cell references return deep-c
 ## Project status
 
 - Base fork point: `01500b4` (pyspread 2.3.1)
-- Current development phase: v0.3.0 released
+- v0.4.0: released
+- Current development phase: v0.5.0 parser/spill feature expansion
 
 ## Key changes
+
+### v0.4.0 (Internal Semantics Cleanup)
+
+- Continued internal semantics cleanup and docs/test alignment.
+- Added high-impact test coverage for command undo/redo paths, `.pycs` parser/writer edge cases, and model metadata/parser contracts.
+- Hardened Sheet Script stream handling to always restore process stdio on interruption/failure paths.
+- Exposed warning-marker details directly in cell tooltips for faster diagnosis.
+- API docs pass cleaned normal-build warnings; strict cross-reference cleanup remains a later docs-quality task.
 
 ### v0.3.0 (Release Engineering)
 
@@ -45,7 +54,6 @@ The core design choice is copy-priority semantics: cell references return deep-c
 
 ## Roadmap
 
-- `v0.4.0`: internal semantics cleanup (naming/refactor, warning contracts, reproducibility policy, button-cell cache/dependency contract).
 - `v0.5.0`: parser and spill expansion (parser selector/migrator, RangeOutput conflict semantics, staged `pycel` integration).
 - `v0.6.0`: architecture upgrades (data model rewrite, compile caching, dynamic row/column sizing, recalc/warning UX completion).
 
@@ -54,13 +62,13 @@ The core design choice is copy-priority semantics: cell references return deep-c
 - Release notes: `changelog.txt`
 - Design note: `Application Design Note.txt`
 - Developer guide: `CLAUDE.md`
-- User manual: `pyspread/share/doc/manual/`
+- User manual: `pycellsheet/share/doc/manual/`
 
 ## Run
 
 ```bash
 pip install -r requirements.txt
-python -m pyspread
+python -m pycellsheet
 ```
 
 ## Testing
@@ -77,3 +85,5 @@ tox -e py310,py311,py312,py313,py314
 # Optional dependency coverage (latest line)
 tox -e py314-optional
 ```
+
+Current active-interpreter baseline: `869 passed`.

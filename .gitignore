@@ -1,5 +1,5 @@
 
-# pyspread
+# pycellsheet
 
 *.sig
 
@@ -8,11 +8,13 @@
 *.pyc
 dist
 build
+apidocs/_build/
 MANIFEST
 
 *.psproj
 .cache
 pyspread.egg-info
+pycellsheet.egg-info
 
 # editors
 .idea/

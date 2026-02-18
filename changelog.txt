@@ -3,6 +3,33 @@ PyCellSheet Changelog
 
 Base upstream: pyspread 2.3.1 (forked November 2024)
 
+v0.4.0
+-------------------
+
+Summary:
+- 410 files changed, 2683 insertions(+), 3265 deletions(-)
+
+Features:
+- Canonicalized Sheet Script execution terminology and compatibility aliases in core/runtime paths.
+- Added deterministic random defaults in the Sheet Script template for reproducible startup behavior.
+- Completed major internal naming/packaging cleanup toward `pycellsheet`.
+
+Fixes:
+- Added warning-contract and button-cell lifecycle hardening to preserve cache/dirty invariants.
+- Hardened PythonEvaluator terminal-expression handling and sync-cell semantics.
+- Fixed startup/new-document defaults to apply/execute default Sheet Scripts consistently.
+- Improved dependency detection on Python 3.14 by using `importlib.metadata`-first checks.
+- Finalized desktop app-id migration to `io.github.euphoriccatface.pycellsheet` and removed GitLab integration artifacts.
+- Hardened Sheet Script execution stream restoration to avoid stdout/stderr leakage on interruption/error paths.
+- Added warning-detail propagation to cell tooltips when warning markers are active.
+
+Tests:
+- Added evaluator semantics regression coverage and expanded Sheet Script isolation coverage for uncopyable globals.
+- Added targeted non-UI command coverage for undo/redo edge paths (`SetGridSize`, row/column sizing, merge warnings, sheet rename, button-cell lifecycle).
+- Expanded `.pycs` reader/writer coverage for version/shape validation, attribute conversion, macro-header fallback, and bounds handling.
+- Expanded model metadata/parser contract coverage for builtins isolation, shape-resize sheet metadata behavior, and expression-parser mode updates.
+- Current development baseline passes on active interpreter (`869 passed`).
+
 v0.3.0
 ------
 
