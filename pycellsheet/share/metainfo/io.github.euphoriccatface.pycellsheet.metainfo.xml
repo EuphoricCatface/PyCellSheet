@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.gitlab.pycellsheet.pycellsheet</id>
+  <id>io.github.euphoriccatface.pycellsheet</id>
   <metadata_license>FSFAP</metadata_license>
   <name>pycellsheet</name>
   <summary>pycellsheet is a non-traditional spreadsheet application that is based on and written in the programming language Python</summary>
@@ -27,7 +27,7 @@
   <url type="homepage">https://pycellsheet.gitlab.io</url>
   <url type="bugtracker">https://gitlab.com/pycellsheet/pycellsheet/issues</url>
   <url type="help">https://pycellsheet.gitlab.io/docs.html</url>
-  <launchable type="desktop-id">io.gitlab.pycellsheet.pycellsheet.desktop</launchable>
+  <launchable type="desktop-id">io.github.euphoriccatface.pycellsheet.desktop</launchable>
   
   <releases>
     <release version="2.0.2" date="2021-12-16">

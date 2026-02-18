@@ -52,7 +52,7 @@ setup(
     },
     data_files=[
         ('pycellsheet/share/applications',
-         ['pycellsheet/share/applications/io.gitlab.pycellsheet.pycellsheet.desktop']),
+         ['pycellsheet/share/applications/io.github.euphoriccatface.pycellsheet.desktop']),
     ],
     license='GPL v3 :: GNU General Public License',
     keywords=['spreadsheet', 'pycellsheet'],
