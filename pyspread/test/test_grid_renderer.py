@@ -33,6 +33,8 @@ import sys
 
 import pytest
 
+from PyQt6.QtCore import QRectF
+from PyQt6.QtGui import QImage, QPainter
 from PyQt6.QtWidgets import QApplication
 
 PYSPREADPATH = abspath(join(dirname(__file__) + "/.."))
@@ -48,7 +50,7 @@ def insert_path(path):
 
 with insert_path(PYSPREADPATH):
     from ..pyspread import MainWindow
-    from ..grid_renderer import GridCellNavigator
+    from ..grid_renderer import EdgeBorders, GridCellNavigator, QColor, QColorCache, painter_rotate
 
 app = QApplication.instance()
 if app is None:
@@ -172,3 +174,43 @@ class TestGridCellNavigator:
 
         cell = GridCellNavigator(self.grid, key)
         assert cell.below_right_key() == res
+
+
+def test_painter_rotate_rejects_unsupported_angle():
+    image = QImage(10, 10, QImage.Format.Format_ARGB32)
+    painter = QPainter(image)
+    rect = QRectF(0, 0, 10, 10)
+    try:
+        with pytest.raises(Warning):
+            with painter_rotate(painter, rect, 45):
+                pass
+    finally:
+        painter.end()
+
+
+def test_edge_borders_color_prefers_darkest_among_thickest():
+    borders = EdgeBorders(
+        left_width=1.0,
+        right_width=2.0,
+        top_width=2.0,
+        bottom_width=1.0,
+        left_color=QColor(255, 255, 255),
+        right_color=QColor(120, 120, 120),
+        top_color=QColor(10, 10, 10),
+        bottom_color=QColor(200, 200, 200),
+        left_x=0.0,
+        right_x=1.0,
+        top_y=0.0,
+        bottom_y=1.0,
+    )
+
+    assert borders.color == QColor(10, 10, 10)
+    assert borders.color == QColor(10, 10, 10)
+
+
+def test_qcolor_cache_none_key_uses_palette_mid_color():
+    cache = QColorCache(main_window.grid)
+
+    mid_color = main_window.grid.palette().color(main_window.grid.palette().ColorRole.Mid)
+    assert cache[None] == QColor(mid_color)
+    assert cache[(1, 2, 3)] == QColor(1, 2, 3)

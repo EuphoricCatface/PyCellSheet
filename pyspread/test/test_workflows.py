@@ -572,3 +572,366 @@ class TestWorkflows:
         assert main_window.grid.model.code_array((0, 0, 0)) == "3"
         assert main_window.grid.model.code_array((1, 0, 0)) == "2"
         assert main_window.grid.model.code_array((2, 1, 0)) == "12"
+
+    def test_file_open_recent_delegates_to_filepath_open(self, monkeypatch):
+        """file_open_recent should forward to filepath_open with Path argument."""
+
+        called = {"path": None}
+        old_changed = main_window.settings.changed_since_save
+
+        def fake_filepath_open(path):
+            called["path"] = path
+
+        try:
+            main_window.settings.changed_since_save = False
+            monkeypatch.setattr(self.workflows, "filepath_open", fake_filepath_open)
+
+            self.workflows.file_open_recent("relative/test.pycsu")
+
+            assert isinstance(called["path"], Path)
+            assert called["path"] == Path("relative/test.pycsu")
+        finally:
+            main_window.settings.changed_since_save = old_changed
+
+    def test_sign_file_skips_signing_in_safe_mode(self, monkeypatch, tmp_path):
+        """sign_file should not sign files while safe mode is enabled."""
+
+        filepath = tmp_path / "data.pycsu"
+        filepath.write_text("payload", encoding="utf-8")
+        old_safe_mode = main_window.safe_mode
+
+        called = {"sign": 0}
+
+        def fake_sign(_data, _key):
+            called["sign"] += 1
+            return b"sig"
+
+        try:
+            main_window.safe_mode = True
+            monkeypatch.setitem(self.workflows.sign_file.__globals__, "sign", fake_sign)
+
+            self.workflows.sign_file(filepath)
+
+            assert called["sign"] == 0
+            assert main_window.statusBar().currentMessage() == \
+                "File saved but not signed because it is unapproved."
+            assert not filepath.with_suffix(".pycsu.sig").exists()
+        finally:
+            main_window.safe_mode = old_safe_mode
+
+    def test_sign_file_reports_error_when_signature_generation_fails(self, monkeypatch, tmp_path):
+        """sign_file should report signing error when signer returns no signature."""
+
+        filepath = tmp_path / "data.pycsu"
+        filepath.write_text("payload", encoding="utf-8")
+        old_safe_mode = main_window.safe_mode
+
+        def fake_sign(_data, _key):
+            return None
+
+        try:
+            main_window.safe_mode = False
+            monkeypatch.setitem(self.workflows.sign_file.__globals__, "sign", fake_sign)
+
+            self.workflows.sign_file(filepath)
+
+            assert main_window.statusBar().currentMessage() == "Error signing file."
+            assert not filepath.with_suffix(".pycsu.sig").exists()
+        finally:
+            main_window.safe_mode = old_safe_mode
+
+    def test_sign_file_writes_signature_and_reports_success(self, monkeypatch, tmp_path):
+        """sign_file should write .sig file and report success when signing works."""
+
+        filepath = tmp_path / "data.pycsu"
+        filepath.write_bytes(b"payload")
+        old_safe_mode = main_window.safe_mode
+
+        def fake_sign(data, _key):
+            assert data == b"payload"
+            return b"signed-data"
+
+        try:
+            main_window.safe_mode = False
+            monkeypatch.setitem(self.workflows.sign_file.__globals__, "sign", fake_sign)
+
+            self.workflows.sign_file(filepath)
+
+            sig_path = filepath.with_suffix(".pycsu.sig")
+            assert sig_path.exists()
+            assert sig_path.read_bytes() == b"signed-data"
+            assert main_window.statusBar().currentMessage() == "File saved and signed."
+        finally:
+            main_window.safe_mode = old_safe_mode
+
+    def test_save_returns_false_when_progress_is_canceled(self, monkeypatch, tmp_path):
+        """_save should abort and return False on save-progress cancellation."""
+
+        filepath = tmp_path / "out.pycsu"
+
+        def fake_file_progress_gen(*_args, **_kwargs):
+            raise self.workflows._save.__globals__["ProgressDialogCanceled"]
+            yield  # pragma: no cover
+
+        monkeypatch.setitem(self.workflows._save.__globals__, "file_progress_gen",
+                            fake_file_progress_gen)
+
+        result = self.workflows._save(filepath)
+
+        assert result is False
+        assert main_window.statusBar().currentMessage() == "File save stopped by user."
+
+    def test_save_returns_false_when_writer_init_fails(self, monkeypatch, tmp_path):
+        """_save should return False when PycsWriter raises during setup."""
+
+        filepath = tmp_path / "out.pycsu"
+        calls = {"count": 0}
+
+        class _FailWriter:
+            def __init__(self, _code_array):
+                raise ValueError("writer failed")
+
+        def fake_critical(*_args, **_kwargs):
+            calls["count"] += 1
+
+        monkeypatch.setitem(self.workflows._save.__globals__, "PycsWriter", _FailWriter)
+        monkeypatch.setattr(self.workflows._save.__globals__["QMessageBox"],
+                            "critical", fake_critical)
+
+        result = self.workflows._save(filepath)
+
+        assert result is False
+        assert calls["count"] == 1
+
+    def test_save_returns_false_when_move_fails(self, monkeypatch, tmp_path):
+        """_save should return False when moving temp file to destination fails."""
+
+        filepath = tmp_path / "out.pycsu"
+        calls = {"critical": 0}
+
+        class _DummyWriter:
+            def __init__(self, _code_array):
+                self.lines = ["x = 1\n"]
+
+            def __len__(self):
+                return 1
+
+            def __iter__(self):
+                return iter(self.lines)
+
+        def fake_file_progress_gen(_main_window, iterable, _title, _label, _length):
+            for i, line in enumerate(iterable, start=1):
+                yield i, line
+
+        def fake_move(_src, _dst):
+            raise OSError("move failed")
+
+        def fake_critical(*_args, **_kwargs):
+            calls["critical"] += 1
+
+        monkeypatch.setitem(self.workflows._save.__globals__, "PycsWriter", _DummyWriter)
+        monkeypatch.setitem(self.workflows._save.__globals__, "file_progress_gen",
+                            fake_file_progress_gen)
+        monkeypatch.setitem(self.workflows._save.__globals__, "move", fake_move)
+        monkeypatch.setattr(self.workflows._save.__globals__["QMessageBox"],
+                            "critical", fake_critical)
+
+        result = self.workflows._save(filepath)
+
+        assert result is False
+        assert calls["critical"] == 1
+
+    def test_save_success_updates_state_and_signs(self, monkeypatch, tmp_path):
+        """_save should update state/history and call sign_file on success."""
+
+        filepath = tmp_path / "ok.pycsu"
+        old_changed = main_window.settings.changed_since_save
+        old_output = main_window.settings.last_file_output_path
+        old_history = list(main_window.settings.file_history)
+        calls = {"sign": 0, "menu_update": 0}
+
+        class _DummyWriter:
+            def __init__(self, _code_array):
+                self.lines = ["x = 1\n"]
+
+            def __len__(self):
+                return 1
+
+            def __iter__(self):
+                return iter(self.lines)
+
+        def fake_file_progress_gen(_main_window, iterable, _title, _label, _length):
+            for i, line in enumerate(iterable, start=1):
+                yield i, line
+
+        def fake_sign_file(_filepath):
+            calls["sign"] += 1
+
+        def fake_menu_update():
+            calls["menu_update"] += 1
+
+        try:
+            main_window.settings.changed_since_save = True
+            monkeypatch.setitem(self.workflows._save.__globals__, "PycsWriter", _DummyWriter)
+            monkeypatch.setitem(self.workflows._save.__globals__, "file_progress_gen",
+                                fake_file_progress_gen)
+            monkeypatch.setattr(self.workflows, "sign_file", fake_sign_file)
+            monkeypatch.setattr(
+                main_window.menuBar().file_menu.history_submenu,
+                "update_",
+                fake_menu_update,
+            )
+
+            result = self.workflows._save(filepath)
+
+            assert result is None
+            assert filepath.exists()
+            assert main_window.settings.changed_since_save is False
+            assert main_window.settings.last_file_output_path == filepath
+            assert main_window.windowTitle() == "ok.pycsu - pyspread"
+            assert calls["sign"] == 1
+            assert calls["menu_update"] == 1
+            assert main_window.settings.file_history[0] == filepath.as_posix()
+        finally:
+            main_window.settings.changed_since_save = old_changed
+            main_window.settings.last_file_output_path = old_output
+            main_window.settings.file_history = old_history
+
+    def test_file_save_uses_save_as_when_no_suffix(self, monkeypatch):
+        """file_save should delegate to file_save_as when last output path has no suffix."""
+
+        old_path = main_window.settings.last_file_output_path
+        main_window.settings.last_file_output_path = Path("untitled")
+
+        calls = {"save_as": 0, "save": 0}
+
+        try:
+            monkeypatch.setattr(self.workflows, "_resolve_unapplied_sheet_script_drafts",
+                                lambda: True)
+            monkeypatch.setattr(self.workflows, "_save",
+                                lambda _filepath: calls.__setitem__("save", calls["save"] + 1))
+            monkeypatch.setattr(self.workflows, "file_save_as",
+                                lambda: calls.__setitem__("save_as", calls["save_as"] + 1) or "fallback")
+
+            result = self.workflows.file_save()
+
+            assert result == "fallback"
+            assert calls["save"] == 0
+            assert calls["save_as"] == 1
+        finally:
+            main_window.settings.last_file_output_path = old_path
+
+    def test_file_save_routes_to_save_as_when_save_fails(self, monkeypatch):
+        """file_save should fall back to file_save_as when _save returns False."""
+
+        old_path = main_window.settings.last_file_output_path
+        main_window.settings.last_file_output_path = Path("data.pycsu")
+        calls = {"save_as": 0}
+
+        try:
+            monkeypatch.setattr(self.workflows, "_resolve_unapplied_sheet_script_drafts",
+                                lambda: True)
+            monkeypatch.setattr(self.workflows, "_save", lambda _filepath: False)
+            monkeypatch.setattr(self.workflows, "file_save_as",
+                                lambda: calls.__setitem__("save_as", calls["save_as"] + 1) or "fallback")
+
+            result = self.workflows.file_save()
+
+            assert result == "fallback"
+            assert calls["save_as"] == 1
+        finally:
+            main_window.settings.last_file_output_path = old_path
+
+    def test_file_save_as_returns_false_when_dialog_is_canceled(self, monkeypatch):
+        """file_save_as should return False when save dialog is cancelled."""
+
+        class _SaveDialog:
+            def __init__(self, _parent):
+                self.file_path = ""
+                self.suffix = ".pycsu"
+
+        monkeypatch.setattr(self.workflows, "_resolve_unapplied_sheet_script_drafts",
+                            lambda: True)
+        monkeypatch.setitem(self.workflows.file_save_as.__globals__,
+                            "FileSaveDialog", _SaveDialog)
+
+        assert self.workflows.file_save_as() is False
+
+    def test_file_save_as_normalizes_suffix_before_save(self, monkeypatch):
+        """file_save_as should enforce chosen suffix before calling _save."""
+
+        class _SaveDialog:
+            def __init__(self, _parent):
+                self.file_path = "report"
+                self.suffix = ".pycsu"
+
+        called = {"path": None}
+
+        def fake_save(path):
+            called["path"] = path
+            return True
+
+        monkeypatch.setattr(self.workflows, "_resolve_unapplied_sheet_script_drafts",
+                            lambda: True)
+        monkeypatch.setitem(self.workflows.file_save_as.__globals__,
+                            "FileSaveDialog", _SaveDialog)
+        monkeypatch.setattr(self.workflows, "_save", fake_save)
+
+        assert self.workflows.file_save_as() is True
+        assert called["path"] == Path("report.pycsu")
+
+    def test_filepath_open_trusted_applies_scripts_and_reports_errors(self, tmp_path, monkeypatch):
+        """Trusted file loads should apply all sheet scripts and report script errors."""
+
+        payload = (
+            "[PyCellSheet save file version]\n"
+            "0.0\n"
+            "[shape]\n"
+            "1\t1\t1\n"
+            "[sheet_names]\n"
+            "Sheet 0\n"
+            "[macros]\n"
+            "(macro:'Sheet 0') 1\n"
+            "VALUE = 7\n"
+            "[grid]\n"
+            "0\t0\t0\t'abc'\n"
+            "[attributes]\n"
+            "[row_heights]\n"
+            "[col_widths]\n"
+        )
+        filepath = tmp_path / "trusted.pycsu"
+        filepath.write_text(payload, encoding="utf-8")
+        filepath.with_suffix(".pycsu.sig").write_bytes(b"sig")
+
+        old_safe_mode = main_window.safe_mode
+        old_cwd = os.getcwd()
+        apply_calls = {"count": 0}
+
+        def fake_file_progress_gen(_main_window, iterable, _title, _label, _lines):
+            for i, line in enumerate(iterable, start=1):
+                yield i, line
+
+        def fake_verify(_data, _sig, _key):
+            return True
+
+        def fake_apply_all_sheet_scripts():
+            apply_calls["count"] += 1
+            return 2, 1
+
+        try:
+            monkeypatch.setitem(self.workflows.filepath_open.__globals__,
+                                "file_progress_gen", fake_file_progress_gen)
+            monkeypatch.setitem(self.workflows.filepath_open.__globals__,
+                                "verify", fake_verify)
+            monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
+                                fake_apply_all_sheet_scripts)
+
+            self.workflows.filepath_open(filepath)
+
+            assert main_window.safe_mode is False
+            assert apply_calls["count"] == 1
+            assert main_window.statusBar().currentMessage() == \
+                "Applied 2 sheet scripts (1 with errors)."
+        finally:
+            os.chdir(old_cwd)
+            main_window.safe_mode = old_safe_mode

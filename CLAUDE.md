@@ -4,7 +4,7 @@
 
 PyCellSheet is a fork of pyspread v2.3.1 that aims to be a comfortable middle ground between a conventional spreadsheet and pyspread's purely Pythonic approach. The key philosophical difference from pyspread is **copy-priority semantics**: cell references return `deepcopy`'d values by default, so cells behave like independent values in a normal spreadsheet, rather than pyspread's reference-priority system where cells share mutable objects.
 
-v0.1.0 is released. Current development is on the v0.2.0 stabilization cycle.
+v0.1.0 and v0.2.0 are released. Current development is on the v0.3.0 release-engineering cycle.
 
 ## Design Philosophy
 
@@ -175,9 +175,9 @@ python pyspread/__main__.py
 - `pyspread/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
 - `pyspread/model/test/test_dependency_integration.py` - 17 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection, dynamic refs)
 
-As of 2026-02-16, `pytest --collect-only` discovers 750 tests across `pyspread/lib/test`, `pyspread/model/test`, and `pyspread/test`.
+As of 2026-02-18, `pytest -q` passes with 792 tests on the active interpreter.
 
-**Legacy pyspread tests** exist in `pyspread/test/` and `pyspread/lib/test/` but have not been updated for PyCellSheet changes.
+Legacy test suites under `pyspread/test/` and `pyspread/lib/test/` are part of the active regression baseline and should remain aligned with shipped PyCellSheet behavior.
 
 ## Later Goals (from design note, not yet implemented)
 

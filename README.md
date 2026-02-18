@@ -9,12 +9,16 @@ The core design choice is copy-priority semantics: cell references return deep-c
 ## Project status
 
 - Base fork point: `01500b4` (pyspread 2.3.1)
-- v0.0.5 PoC tag point: `a7eda84`
-- v0.1.0: released
-- v0.2.0: released
-- Current development line: v0.3.0+
+- Current development phase: RC for v0.3.0
 
 ## Key changes
+
+### v0.3.0
+
+- Release-engineering/safety baseline completion for the release line.
+- Multi-version CI gate and tox matrix formalized as required checks.
+- Sheet Script draft lifecycle safeguards stabilized across save/new/open/quit transitions.
+- Baseline contract coverage expanded for parser modes, migration/alias compatibility, workflows, and runtime helper behavior.
 
 ### v0.2.0
 
