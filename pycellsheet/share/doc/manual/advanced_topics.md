@@ -77,6 +77,16 @@ cycle is created, the cycle is detected and reported as an error.
 
 Result stability is not guaranteed when redefining global variables because execution order may be changed. This happens for when in large spreadsheets the result cache is full and cell results that are purged from the cache are re-evaluated.
 
+## Sheet Script global-name collisions with cell references
+
+PyCellSheet warns when a Sheet Script global name looks like a cell reference.
+The current heuristic treats names that match spreadsheet-like coordinates as
+potentially ambiguous. This has been narrowed to reduce false positives, but
+names such as `LOG10` can still be interpreted as cell-like in some contexts.
+
+For reliable behavior, avoid ambiguous global names. Prefer a prefix or
+namespace pattern such as `FUNC_LOG10`, `MY_LOG10`, or `math_ext.LOG10`.
+
 ## Security annoyance when approving files in read only folders
 
 If a `.pycs` or `.pycsu` file is located in a folder without write or file

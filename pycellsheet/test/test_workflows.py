@@ -100,8 +100,8 @@ class TestWorkflows:
         assert not main_window.settings.changed_since_save
 
     param_update_main_window_title = [
-        (Path.home(), "pycellsheet"),
-        (Path("/test.pys"), "test.pys - pycellsheet"),
+        (Path.home(), "PyCellSheet"),
+        (Path("/test.pys"), "test.pys - PyCellSheet"),
     ]
 
     @pytest.mark.parametrize("path, title", param_update_main_window_title)
@@ -793,7 +793,7 @@ class TestWorkflows:
             assert filepath.exists()
             assert main_window.settings.changed_since_save is False
             assert main_window.settings.last_file_output_path == filepath
-            assert main_window.windowTitle() == "ok.pycsu - pycellsheet"
+            assert main_window.windowTitle() == "ok.pycsu - PyCellSheet"
             assert calls["sign"] == 1
             assert calls["menu_update"] == 1
             assert main_window.settings.file_history[0] == filepath.as_posix()
