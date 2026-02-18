@@ -1788,16 +1788,17 @@ class Workflows:
 
         data = numpy.array([
             [
-                None if (value := grid.model.code_array[row, column, table]) == EmptyCell
+                None if (value := grid.model.code_array[row, column, table]) is EmptyCell
                 else value
                 for column in range(left, right + 1)
             ]
             for row in range(top, bottom + 1)
         ], dtype="O")
-        if ascending:
-            data[data == None] = numpy.inf  # `is` does not work here
-        else:
-            data[data == None] = -numpy.inf  # `is` does not work here
+
+        empty_fill = numpy.inf if ascending else -numpy.inf
+        for idx, value in numpy.ndenumerate(data):
+            if value is None:
+                data[idx] = empty_fill
 
         try:
             if ascending:
