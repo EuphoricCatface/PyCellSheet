@@ -62,6 +62,7 @@ with insert_path(PYSPREADPATH):
     from ..pycellsheet import MainWindow
     from ..commands import MakeButtonCell, RemoveButtonCell
     from ..lib.selection import Selection
+    from ..model.model import INITSCRIPT_DEFAULT
 
 
 app = QApplication.instance()
@@ -87,6 +88,16 @@ class TestMainWindow:
         main_window.safe_mode = False
         assert not main_window.main_window_actions.approve.isEnabled()
         assert not main_window.safe_mode
+
+    def test_startup_applies_default_sheet_script(self):
+        """Fresh startup should auto-apply default sheet scripts."""
+
+        code_array = main_window.grid.model.code_array
+        tables = code_array.shape[2]
+
+        assert code_array.sheet_scripts == [INITSCRIPT_DEFAULT for _ in range(tables)]
+        assert code_array.sheet_scripts_draft == [None for _ in range(tables)]
+        assert code_array.sheet_globals_copyable[0].get("RANDOM_SEED") == 0
 
     def test_sheet_script_globals_are_isolated_per_sheet(self):
         """Sheet Script globals should not leak across sheets."""

@@ -58,6 +58,7 @@ def insert_path(path):
 
 with insert_path(PYSPREADPATH):
     from ..pycellsheet import MainWindow
+    from ..model.model import INITSCRIPT_DEFAULT
 
 
 app = QApplication.instance()
@@ -140,6 +141,10 @@ class TestWorkflows:
         assert main_window.settings.last_file_input_path == Path.home()
         assert main_window.settings.changed_since_save is False
         assert main_window.safe_mode is False
+        if should_apply:
+            assert main_window.grid.model.code_array.sheet_scripts == [
+                INITSCRIPT_DEFAULT for _ in range(res[2])
+            ]
         expected_calls = 1 if should_apply else 0
         assert called["count"] == expected_calls
         if msg:

@@ -86,7 +86,8 @@ try:
                                            BorderColorBottomCache)
     from pycellsheet.model.model import (CodeArray, CellAttribute,
                                          DefaultCellAttributeDict,
-                                         class_format_functions)
+                                         class_format_functions,
+                                         INITSCRIPT_DEFAULT)
     from pycellsheet.lib.attrdict import AttrDict
     from pycellsheet.interfaces.pycs import (qt52qt6_fontweights,
                                              qt62qt5_fontweights)
@@ -109,7 +110,7 @@ except ImportError:
                                BorderWidthRightCache, EdgeBordersCache,
                                BorderColorRightCache, BorderColorBottomCache)
     from model.model import (CodeArray, CellAttribute, DefaultCellAttributeDict,
-                            class_format_functions)
+                            class_format_functions, INITSCRIPT_DEFAULT)
     from lib.attrdict import AttrDict
     from interfaces.pycs import qt52qt6_fontweights, qt62qt5_fontweights
     from lib.selection import Selection
@@ -2141,8 +2142,9 @@ class GridTableModel(QAbstractTableModel):
             self.code_array.row_heights.clear()
             self.code_array.col_widths.clear()
 
-            # Clear sheet scripts
-            self.code_array.sheet_scripts = ["" for _ in range(self.shape[2])]
+            # Reset sheet scripts to default template so New/Load keeps
+            # spreadsheet helpers and deterministic random policy available.
+            self.code_array.sheet_scripts = [INITSCRIPT_DEFAULT for _ in range(self.shape[2])]
             self.code_array.sheet_scripts_draft = [None for _ in range(self.shape[2])]
             self.code_array.sheet_globals_uncopyable = [dict() for _ in range(self.shape[2])]
             self.code_array.sheet_globals_copyable = [dict() for _ in range(self.shape[2])]

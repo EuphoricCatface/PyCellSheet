@@ -37,6 +37,7 @@ PyCellSheet
 
 import os
 from pathlib import Path
+from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent, QTimer, QRectF
 from PyQt6.QtWidgets import (QWidget, QMainWindow, QApplication,
@@ -101,7 +102,7 @@ class MainWindow(QMainWindow):
 
     gui_update = pyqtSignal(dict)
 
-    def __init__(self, filepath: Path = Path(),
+    def __init__(self, filepath: Optional[Path] = None,
                  default_settings: bool = False):
         """
         :param filepath: File path for inital file to be opened
@@ -157,6 +158,16 @@ class MainWindow(QMainWindow):
             else:
                 msg = f"File '{filepath}' could not be opened."
                 self.statusBar().showMessage(msg)
+        else:
+            # Fresh startup without an input file should initialize and execute
+            # default sheet scripts so spreadsheet helpers are available.
+            self.sheet_script_panel.apply_all_drafts_to_scripts()
+            tables_executed, tables_with_errors = self.workflows.apply_all_sheet_scripts()
+            if tables_executed and tables_with_errors:
+                self.statusBar().showMessage(
+                    f"Applied {tables_executed} sheet scripts ({tables_with_errors} with errors).",
+                    5000
+                )
 
     def _init_window(self):
         """Initialize main window components"""
