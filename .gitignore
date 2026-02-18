@@ -1,5 +1,5 @@
 
-# pyspread
+# pycellsheet
 
 *.sig
 
@@ -13,6 +13,7 @@ MANIFEST
 *.psproj
 .cache
 pyspread.egg-info
+pycellsheet.egg-info
 
 # editors
 .idea/

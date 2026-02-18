@@ -10,14 +10,14 @@ import os
 import sys
 
 try:
-    from pyspread.settings import VERSION
+    from pycellsheet.settings import VERSION
 except ImportError:
     sys.path.insert(0, os.path.abspath('../'))
-    from pyspread.settings import VERSION
+    from pycellsheet.settings import VERSION
 
-project = 'pyspread'
-copyright = 'Martin Manns and the pyspread team '
-author = 'Martin Manns and the pyspread team'
+project = 'pycellsheet'
+copyright = 'Martin Manns and the pycellsheet team '
+author = 'Martin Manns and the pycellsheet team'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -81,9 +81,9 @@ html_css_files = [
     'css/w3.css',
 ]
 
-html_title = 'pyspread API docs'
-html_short_title = "pyspread"
-html_favicon = "_static/pyspread.png"
+html_title = 'pycellsheet API docs'
+html_short_title = "pycellsheet"
+html_favicon = "_static/pycellsheet.png"
 
 
 html_sidebars = {
@@ -104,7 +104,7 @@ html_show_sphinx = False
 #
 html_show_copyright = False
 
-html_context = {"git_repos_url": "https://gitlab.com/pyspread/pyspread"}
+html_context = {"git_repos_url": "https://github.com/EuphoricCatface/PyCellSheet"}
 
 intersphinx_mapping = {
     'python': ('http://docs.python.org/3', None),

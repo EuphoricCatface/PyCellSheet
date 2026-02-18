@@ -4,7 +4,7 @@
 
 PyCellSheet is a fork of pyspread v2.3.1 that aims to be a comfortable middle ground between a conventional spreadsheet and pyspread's purely Pythonic approach. The key philosophical difference from pyspread is **copy-priority semantics**: cell references return `deepcopy`'d values by default, so cells behave like independent values in a normal spreadsheet, rather than pyspread's reference-priority system where cells share mutable objects.
 
-v0.1.0 is released. Current development is on the v0.2.0 stabilization cycle.
+v0.1.0 and v0.2.0 are released. Current development is on the v0.3.0 release-engineering cycle.
 
 ## Design Philosophy
 
@@ -51,7 +51,7 @@ Cell Contents -> Expression Parser -> Reference Parser -> Python Evaluator -> (F
 
 ```python
 try:
-    from pyspread.lib.module import Class
+    from pycellsheet.lib.module import Class
 except ImportError:
     from lib.module import Class
 ```
@@ -59,19 +59,22 @@ except ImportError:
 **NEVER** import inline in methods. All imports must be in the try/except block at the top of the file.
 
 **Example violation**:
+
 ```python
 def some_method(self):
-    from pyspread.icons import Icon  # ❌ WRONG - inline import
+    from pycellsheet.icons import Icon  # ❌ WRONG - inline import
     ...
 ```
 
 **Correct pattern**:
+
 ```python
 # At top of file
 try:
-    from pyspread.icons import Icon
+    from pycellsheet.icons import Icon
 except ImportError:
     from icons import Icon
+
 
 def some_method(self):
     # Use Icon here ✅
@@ -163,9 +166,9 @@ The grid is currently a 3D dict keyed by `(row, col, table)` where the key forma
 pip install -r requirements.txt  # PyQt6, numpy, etc.
 
 # Run
-python -m pyspread
+python -m pycellsheet
 # or
-python pyspread/__main__.py
+python pycellsheet/__main__.py
 ```
 
 ## Testing
@@ -175,9 +178,9 @@ python pyspread/__main__.py
 - `pyspread/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
 - `pyspread/model/test/test_dependency_integration.py` - 17 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection, dynamic refs)
 
-As of 2026-02-16, `pytest --collect-only` discovers 750 tests across `pyspread/lib/test`, `pyspread/model/test`, and `pyspread/test`.
+As of 2026-02-18, `pytest -q` passes with 792 tests on the active interpreter.
 
-**Legacy pyspread tests** exist in `pyspread/test/` and `pyspread/lib/test/` but have not been updated for PyCellSheet changes.
+Legacy test suites under `pyspread/test/` and `pyspread/lib/test/` are part of the active regression baseline and should remain aligned with shipped PyCellSheet behavior.
 
 ## Later Goals (from design note, not yet implemented)
 
