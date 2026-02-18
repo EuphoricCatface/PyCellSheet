@@ -109,8 +109,10 @@ class TestMainWindow:
         old_draft1 = code_array.macros_draft[1]
         old_copyable0 = deepcopy(code_array.sheet_globals_copyable[0])
         old_copyable1 = deepcopy(code_array.sheet_globals_copyable[1])
-        old_uncopyable0 = deepcopy(code_array.sheet_globals_uncopyable[0])
-        old_uncopyable1 = deepcopy(code_array.sheet_globals_uncopyable[1])
+        # Uncopyable globals may include module objects (e.g. random),
+        # so keep shallow snapshots of dict mappings for restore.
+        old_uncopyable0 = dict(code_array.sheet_globals_uncopyable[0])
+        old_uncopyable1 = dict(code_array.sheet_globals_uncopyable[1])
 
         key_sheet0 = (0, 0, 0)
         key_sheet1 = (0, 0, 1)
