@@ -9,7 +9,8 @@ The core design choice is copy-priority semantics: cell references return deep-c
 ## Project status
 
 - Base fork point: `01500b4` (pyspread 2.3.1)
-- Current development phase: v0.3.0 released
+- v0.3.0: released
+- Current development phase: v0.4.0 internal-semantics cleanup
 
 ## Key changes
 
@@ -54,7 +55,7 @@ The core design choice is copy-priority semantics: cell references return deep-c
 - Release notes: `changelog.txt`
 - Design note: `Application Design Note.txt`
 - Developer guide: `CLAUDE.md`
-- User manual: `pyspread/share/doc/manual/`
+- User manual: `pycellsheet/share/doc/manual/`
 
 ## Run
 
