@@ -63,7 +63,7 @@ deploy_pypi:
     - tags
 
 
-## api.docs pages at pyspread.gitlab.io/pyspread
+## api.docs pages at pycellsheet.gitlab.io/pycellsheet
 pages:
   stage: deploy
   image: debian:stable

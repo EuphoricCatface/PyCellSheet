@@ -60,7 +60,7 @@ The core design choice is copy-priority semantics: cell references return deep-c
 
 ```bash
 pip install -r requirements.txt
-python -m pyspread
+python -m pycellsheet
 ```
 
 ## Testing

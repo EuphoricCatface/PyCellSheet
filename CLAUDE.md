@@ -51,7 +51,7 @@ Cell Contents -> Expression Parser -> Reference Parser -> Python Evaluator -> (F
 
 ```python
 try:
-    from pyspread.lib.module import Class
+    from pycellsheet.lib.module import Class
 except ImportError:
     from lib.module import Class
 ```
@@ -59,19 +59,22 @@ except ImportError:
 **NEVER** import inline in methods. All imports must be in the try/except block at the top of the file.
 
 **Example violation**:
+
 ```python
 def some_method(self):
-    from pyspread.icons import Icon  # ❌ WRONG - inline import
+    from pycellsheet.icons import Icon  # ❌ WRONG - inline import
     ...
 ```
 
 **Correct pattern**:
+
 ```python
 # At top of file
 try:
-    from pyspread.icons import Icon
+    from pycellsheet.icons import Icon
 except ImportError:
     from icons import Icon
+
 
 def some_method(self):
     # Use Icon here ✅
@@ -163,9 +166,9 @@ The grid is currently a 3D dict keyed by `(row, col, table)` where the key forma
 pip install -r requirements.txt  # PyQt6, numpy, etc.
 
 # Run
-python -m pyspread
+python -m pycellsheet
 # or
-python pyspread/__main__.py
+python pycellsheet/__main__.py
 ```
 
 ## Testing
