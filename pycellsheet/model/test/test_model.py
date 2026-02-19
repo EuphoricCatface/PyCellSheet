@@ -705,6 +705,11 @@ class TestCodeArray(object):
         assert isinstance(result, ImportError)
         assert "pycel" in str(result).lower()
 
+    def test_pure_spreadsheet_python_marker_allows_space_after_token(self):
+        self.code_array[0, 0, 0] = "> 123"
+
+        assert self.code_array[0, 0, 0] == 123
+
     def test_globals_result_with_modules_survives_cache_hit(self):
         """globals() result should not crash on cached deepcopy fallback."""
 

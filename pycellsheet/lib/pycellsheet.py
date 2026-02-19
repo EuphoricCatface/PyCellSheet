@@ -543,6 +543,10 @@ class ReferenceParser:
     CR = cell_ref
 
     def parser(self, code: PythonCode):
+        # Users often type a space after parser markers (e.g. `> 1 + 2`).
+        # Normalize here so AST parsing does not fail with unexpected indent.
+        code = code.lstrip()
+
         # A1:B2 -> R("A1", "B2")
         # A1 -> C("A1")
         # "0"!A1 -> Sh("0").C("A1")

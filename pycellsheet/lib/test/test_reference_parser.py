@@ -71,3 +71,9 @@ def test_sheet_global_var_missing_raises_nameerror():
         assert False, "Expected NameError for missing sheet global"
     except NameError as err:
         assert "not found in sheet" in str(err)
+
+
+def test_parser_accepts_leading_whitespace_without_indentation_error():
+    parser = ReferenceParser(None)
+
+    assert parser.parser(PythonCode(" 123")) == "123"
