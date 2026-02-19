@@ -83,6 +83,11 @@ except ImportError:
     Money = None
 
 try:
+    from pycel.excelformula import ExcelFormula
+except ImportError:
+    ExcelFormula = None
+
+try:
     from pycellsheet.settings import Settings
     from pycellsheet.lib.attrdict import AttrDict
     import pycellsheet.lib.charts as charts
@@ -93,6 +98,10 @@ try:
     from pycellsheet.lib.sheet_name import generate_unique_sheet_name
     from pycellsheet.lib.pycellsheet import EmptyCell, PythonCode, SpreadSheetCode, Range, HelpText, ExpressionParser, \
         ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
+    from pycellsheet.lib.expression_parser_migrator import (
+        preview_migration as preview_expression_parser_migration,
+        apply_migration as apply_expression_parser_migration,
+    )
 
     # Dependency tracking and smart caching
     from pycellsheet.lib.dependency_graph import DependencyGraph
@@ -110,6 +119,10 @@ except ImportError:
     from lib.sheet_name import generate_unique_sheet_name
     from lib.pycellsheet import EmptyCell, PythonCode, SpreadSheetCode, Range, HelpText, ExpressionParser, \
         ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
+    from lib.expression_parser_migrator import (
+        preview_migration as preview_expression_parser_migration,
+        apply_migration as apply_expression_parser_migration,
+    )
 
     # Dependency tracking and smart caching
     from lib.dependency_graph import DependencyGraph
@@ -508,6 +521,7 @@ class DataArray:
         self.sheet_scripts_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
         self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
+        self.pycel_formula_opt_in = False
 
         self.exp_parser = ExpressionParser()
         self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
@@ -709,6 +723,64 @@ class DataArray:
         """Sets parser mode using a canonical parser mode id."""
 
         self.exp_parser_code = ExpressionParser.get_mode_code(mode_id)
+
+    def preview_expression_parser_migration(
+            self, source_mode_id: str, target_mode_id: str,
+            tables: typing.Optional[list[int]] = None, include_risky: bool = False):
+        return preview_expression_parser_migration(
+            self, source_mode_id, target_mode_id, tables=tables, include_risky=include_risky
+        )
+
+    def apply_expression_parser_migration(
+            self, source_mode_id: str, target_mode_id: str,
+            tables: typing.Optional[list[int]] = None, include_risky: bool = False):
+        report = apply_expression_parser_migration(
+            self, source_mode_id, target_mode_id, tables=tables, include_risky=include_risky
+        )
+        if report.summary["safe_changed"] > 0:
+            if hasattr(self, "smart_cache"):
+                self.smart_cache.clear()
+            if hasattr(self, "dep_graph"):
+                self.dep_graph.dirty.clear()
+        return report
+
+    def set_pycel_formula_opt_in(self, enabled: bool):
+        self.pycel_formula_opt_in = bool(enabled)
+
+    def _eval_spreadsheet_code(self, key: Tuple[int, int, int],
+                               formula: SpreadSheetCode):
+        if not self.pycel_formula_opt_in:
+            return RuntimeError(
+                "Spreadsheet formulas are disabled. Enable pycel formula mode first."
+            )
+        if ExcelFormula is None:
+            return ImportError(
+                "pycel is not installed. Install pycel and re-evaluate the cell."
+            )
+
+        cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
+
+        def _normalize_addr(addr) -> str:
+            if isinstance(addr, str):
+                return addr
+            if hasattr(addr, "address"):
+                return addr.address
+            return str(addr)
+
+        def evaluate(addr):
+            return cur_sheet.cell_single_ref(_normalize_addr(addr))
+
+        def evaluate_range(addr):
+            addr_str = _normalize_addr(addr)
+            if ":" not in addr_str:
+                return cur_sheet.cell_single_ref(addr_str)
+            addr1, addr2 = addr_str.split(":", 1)
+            return cur_sheet.cell_range_ref(addr1, addr2)
+
+        eval_formula = ExcelFormula.build_eval_context(evaluate, evaluate_range)
+        compiled_formula = ExcelFormula(f"={formula}")
+        with DependencyTracker.track(key):
+            return eval_formula(compiled_formula)
 
     @property
     def shape(self) -> Tuple[int, int, int]:
@@ -1567,10 +1639,28 @@ class CodeArray(DataArray):
             eval_warnings.append(
                 "Expression parser returned EmptyCell for non-empty cell contents."
             )
-        if not isinstance(exp_parsed, PythonCode):
+        if not isinstance(exp_parsed, (PythonCode, SpreadSheetCode)):
             if return_warnings:
                 return exp_parsed, eval_warnings
             return exp_parsed
+        if isinstance(exp_parsed, SpreadSheetCode):
+            self.dep_graph.remove_cell(key)
+            try:
+                self.dep_graph.check_for_cycles(key)
+            except CircularRefError as err:
+                if return_warnings:
+                    return err, eval_warnings
+                return err
+
+            try:
+                result = self._eval_spreadsheet_code(key, exp_parsed)
+            except CircularRefError as err:
+                result = err
+            except Exception as err:
+                result = err
+            if return_warnings:
+                return result, eval_warnings
+            return result
         #  --- ExpParser END ---  #
 
         #  --- RefParser ---  #

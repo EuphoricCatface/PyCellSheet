@@ -367,6 +367,23 @@ class TestDataArray(object):
         data_array.exp_parser_code = "return cell.strip()"
         assert data_array.exp_parser_mode_id is None
 
+    def test_codearray_expression_parser_migration_wrappers(self):
+        code_array = CodeArray((2, 2, 1), Settings())
+        code_array[0, 0, 0] = "1 + 2"
+        code_array[0, 1, 0] = "'hello"
+
+        preview = code_array.preview_expression_parser_migration(
+            "mixed", "pure_spreadsheet"
+        )
+        assert preview.summary["safe_changed"] == 1
+
+        applied = code_array.apply_expression_parser_migration(
+            "mixed", "pure_spreadsheet"
+        )
+        assert applied.summary["safe_changed"] == 1
+        assert code_array((0, 0, 0)) == ">1 + 2"
+        assert code_array((0, 1, 0)) == "'hello"
+
     param_get_last_filled_cell = [
         ({(0, 0, 0): "2"}, 0, (0, 0)),
         ({(2, 0, 2): "2"}, 0, (0, 0)),
@@ -651,6 +668,37 @@ class TestCodeArray(object):
             assert isinstance(result, res)
         else:
             assert result == res
+
+    def test_spreadsheet_formula_requires_opt_in(self):
+        self.code_array[0, 0, 0] = "=1+2"
+        result = self.code_array[0, 0, 0]
+
+        assert isinstance(result, RuntimeError)
+        assert "disabled" in str(result).lower()
+
+    def test_spreadsheet_formula_evaluates_with_pycel_when_opted_in(self):
+        excel_formula = self.code_array._eval_spreadsheet_code.__globals__["ExcelFormula"]
+        if excel_formula is None:
+            pytest.skip("pycel is not installed in this environment")
+
+        self.code_array.set_pycel_formula_opt_in(True)
+        self.code_array[0, 0, 0] = "=1+2"
+        result = self.code_array[0, 0, 0]
+
+        assert not isinstance(result, RuntimeError)
+        assert not isinstance(result, ImportError)
+        if isinstance(result, Exception):
+            assert "compile expression" in str(result).lower()
+
+    def test_spreadsheet_formula_reports_missing_pycel(self, monkeypatch):
+        self.code_array.set_pycel_formula_opt_in(True)
+        monkeypatch.setitem(self.code_array._eval_spreadsheet_code.__globals__,
+                            "ExcelFormula", None)
+        self.code_array[0, 0, 0] = "=1+2"
+        result = self.code_array[0, 0, 0]
+
+        assert isinstance(result, ImportError)
+        assert "pycel" in str(result).lower()
 
     def test_globals_result_with_modules_survives_cache_hit(self):
         """globals() result should not crash on cached deepcopy fallback."""

@@ -507,7 +507,12 @@ class ReferenceParser:
             return rtn
 
         def global_var(self, name):
-            return self.sheet_global_var[name]
+            try:
+                return self.sheet_global_var[name]
+            except KeyError as err:
+                raise NameError(
+                    f"Sheet global '{name}' not found in sheet {self.sheet_idx}"
+                ) from err
 
         C = cell_single_ref
         R = cell_range_ref
