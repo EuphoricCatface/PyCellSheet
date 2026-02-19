@@ -408,14 +408,14 @@ class MenuComboBox(QComboBox):
 
     def __init__(self, items: dict):
         """
-
         :param items: Menu items
 
-        The dict items needs to be given in the following format:
-        {
-            "<label_1>": None,  # For leaf item
-            "<label_2>": {"<label_2.1>": None},  # For submenu
-         }
+        The dict items need to be passed in this format::
+
+            {
+                "<label_1>": None,  # leaf item
+                "<label_2>": {"<label_2.1>": None},  # submenu
+            }
 
         """
 

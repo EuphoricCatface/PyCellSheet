@@ -1989,7 +1989,15 @@ class GridTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.ToolTipRole:
             value = self.code_array[key]
             output = Formatter.tooltip_formatter(value)
-            return wrap_text(safe_str(output))
+            tooltip = safe_str(output)
+            warnings = self.code_array.get_cell_warnings(key)
+            if warnings:
+                warning_block = "\n".join(warnings)
+                if tooltip.strip():
+                    tooltip = f"{tooltip}\n\nWarnings:\n{warning_block}"
+                else:
+                    tooltip = f"Warnings:\n{warning_block}"
+            return wrap_text(tooltip)
 
         if role == Qt.ItemDataRole.DecorationRole:
             # Handle image rendering (dirty icon is painted separately in paint_)

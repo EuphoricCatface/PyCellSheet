@@ -154,10 +154,7 @@ def COUNTBLANK(r: Range):
 
 
 def COUNTIF(range_: Range, criterion_func):
-    """
-    COUNTIF(range_, lambda):
-      Counts how many items pass criterion_func.
-    """
+    """Count items in a range that satisfy ``criterion_func``."""
     vals = range_.flatten()
     return sum(1 for v in vals if criterion_func(v))
 

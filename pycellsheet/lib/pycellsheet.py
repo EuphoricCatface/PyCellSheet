@@ -25,12 +25,12 @@ import collections
 import threading
 
 try:
-    from pycellsheet.lib.exceptions import CircularRefError
+    from pycellsheet.lib.exceptions import CircularRefError, SpillRefError
 except ImportError:
     try:
-        from lib.exceptions import CircularRefError
+        from lib.exceptions import CircularRefError, SpillRefError
     except ImportError:
-        from .exceptions import CircularRefError
+        from .exceptions import CircularRefError, SpillRefError
 
 
 # Dependency tracking context manager
@@ -141,6 +141,59 @@ EmptyCell = Empty()
 
 class PythonCode(str):
     pass
+
+
+class SpreadSheetCode(str):
+    pass
+
+
+def safe_deepcopy(value, _memo=None):
+    """Best-effort deepcopy that preserves container isolation.
+
+    Falls back to by-reference values for uncopyable objects (e.g. modules)
+    while still copying container shells where possible.
+    """
+
+    if _memo is None:
+        _memo = {}
+
+    obj_id = id(value)
+    if obj_id in _memo:
+        return _memo[obj_id]
+
+    try:
+        copied = copy.deepcopy(value)
+        _memo[obj_id] = copied
+        return copied
+    except Exception:
+        pass
+
+    if isinstance(value, dict):
+        copied = {}
+        _memo[obj_id] = copied
+        for key, item in value.items():
+            copied_key = safe_deepcopy(key, _memo)
+            copied[copied_key] = safe_deepcopy(item, _memo)
+        return copied
+
+    if isinstance(value, list):
+        copied = []
+        _memo[obj_id] = copied
+        copied.extend(safe_deepcopy(item, _memo) for item in value)
+        return copied
+
+    if isinstance(value, tuple):
+        copied = tuple(safe_deepcopy(item, _memo) for item in value)
+        _memo[obj_id] = copied
+        return copied
+
+    if isinstance(value, set):
+        copied = {safe_deepcopy(item, _memo) for item in value}
+        _memo[obj_id] = copied
+        return copied
+
+    _memo[obj_id] = value
+    return value
 
 
 class HelpText:
@@ -271,19 +324,16 @@ class ExpressionParser:
             "# Inspired by the spreadsheet string marker\n"
             "if cell.startswith('\\''):\n"
             "    return cell[1:]\n"
+            "elif cell.startswith('='):\n"
+            "    return SpreadSheetCode(cell[1:])\n"
             "return PythonCode(cell)\n"
         ),
-        "Reverse Mixed": (
+        "Pure Spreadsheet": (
             "# Inspired by the python shell prompt `>>>`\n"
             "if cell.startswith('>'):\n"
             "    return PythonCode(cell[1:])\n"
-            "if cell.startswith('\\''):\n"
-            "    cell = cell[1:]\n"
-            "return cell\n"
-        ),
-        "Pure Spreadsheet": (
-            "if cell.startswith('='):\n"
-            "    return PythonCode(cell[1:])\n"
+            "elif cell.startswith('='):\n"
+            "    return SpreadSheetCode(cell[1:])\n"
             "try:\n"
             "    return int(cell)\n"
             "except ValueError:\n"
@@ -296,6 +346,24 @@ class ExpressionParser:
             "    cell = cell[1:]\n"
             "return cell\n"
         )
+    }
+    LEGACY_PARSERS = {
+        "Reverse Mixed": (
+            "# Inspired by the python shell prompt `>>>`\n"
+            "if cell.startswith('>'):\n"
+            "    return PythonCode(cell[1:])\n"
+            "if cell.startswith('\\''):\n"
+            "    cell = cell[1:]\n"
+            "return cell\n"
+        ),
+    }
+    MODE_ID_TO_LABEL = {
+        "pure_pythonic": "Pure Pythonic",
+        "mixed": "Mixed",
+        "pure_spreadsheet": "Pure Spreadsheet",
+    }
+    LEGACY_MODE_ID_TO_LABEL = {
+        "reverse_mixed_legacy": "Reverse Mixed",
     }
 
     def __init__(self):
@@ -317,6 +385,31 @@ class ExpressionParser:
         if cell is None or cell == "":
             return True
         return False
+
+    @classmethod
+    def list_modes(cls) -> list[dict[str, str]]:
+        return [
+            {"id": mode_id, "label": label, "code": cls.DEFAULT_PARSERS[label]}
+            for mode_id, label in cls.MODE_ID_TO_LABEL.items()
+        ]
+
+    @classmethod
+    def get_mode_code(cls, mode_id: str) -> str:
+        try:
+            label = cls.MODE_ID_TO_LABEL[mode_id]
+        except KeyError as err:
+            raise ValueError(f"Unknown expression parser mode id: {mode_id}") from err
+        return cls.DEFAULT_PARSERS[label]
+
+    @classmethod
+    def detect_mode_id(cls, parser_code: str) -> typing.Optional[str]:
+        for mode_id, label in cls.MODE_ID_TO_LABEL.items():
+            if cls.DEFAULT_PARSERS[label] == parser_code:
+                return mode_id
+        for mode_id, label in cls.LEGACY_MODE_ID_TO_LABEL.items():
+            if cls.LEGACY_PARSERS[label] == parser_code:
+                return mode_id
+        return None
 
 
 def flatten_args(*args: list | Range | typing.Any) -> list:
@@ -367,7 +460,7 @@ class ReferenceParser:
                 else:
                     raise ValueError(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
 
-            self.sheet_global_var = copy.deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
+            self.sheet_global_var = safe_deepcopy(self.code_array.sheet_globals_copyable[self.sheet_idx])
             self.sheet_global_var.update(self.code_array.sheet_globals_uncopyable[self.sheet_idx])
 
         def cell_single_ref(self, addr: str):
@@ -384,7 +477,7 @@ class ReferenceParser:
                 self.code_array.dep_graph.check_for_cycles(current_cell)
                 # If check_for_cycles raises CircularRefError, it will propagate
 
-            return copy.deepcopy(self.code_array[row, col, self.sheet_idx])
+            return safe_deepcopy(self.code_array[row, col, self.sheet_idx])
 
         def cell_range_ref(self, addr1: str, addr2: str) -> Range:
             coord1 = spreadsheet_ref_to_coord(addr1)
@@ -409,12 +502,17 @@ class ReferenceParser:
                         self.code_array.dep_graph.check_for_cycles(current_cell)
                         # If check_for_cycles raises CircularRefError, it will propagate
 
-                    rtn.append(copy.deepcopy(self.code_array[row, col, self.sheet_idx]))
+                    rtn.append(safe_deepcopy(self.code_array[row, col, self.sheet_idx]))
 
             return rtn
 
         def global_var(self, name):
-            return self.sheet_global_var[name]
+            try:
+                return self.sheet_global_var[name]
+            except KeyError as err:
+                raise NameError(
+                    f"Sheet global '{name}' not found in sheet {self.sheet_idx}"
+                ) from err
 
         C = cell_single_ref
         R = cell_range_ref
@@ -445,6 +543,10 @@ class ReferenceParser:
     CR = cell_ref
 
     def parser(self, code: PythonCode):
+        # Users often type a space after parser markers (e.g. `> 1 + 2`).
+        # Normalize here so AST parsing does not fail with unexpected indent.
+        code = code.lstrip()
+
         # A1:B2 -> R("A1", "B2")
         # A1 -> C("A1")
         # "0"!A1 -> Sh("0").C("A1")
@@ -688,10 +790,11 @@ class PythonEvaluator:
             for co in range(range_output.width):
                 if ro == 0 and co == 0:
                     continue
+                target_key = (r1 + ro, c1 + co, current_table)
                 if code_array((r1 + ro, c1 + co, current_table)) == f"RangeOutput.OFFSET({ro}, {co})":
                     code_array[r1 + ro, c1 + co, current_table] = ""
                 if code_array[r1 + ro, c1 + co, current_table] != EmptyCell:
-                    raise ValueError("Cannot expand RangeOutput")
+                    raise SpillRefError(current_key, target_key)
         for ro in range(range_output.height):
             for co in range(range_output.width):
                 if ro == 0 and co == 0:
@@ -717,6 +820,8 @@ class Formatter:
     def display_formatter(value):
         if isinstance(value, RangeOutput):
             value = value.lst[0] if value.lst else "EMPTY_RANGEOUTPUT"
+        if isinstance(value, SpillRefError) or type(value).__name__ == "SpillRefError":
+            return "#REF!"
 
         if isinstance(value, Exception):
             return value.__class__.__name__

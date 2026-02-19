@@ -258,13 +258,7 @@ class Selection:
     @property
     def parameters(self) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]],
                                   List[int], List[int], List[Tuple[int, int]]]:
-        """
-
-        :return: Tuple of selection parameters of self
-                 (self.block_tl, self.block_br, self.rows, self.columns,
-                  self.cells)
-
-        """
+        """Returns tuple of selection parameters."""
 
         return (self.block_tl, self.block_br, self.rows, self.columns,
                 self.cells)

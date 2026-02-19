@@ -38,8 +38,8 @@ PycsReader and PycsWriter classed are structured into the following sections:
  * :func:`wxcolor2rgb`
  * :func:`qt52qt6_fontweights`
  * :func:`qt62qt5_fontweights`
- * :dict:`wx2qt_fontweights`
- * :dict:`wx2qt_fontstyles`
+ * ``dict``: ``wx2qt_fontweights``
+ * ``dict``: ``wx2qt_fontstyles``
  * :class:`PycsReader`
  * :class:`PycsWriter`
 
