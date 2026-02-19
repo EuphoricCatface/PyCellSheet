@@ -53,7 +53,9 @@ class Settings:
 @pytest.fixture
 def code_array():
     """Create a CodeArray for testing"""
-    return CodeArray((100, 100, 3), Settings())
+    arr = CodeArray((100, 100, 3), Settings())
+    arr.set_exp_parser_mode("mixed")
+    return arr
 
 
 # --- Basic Dependency Tracking Tests ---
