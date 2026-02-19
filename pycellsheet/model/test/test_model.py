@@ -47,11 +47,13 @@ sys.path.insert(0, project_path)
 
 from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          CodeArray, CellAttribute, DefaultCellAttributeDict,
-                         INITSCRIPT_DEFAULT, _get_isolated_builtins)
+                         INITSCRIPT_DEFAULT, _get_isolated_builtins,
+                         PYCEL_FORMULA_PROMOTION_ENABLED)
 
 from lib.attrdict import AttrDict
+from lib.exceptions import SpillRefError
 from lib.selection import Selection
-from lib.pycellsheet import EmptyCell, ExpressionParser, PythonCode
+from lib.pycellsheet import EmptyCell, ExpressionParser, PythonCode, SpreadSheetCode
 sys.path.pop(0)
 
 
@@ -72,6 +74,10 @@ def test_get_isolated_builtins_returns_detached_mapping():
     builtins_map[sentinel_key] = 1
     fresh_map = _get_isolated_builtins()
     assert sentinel_key not in fresh_map
+
+
+def test_pycel_formula_promotion_policy_default_off():
+    assert PYCEL_FORMULA_PROMOTION_ENABLED is False
 
 
 class TestCellAttributes(object):
@@ -191,6 +197,7 @@ def test_execute_sheet_script_alias():
     """execute_sheet_script delegates to execute_macros."""
 
     code_array = CodeArray((2, 2, 1), Settings())
+    code_array.set_exp_parser_mode("mixed")
     code_array.sheet_scripts = ["x = 7"]
     code_array.execute_sheet_script(0)
 
@@ -353,7 +360,35 @@ class TestDataArray(object):
 
         assert data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
         assert data_array.exp_parser.parse("42") == 42
-        assert data_array.exp_parser.parse("=1+1") == PythonCode("1+1")
+        assert data_array.exp_parser.parse("=1+1") == SpreadSheetCode("1+1")
+
+    def test_exp_parser_mode_id_contract(self):
+        data_array = DataArray((2, 2, 1), Settings())
+        assert data_array.exp_parser_mode_id == "pure_spreadsheet"
+
+        data_array.set_exp_parser_mode("mixed")
+        assert data_array.exp_parser_mode_id == "mixed"
+        assert data_array.exp_parser.parse("=A1+1") == SpreadSheetCode("A1+1")
+
+        data_array.exp_parser_code = "return cell.strip()"
+        assert data_array.exp_parser_mode_id is None
+
+    def test_codearray_expression_parser_migration_wrappers(self):
+        code_array = CodeArray((2, 2, 1), Settings())
+        code_array[0, 0, 0] = "1 + 2"
+        code_array[0, 1, 0] = "'hello"
+
+        preview = code_array.preview_expression_parser_migration(
+            "mixed", "pure_spreadsheet"
+        )
+        assert preview.summary["safe_changed"] == 1
+
+        applied = code_array.apply_expression_parser_migration(
+            "mixed", "pure_spreadsheet"
+        )
+        assert applied.summary["safe_changed"] == 1
+        assert code_array((0, 0, 0)) == ">1 + 2"
+        assert code_array((0, 1, 0)) == "'hello"
 
     param_get_last_filled_cell = [
         ({(0, 0, 0): "2"}, 0, (0, 0)),
@@ -435,11 +470,12 @@ class TestDataArray(object):
         assert self.data_array.cell_attributes == cell_attributes
 
     def test_default_expression_parser_mode_contract(self):
-        """DataArray currently defaults to the Mixed parser workaround."""
+        """DataArray defaults to Pure Spreadsheet mode."""
 
-        assert self.data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Mixed"]
-        assert self.data_array.exp_parser.parse("'hello") == "hello"
-        assert self.data_array.exp_parser.parse("1 + 2") == PythonCode("1 + 2")
+        assert self.data_array.exp_parser_code == ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        assert self.data_array.exp_parser_mode_id == "pure_spreadsheet"
+        assert self.data_array.exp_parser.parse(">1 + 2") == PythonCode("1 + 2")
+        assert self.data_array.exp_parser.parse("=SUM(A1:A2)") == SpreadSheetCode("SUM(A1:A2)")
 
     param_adjust_cell_attributes = [
         (0, 5, 0, (4, 3, 0), (9, 3, 0)),
@@ -546,6 +582,7 @@ class TestCodeArray(object):
         """Creates empty DataArray"""
 
         self.code_array = CodeArray((100, 10, 3), Settings())
+        self.code_array.set_exp_parser_mode("mixed")
 
     param_test_setitem = [
         ({(2, 3, 2): "42"}, {(1, 3, 2): "42"},
@@ -581,6 +618,7 @@ class TestCodeArray(object):
 
         gridsize = 100
         filled_grid = CodeArray((gridsize, 10, 1), Settings())
+        filled_grid.set_exp_parser_mode("mixed")
         for i in [-2**99, 2**99, 0]:
             for j in range(gridsize):
                 filled_grid[j, 0, 0] = str(i)
@@ -638,6 +676,71 @@ class TestCodeArray(object):
             assert isinstance(result, res)
         else:
             assert result == res
+
+    def test_spreadsheet_formula_requires_opt_in(self):
+        self.code_array[0, 0, 0] = "=1+2"
+        result = self.code_array[0, 0, 0]
+
+        assert isinstance(result, RuntimeError)
+        assert "disabled" in str(result).lower()
+
+    def test_spreadsheet_formula_evaluates_with_pycel_when_opted_in(self):
+        excel_formula = self.code_array._eval_spreadsheet_code.__globals__["ExcelFormula"]
+        if excel_formula is None:
+            pytest.skip("pycel is not installed in this environment")
+
+        self.code_array.set_pycel_formula_opt_in(True)
+        self.code_array[0, 0, 0] = "=1+2"
+        result = self.code_array[0, 0, 0]
+
+        assert not isinstance(result, RuntimeError)
+        assert not isinstance(result, ImportError)
+        if isinstance(result, Exception):
+            assert "compile expression" in str(result).lower()
+
+    def test_spreadsheet_formula_reports_missing_pycel(self, monkeypatch):
+        self.code_array.set_pycel_formula_opt_in(True)
+        monkeypatch.setitem(self.code_array._eval_spreadsheet_code.__globals__,
+                            "ExcelFormula", None)
+        self.code_array[0, 0, 0] = "=1+2"
+        result = self.code_array[0, 0, 0]
+
+        assert isinstance(result, ImportError)
+        assert "pycel" in str(result).lower()
+
+    def test_pure_spreadsheet_python_marker_allows_space_after_token(self):
+        self.code_array.set_exp_parser_mode("pure_spreadsheet")
+        self.code_array[0, 0, 0] = "> 123"
+
+        assert self.code_array[0, 0, 0] == 123
+
+    def test_globals_result_with_modules_survives_cache_hit(self):
+        """globals() result should not crash on cached deepcopy fallback."""
+
+        self.code_array.sheet_scripts[0] = INITSCRIPT_DEFAULT
+        self.code_array.execute_sheet_script(0)
+        self.code_array[0, 0, 0] = "globals()"
+
+        first = self.code_array[0, 0, 0]
+        second = self.code_array[0, 0, 0]
+
+        assert isinstance(first, dict)
+        assert isinstance(second, dict)
+        assert "random_" in second
+
+    def test_locals_result_with_modules_survives_cache_hit(self):
+        """locals() result should not crash on cached deepcopy fallback."""
+
+        self.code_array.sheet_scripts[0] = INITSCRIPT_DEFAULT
+        self.code_array.execute_sheet_script(0)
+        self.code_array[0, 0, 0] = "locals()"
+
+        first = self.code_array[0, 0, 0]
+        second = self.code_array[0, 0, 0]
+
+        assert isinstance(first, dict)
+        assert isinstance(second, dict)
+        assert "C" in second
 
     def test_legacy_slice_replacement_helpers(self):
         """Reference helpers replace legacy slice-style references."""
@@ -725,6 +828,14 @@ class TestCodeArray(object):
         self.code_array.sheet_scripts = ["import math\nimport random as math"]
         _, errs = self.code_array.execute_sheet_script(0)
         assert "Duplicate import binding 'math'" in errs
+
+    def test_range_output_spill_conflict_returns_spill_ref_error(self):
+        self.code_array.set_exp_parser_mode("pure_spreadsheet")
+        self.code_array[0, 1, 0] = ">99"
+        self.code_array[0, 0, 0] = ">RangeOutput(2, [1, 2])"
+
+        result = self.code_array[0, 0, 0]
+        assert isinstance(result, SpillRefError)
 
     def test_execute_sheet_script_restores_streams_on_base_exception(self):
         old_stdout, old_stderr = sys.stdout, sys.stderr

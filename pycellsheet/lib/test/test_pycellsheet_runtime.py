@@ -24,6 +24,12 @@ Focused contract tests for runtime helpers in pycellsheet.py.
 """
 
 import pytest
+import random
+
+try:
+    from pycellsheet.lib.exceptions import SpillRefError
+except ImportError:
+    from ..exceptions import SpillRefError
 
 from ..pycellsheet import (
     CELL_META_GENERATOR,
@@ -32,6 +38,7 @@ from ..pycellsheet import (
     HelpText,
     Range,
     RangeOutput,
+    safe_deepcopy,
 )
 
 
@@ -70,6 +77,9 @@ def test_helptext_query_formatting():
 def test_formatter_display_and_tooltip_contracts():
     assert Formatter.display_formatter(ValueError("bad")) == "ValueError"
     assert Formatter.tooltip_formatter(ValueError("bad")) == "bad"
+    spill_err = SpillRefError((0, 0, 0), (0, 1, 0))
+    assert Formatter.display_formatter(spill_err) == "#REF!"
+    assert "Spill conflict" in Formatter.tooltip_formatter(spill_err)
 
     help_text = HelpText((str,), "string help")
     assert Formatter.display_formatter(help_text) == "help(str)"
@@ -112,3 +122,14 @@ def test_cell_meta_generator_current_and_explicit_refs():
 
     sheet2_b2 = generator.cell_meta('"Sheet2"!B2')
     assert sheet2_b2.code == "B2_sheet2"
+
+
+def test_safe_deepcopy_handles_nested_uncopyables_in_dict():
+    value = {"module": random, "nested": {"n": 1}}
+
+    copied = safe_deepcopy(value)
+
+    assert copied is not value
+    assert copied["nested"] is not value["nested"]
+    assert copied["nested"]["n"] == 1
+    assert copied["module"] is random

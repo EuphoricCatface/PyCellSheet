@@ -116,8 +116,10 @@ class TestMainWindow:
 
         key_sheet0 = (0, 0, 0)
         key_sheet1 = (0, 0, 1)
+        old_parser_code = code_array.exp_parser_code
 
         try:
+            code_array.set_exp_parser_mode("mixed")
             code_array.macros[0] = "RATE = 7"
             code_array.macros[1] = ""
             code_array.execute_sheet_script(0)
@@ -144,6 +146,7 @@ class TestMainWindow:
             code_array.sheet_globals_copyable[1] = old_copyable1
             code_array.sheet_globals_uncopyable[0] = old_uncopyable0
             code_array.sheet_globals_uncopyable[1] = old_uncopyable1
+            code_array.exp_parser_code = old_parser_code
             code_array.smart_cache.clear()
             code_array.dep_graph.dirty.clear()
 

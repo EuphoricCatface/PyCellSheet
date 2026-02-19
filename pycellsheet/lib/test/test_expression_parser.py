@@ -22,7 +22,7 @@
 
 import pytest
 
-from ..pycellsheet import ExpressionParser, PythonCode
+from ..pycellsheet import ExpressionParser, PythonCode, SpreadSheetCode
 
 
 @pytest.mark.parametrize(
@@ -44,8 +44,8 @@ def test_pure_pythonic_mode_contract(cell, expected):
     "cell, expected",
     [
         ("'hello", "hello"),
+        ("=A1+1", SpreadSheetCode("A1+1")),
         ("1 + 2", PythonCode("1 + 2")),
-        ("=A1", PythonCode("=A1")),
     ],
 )
 def test_mixed_mode_contract(cell, expected):
@@ -59,21 +59,7 @@ def test_mixed_mode_contract(cell, expected):
     "cell, expected",
     [
         (">1 + 2", PythonCode("1 + 2")),
-        ("plain text", "plain text"),
-        ("'>A1", ">A1"),
-    ],
-)
-def test_reverse_mixed_mode_contract(cell, expected):
-    parser = ExpressionParser()
-    parser.set_parser(ExpressionParser.DEFAULT_PARSERS["Reverse Mixed"])
-
-    assert parser.parse(cell) == expected
-
-
-@pytest.mark.parametrize(
-    "cell, expected",
-    [
-        ("=1 + 2", PythonCode("1 + 2")),
+        ("=SUM(A1:A2)", SpreadSheetCode("SUM(A1:A2)")),
         ("42", 42),
         ("3.5", 3.5),
         ("'42", "42"),
@@ -100,3 +86,18 @@ def test_handle_empty_contract(cell, expected):
     parser = ExpressionParser()
 
     assert parser.handle_empty(cell) is expected
+
+
+def test_mode_api_contracts():
+    modes = ExpressionParser.list_modes()
+    mode_ids = [mode["id"] for mode in modes]
+
+    assert mode_ids == ["pure_pythonic", "mixed", "pure_spreadsheet"]
+    assert ExpressionParser.get_mode_code("mixed") == ExpressionParser.DEFAULT_PARSERS["Mixed"]
+    assert ExpressionParser.detect_mode_id(
+        ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+    ) == "pure_spreadsheet"
+    assert ExpressionParser.detect_mode_id("return cell.strip()") is None
+    assert ExpressionParser.detect_mode_id(
+        ExpressionParser.LEGACY_PARSERS["Reverse Mixed"]
+    ) == "reverse_mixed_legacy"
