@@ -158,6 +158,8 @@ except ImportError:
 #     from lib import spreadsheet
 """
 
+PYCEL_FORMULA_PROMOTION_ENABLED = False
+
 
 class_format_functions = {}
 
@@ -521,7 +523,7 @@ class DataArray:
         self.sheet_scripts_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
         self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
-        self.pycel_formula_opt_in = False
+        self.pycel_formula_opt_in = bool(PYCEL_FORMULA_PROMOTION_ENABLED)
 
         self.exp_parser = ExpressionParser()
         self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]

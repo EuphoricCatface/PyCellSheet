@@ -47,7 +47,8 @@ sys.path.insert(0, project_path)
 
 from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          CodeArray, CellAttribute, DefaultCellAttributeDict,
-                         INITSCRIPT_DEFAULT, _get_isolated_builtins)
+                         INITSCRIPT_DEFAULT, _get_isolated_builtins,
+                         PYCEL_FORMULA_PROMOTION_ENABLED)
 
 from lib.attrdict import AttrDict
 from lib.exceptions import SpillRefError
@@ -73,6 +74,10 @@ def test_get_isolated_builtins_returns_detached_mapping():
     builtins_map[sentinel_key] = 1
     fresh_map = _get_isolated_builtins()
     assert sentinel_key not in fresh_map
+
+
+def test_pycel_formula_promotion_policy_default_off():
+    assert PYCEL_FORMULA_PROMOTION_ENABLED is False
 
 
 class TestCellAttributes(object):
