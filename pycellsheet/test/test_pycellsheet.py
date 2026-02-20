@@ -268,23 +268,6 @@ class TestMainWindow:
             code_array.exp_parser_code = old_code
             main_window.update_action_toggles()
 
-    def test_toggle_pycel_formula_mode_updates_code_array(self):
-        """pycel toggle compatibility path should keep mode always enabled."""
-
-        code_array = main_window.grid.model.code_array
-
-        try:
-            main_window.on_toggle_pycel_formula_mode(True)
-            assert code_array.pycel_formula_opt_in is True
-            assert "always enabled" in main_window.statusBar().currentMessage()
-
-            main_window.on_toggle_pycel_formula_mode(False)
-            assert code_array.pycel_formula_opt_in is True
-            assert "always enabled" in main_window.statusBar().currentMessage()
-        finally:
-            code_array.set_pycel_formula_opt_in(True)
-            main_window.update_action_toggles()
-
     def test_entryline_parser_indicator_shows_parser_mode(self):
         """Entry line parser badge should reflect current parser mode."""
 

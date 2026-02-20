@@ -1323,7 +1323,6 @@ class ExpressionParserMigrationDialog(QDialog):
         self._last_preview = None
 
         self._mode_labels = dict(ExpressionParser.MODE_ID_TO_LABEL)
-        self._mode_labels.update(ExpressionParser.LEGACY_MODE_ID_TO_LABEL)
         self._known_modes = list(self._mode_labels.items())
 
         self._build_ui()
@@ -1338,7 +1337,7 @@ class ExpressionParserMigrationDialog(QDialog):
         else:
             current_label = ExpressionParser.MODE_ID_TO_LABEL.get(
                 self.current_mode_id,
-                ExpressionParser.LEGACY_MODE_ID_TO_LABEL.get(self.current_mode_id, self.current_mode_id),
+                self.current_mode_id,
             )
             current_parser_text = (
                 f"Current workspace parser: {current_label} ({self.current_mode_id})"

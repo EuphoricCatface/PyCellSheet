@@ -398,8 +398,6 @@ class Workflows:
             )
             if initscript_choice is not None:
                 self.main_window.settings.initscript_preset_choice = initscript_choice
-            if initscript_choice == "custom" and initscript_template is not None:
-                self.main_window.settings.initscript_preset_custom = initscript_template
         return created
 
     def count_file_lines(self, filepath: Path):

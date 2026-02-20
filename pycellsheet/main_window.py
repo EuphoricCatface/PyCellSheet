@@ -672,15 +672,6 @@ class MainWindow(QMainWindow):
             5000,
         )
 
-    def on_toggle_pycel_formula_mode(self, toggled: bool):
-        """Compatibility no-op: pycel formula mode is always enabled."""
-
-        self.grid.model.code_array.set_pycel_formula_opt_in(True)
-        self.update_action_toggles()
-        self.statusBar().showMessage(
-            "pycel formula mode is always enabled.", 2500
-        )
-
     def _refresh_grid(self):
         """Emit dataChanged for the full grid"""
 
