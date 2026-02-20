@@ -39,11 +39,6 @@ import pytest
 from PyQt6.QtCore import Qt, QItemSelectionModel
 from PyQt6.QtWidgets import QApplication
 
-try:
-    from pycellsheet.dialogs import GridShapeDialog
-except ImportError:
-    from dialogs import GridShapeDialog
-
 
 PYSPREADPATH = abspath(join(dirname(__file__) + "/.."))
 LIBPATH = abspath(PYSPREADPATH + "/lib")
@@ -64,7 +59,7 @@ with insert_path(PYSPREADPATH):
 app = QApplication.instance()
 if app is None:
     app = QApplication([])
-main_window = MainWindow()
+main_window = MainWindow(prompt_parser_dialog_on_startup=False)
 
 
 class TestWorkflows:
@@ -108,6 +103,7 @@ class TestWorkflows:
     def test_update_main_window_title(self, path, title):
         """Unit test for update_main_window_title"""
 
+        main_window.set_document_state(True)
         main_window.settings.last_file_input_path = path
         self.workflows.update_main_window_title()
         assert main_window.windowTitle() == title
@@ -133,7 +129,44 @@ class TestWorkflows:
 
         monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
                             fake_apply_all_sheet_scripts)
-        monkeypatch.setattr(GridShapeDialog, "shape", shape)
+        monkeypatch.setattr(
+            main_window,
+            "on_open_expression_parser_settings_dialog",
+            lambda **_kwargs: True,
+        )
+
+        class _NewDocumentDialog:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def exec(self):
+                return True
+
+            @property
+            def shape(self):
+                return shape
+
+            @property
+            def parser_mode_id(self):
+                return "pure_spreadsheet"
+
+            @property
+            def parser_code(self):
+                return None
+
+            @property
+            def initscript_choice(self):
+                return "verbose"
+
+            @property
+            def initscript_template(self):
+                return INITSCRIPT_DEFAULT
+
+        monkeypatch.setitem(
+            self.workflows.file_new.__globals__,
+            "NewDocumentDialog",
+            _NewDocumentDialog,
+        )
         self.workflows.file_new()
 
         assert main_window.grid.model.shape == res
@@ -150,8 +183,16 @@ class TestWorkflows:
         if msg:
             assert main_window.statusBar().currentMessage() == msg
 
-        monkeypatch.setattr(GridShapeDialog, "shape",
-                            main_window.settings.shape)
+        class _FollowupNewDocumentDialog(_NewDocumentDialog):
+            @property
+            def shape(self):
+                return main_window.settings.shape
+
+        monkeypatch.setitem(
+            self.workflows.file_new.__globals__,
+            "NewDocumentDialog",
+            _FollowupNewDocumentDialog,
+        )
         self.workflows.file_new()
 
     def test_apply_all_sheet_scripts_executes_each_table(self, monkeypatch):
@@ -294,7 +335,43 @@ class TestWorkflows:
             )
             monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
                                 fake_apply_all_sheet_scripts)
-            monkeypatch.setattr(GridShapeDialog, "shape", (5, 5, 1))
+            monkeypatch.setattr(
+                main_window,
+                "on_open_expression_parser_settings_dialog",
+                lambda **_kwargs: True,
+            )
+            class _NewDocumentDialog:
+                def __init__(self, *_args, **_kwargs):
+                    pass
+
+                def exec(self):
+                    return True
+
+                @property
+                def shape(self):
+                    return (5, 5, 1)
+
+                @property
+                def parser_mode_id(self):
+                    return "pure_spreadsheet"
+
+                @property
+                def parser_code(self):
+                    return None
+
+                @property
+                def initscript_choice(self):
+                    return "verbose"
+
+                @property
+                def initscript_template(self):
+                    return INITSCRIPT_DEFAULT
+
+            monkeypatch.setitem(
+                self.workflows.file_new.__globals__,
+                "NewDocumentDialog",
+                _NewDocumentDialog,
+            )
 
             self.workflows.file_new()
 

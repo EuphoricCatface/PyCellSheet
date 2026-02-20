@@ -75,7 +75,7 @@ def _is_empty_cell(value) -> bool:
 app = QApplication.instance()
 if app is None:
     app = QApplication([])
-main_window = MainWindow()
+main_window = MainWindow(prompt_parser_dialog_on_startup=False)
 zoom_levels = main_window.settings.zoom_levels
 
 
