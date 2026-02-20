@@ -66,7 +66,6 @@ try:
     from pycellsheet.dialogs import (ApproveWarningDialog, PreferencesDialog,
                                      ManualDialog, TutorialDialog,
                                      PrintAreaDialog, PrintPreviewDialog,
-                                     StartupGreeterDialog,
                                      ExpressionParserSelectionDialog,
                                      ExpressionParserMigrationDialog)
     from pycellsheet.installer import DependenciesDialog
@@ -88,7 +87,6 @@ except ImportError:
     from widgets import Widgets
     from dialogs import (ApproveWarningDialog, PreferencesDialog, ManualDialog,
                          TutorialDialog, PrintAreaDialog, PrintPreviewDialog,
-                         StartupGreeterDialog,
                          ExpressionParserSelectionDialog,
                          ExpressionParserMigrationDialog)
     from installer import DependenciesDialog
@@ -124,7 +122,6 @@ class MainWindow(QMainWindow):
         self._loading = True  # For initial loading of PyCellSheet
         self.prevent_updates = False  # Prevents setData updates in grid
         self.has_document = False
-        self.startup_greeter_dialog = None
 
         self.settings = Settings(self, reset_settings=default_settings)
         self.workflows = Workflows(self)
@@ -646,47 +643,6 @@ class MainWindow(QMainWindow):
         mode_id = dialog.selection
         self.on_set_expression_parser_mode(mode_id, True)
         return True
-
-    def on_startup_greeter(self):
-        """Show startup greeter and route to Open/New/Close actions."""
-
-        if self.startup_greeter_dialog is not None:
-            self.startup_greeter_dialog.raise_()
-            self.startup_greeter_dialog.activateWindow()
-            return
-
-        code_array = self.grid.model.code_array
-        greeter = StartupGreeterDialog(
-            self,
-            settings=self.settings,
-            current_parser_code=code_array.exp_parser_code,
-        )
-        greeter.setModal(False)
-        greeter.finished.connect(lambda _result: self._on_startup_greeter_closed(greeter))
-        self.startup_greeter_dialog = greeter
-        greeter.show()
-
-    def _on_startup_greeter_closed(self, greeter):
-        """Handle startup greeter result for non-blocking mode."""
-
-        self.startup_greeter_dialog = None
-
-        if greeter.action == "open":
-            self.workflows.file_open(close_if_canceled=False)
-        elif greeter.action == "new":
-            parser_mode_id = greeter.parser_mode_id \
-                if greeter.parser_mode_id != "custom" else None
-            parser_code = greeter.parser_code \
-                if greeter.parser_mode_id == "custom" else None
-            self.workflows.file_new(
-                prompt_parser_settings=False,
-                parser_mode_id=parser_mode_id,
-                parser_code=parser_code,
-                initscript_template=greeter.initscript_template,
-            )
-
-        self.update_action_toggles()
-        self.workflows.update_main_window_title()
 
     def on_open_expression_parser_migration_dialog(self):
         """Open parser migration dialog and apply selected migration."""

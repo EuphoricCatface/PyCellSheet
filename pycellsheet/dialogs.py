@@ -47,7 +47,6 @@
  * :class:`TutorialDialog`
  * :class:`ManualDialog`
  * :class:`PrintPreviewDialog`
- * :class:`StartupGreeterDialog`
  * :class:`ExpressionParserSelectionDialog`
  * :class:`ExpressionParserMigrationDialog`
 """
@@ -615,243 +614,33 @@ class PreferencesDialog(DataEntryDialog):
             return data_dict
 
 
-class StartupGreeterDialog(QDialog):
-    """Startup greeter for parser and initscript selections."""
+def simple_initscript_template() -> str:
+    """Return a compact official initscript preset without comments."""
 
-    @staticmethod
-    def simple_initscript_template() -> str:
-        lines = []
-        for line in INITSCRIPT_DEFAULT.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("#"):
-                continue
-            lines.append(line)
-        return "\n".join(lines).strip() + "\n"
+    lines = []
+    for line in INITSCRIPT_DEFAULT.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip() + "\n"
 
-    def __init__(self, parent: QWidget, settings, current_parser_code: str):
-        super().__init__(parent)
 
-        self.settings = settings
-        self.current_parser_code = current_parser_code
-        self.action = "close"
+def resolve_initscript_template(choice: str, settings) -> str:
+    """Resolve initscript preset choice to concrete script text."""
 
-        self.setWindowTitle("Welcome to PyCellSheet")
-        self.setMinimumSize(860, 620)
-        self._build_ui()
-        self._load_defaults()
-
-    def _build_ui(self):
-        self.tabs = QTabWidget(self)
-        self._build_parser_tab()
-        self._build_initscript_tab()
-
-        self.open_button = QPushButton("Open")
-        self.new_button = QPushButton("New")
-        self.close_button = QPushButton("Close")
-        self.open_button.clicked.connect(lambda: self._done("open"))
-        self.new_button.clicked.connect(lambda: self._done("new"))
-        self.close_button.clicked.connect(lambda: self._done("close"))
-
-        button_row = QHBoxLayout()
-        button_row.addStretch(1)
-        button_row.addWidget(self.open_button)
-        button_row.addWidget(self.new_button)
-        button_row.addWidget(self.close_button)
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.tabs)
-        layout.addLayout(button_row)
-        self.setLayout(layout)
-
-    def _build_parser_tab(self):
-        parser_tab = QWidget(self)
-        layout = QVBoxLayout(parser_tab)
-
-        self.parser_mode_combo = QComboBox()
-        for mode in ExpressionParser.list_modes():
-            self.parser_mode_combo.addItem(
-                f"{mode['label']} ({mode['id']})",
-                ("official", mode["id"], mode["code"]),
-            )
-        self.parser_mode_combo.addItem("Custom (manual code)", ("custom", None, None))
-
-        self.custom_preset_combo = QComboBox()
-        self.save_preset_button = QPushButton("Save as custom preset")
-        self.delete_preset_button = QPushButton("Delete preset")
-        self.save_preset_button.clicked.connect(self._save_custom_preset)
-        self.delete_preset_button.clicked.connect(self._delete_custom_preset)
-        self.custom_preset_combo.currentIndexChanged.connect(
-            self._on_custom_preset_selected
-        )
-
-        self.parser_code_editor = QPlainTextEdit()
-        self.parser_code_editor.setPlaceholderText(
-            "Parser code (function body). Official modes are read-only."
-        )
-
-        self.example_plaintext = QPlainTextEdit()
-        self.example_plaintext.setPlaceholderText("Plaintext examples")
-        self.example_python = QPlainTextEdit()
-        self.example_python.setPlaceholderText("Python code examples")
-        self.example_formula = QPlainTextEdit()
-        self.example_formula.setPlaceholderText("Spreadsheet formula examples")
-
-        form = QFormLayout()
-        form.addRow("Parser mode:", self.parser_mode_combo)
-        form.addRow("Custom presets:", self.custom_preset_combo)
-        row = QHBoxLayout()
-        row.addWidget(self.save_preset_button)
-        row.addWidget(self.delete_preset_button)
-        form.addRow("", row)
-        form.addRow("Parser code:", self.parser_code_editor)
-
-        examples = QHBoxLayout()
-        examples.addWidget(self.example_plaintext)
-        examples.addWidget(self.example_python)
-        examples.addWidget(self.example_formula)
-
-        layout.addLayout(form)
-        layout.addWidget(QLabel("Try sample content snippets:"))
-        layout.addLayout(examples)
-        self.tabs.addTab(parser_tab, "Parser")
-
-        self.parser_mode_combo.currentIndexChanged.connect(self._on_parser_mode_changed)
-
-    def _build_initscript_tab(self):
-        tab = QWidget(self)
-        layout = QVBoxLayout(tab)
-
-        self.initscript_preset_combo = QComboBox()
-        self.initscript_preset_combo.addItem("Verbose", "verbose")
-        self.initscript_preset_combo.addItem("Simple", "simple")
-        self.initscript_preset_combo.addItem("Custom", "custom")
-        self.initscript_preset_combo.currentIndexChanged.connect(
-            self._on_initscript_preset_changed
-        )
-
-        self.initscript_editor = QPlainTextEdit()
-        self.initscript_editor.setPlaceholderText("Sheet Script preset text")
-
-        form = QFormLayout()
-        form.addRow("Preset:", self.initscript_preset_combo)
-        form.addRow("Template:", self.initscript_editor)
-
-        layout.addLayout(form)
-        self.tabs.addTab(tab, "Sheet Script Preset")
-
-    def _load_defaults(self):
-        self._reload_custom_presets()
-
-        preferred_mode = self.settings.startup_parser_mode_id
-        idx = -1
-        for i in range(self.parser_mode_combo.count()):
-            kind, mode_id, _code = self.parser_mode_combo.itemData(i)
-            if kind == "official" and mode_id == preferred_mode:
-                idx = i
-                break
-        if idx == -1:
-            idx = 0
-        self.parser_mode_combo.setCurrentIndex(idx)
-        self._on_parser_mode_changed()
-
-        self.example_plaintext.setPlainText("hello\n42\nTOTAL")
-        self.example_python.setPlainText(">1 + 2\n>'x' * 2")
-        self.example_formula.setPlainText("=SUM(A1:A3)\n=A1*10")
-
-        preset_choice = self.settings.initscript_preset_choice
-        preset_idx = self.initscript_preset_combo.findData(preset_choice)
-        self.initscript_preset_combo.setCurrentIndex(max(0, preset_idx))
-        self._on_initscript_preset_changed()
-
-    def _reload_custom_presets(self):
-        self.custom_preset_combo.clear()
-        presets = self.settings.parser_custom_presets or []
-        for preset in presets:
-            if not isinstance(preset, dict):
-                continue
-            name = preset.get("name", "Unnamed")
-            code = preset.get("code", "")
-            self.custom_preset_combo.addItem(name, code)
-
-    def _on_parser_mode_changed(self):
-        kind, _mode_id, mode_code = self.parser_mode_combo.currentData()
-        if kind == "official":
-            self.parser_code_editor.setPlainText(mode_code)
-            self.parser_code_editor.setReadOnly(True)
-        else:
-            self.parser_code_editor.setReadOnly(False)
-
-    def _on_custom_preset_selected(self):
-        if self.parser_mode_combo.currentData()[0] != "custom":
-            return
-        code = self.custom_preset_combo.currentData()
-        if code:
-            self.parser_code_editor.setPlainText(code)
-
-    def _save_custom_preset(self):
-        name, ok = QInputDialog.getText(self, "Preset name", "Name:")
-        if not ok or not name.strip():
-            return
-        presets = list(self.settings.parser_custom_presets or [])
-        presets.append({"name": name.strip(), "code": self.parser_code_editor.toPlainText()})
-        self.settings.parser_custom_presets = presets
-        self._reload_custom_presets()
-
-    def _delete_custom_preset(self):
-        idx = self.custom_preset_combo.currentIndex()
-        if idx < 0:
-            return
-        target_name = self.custom_preset_combo.currentText()
-        presets = [p for p in (self.settings.parser_custom_presets or [])
-                   if not (isinstance(p, dict) and p.get("name") == target_name)]
-        self.settings.parser_custom_presets = presets
-        self._reload_custom_presets()
-
-    def _on_initscript_preset_changed(self):
-        choice = self.initscript_preset_combo.currentData()
-        if choice == "verbose":
-            self.initscript_editor.setPlainText(INITSCRIPT_DEFAULT)
-            self.initscript_editor.setReadOnly(True)
-        elif choice == "simple":
-            self.initscript_editor.setPlainText(self.simple_initscript_template())
-            self.initscript_editor.setReadOnly(True)
-        else:
-            self.initscript_editor.setReadOnly(False)
-            text = self.settings.initscript_preset_custom or ""
-            if text and self.initscript_editor.toPlainText() != text:
-                self.initscript_editor.setPlainText(text)
-
-    @property
-    def parser_code(self) -> str:
-        return self.parser_code_editor.toPlainText()
-
-    @property
-    def parser_mode_id(self) -> str:
-        kind, mode_id, _code = self.parser_mode_combo.currentData()
-        return mode_id if kind == "official" else "custom"
-
-    @property
-    def initscript_choice(self) -> str:
-        return self.initscript_preset_combo.currentData()
-
-    @property
-    def initscript_template(self) -> str:
-        return self.initscript_editor.toPlainText()
-
-    def _done(self, action: str):
-        self.settings.startup_parser_mode_id = (
-            self.parser_mode_id if self.parser_mode_id != "custom" else "pure_spreadsheet"
-        )
-        self.settings.initscript_preset_choice = self.initscript_choice
-        if self.initscript_choice == "custom":
-            self.settings.initscript_preset_custom = self.initscript_template
-        self.action = action
-        if action == "close":
-            self.reject()
-        else:
-            self.accept()
+    if choice == "verbose":
+        return INITSCRIPT_DEFAULT
+    if choice == "simple":
+        return simple_initscript_template()
+    if str(choice).startswith("preset:"):
+        target = str(choice).split(":", 1)[1]
+        for preset in (settings.initscript_custom_presets or []):
+            if isinstance(preset, dict) and preset.get("name") == target:
+                return preset.get("code", "")
+    return INITSCRIPT_DEFAULT
 
 
 class ExpParserAdvancedDialog(QDialog):
@@ -1220,16 +1009,9 @@ class SheetScriptPresetAdvancedDialog(QDialog):
 
     def _on_preset_changed(self):
         choice = self.preset_combo.currentData()
-        if choice == "verbose":
-            self.editor.setPlainText(INITSCRIPT_DEFAULT)
-        elif choice == "simple":
-            self.editor.setPlainText(StartupGreeterDialog.simple_initscript_template())
-        elif str(choice).startswith("preset:"):
-            target = str(choice).split(":", 1)[1]
-            for preset in (self.settings.initscript_custom_presets or []):
-                if isinstance(preset, dict) and preset.get("name") == target:
-                    self.editor.setPlainText(preset.get("code", ""))
-                    break
+        self.editor.setPlainText(
+            resolve_initscript_template(choice, self.settings)
+        )
         self._update_buttons()
 
     def _save_preset(self):
@@ -1270,17 +1052,9 @@ class SheetScriptPresetAdvancedDialog(QDialog):
         self._update_buttons()
 
     def _current_template_code(self) -> str:
-        choice = self.preset_combo.currentData()
-        if choice == "verbose":
-            return INITSCRIPT_DEFAULT
-        if choice == "simple":
-            return StartupGreeterDialog.simple_initscript_template()
-        if str(choice).startswith("preset:"):
-            target = str(choice).split(":", 1)[1]
-            for preset in (self.settings.initscript_custom_presets or []):
-                if isinstance(preset, dict) and preset.get("name") == target:
-                    return preset.get("code", "")
-        return ""
+        return resolve_initscript_template(
+            self.preset_combo.currentData(), self.settings
+        )
 
     def _update_buttons(self):
         baseline = self._current_template_code()
@@ -1421,17 +1195,9 @@ class NewDocumentDialog(QDialog):
         self.initscript_preset_combo.blockSignals(False)
 
     def _refresh_initscript_template(self):
-        choice = self._initscript_choice
-        if choice == "verbose":
-            self._initscript_template = INITSCRIPT_DEFAULT
-        elif choice == "simple":
-            self._initscript_template = StartupGreeterDialog.simple_initscript_template()
-        elif str(choice).startswith("preset:"):
-            target = str(choice).split(":", 1)[1]
-            for preset in (self.settings.initscript_custom_presets or []):
-                if isinstance(preset, dict) and preset.get("name") == target:
-                    self._initscript_template = preset.get("code", "")
-                    break
+        self._initscript_template = resolve_initscript_template(
+            self._initscript_choice, self.settings
+        )
 
     def _on_parser_mode_changed(self):
         kind, mode_or_name, code = self.parser_mode_combo.currentData()

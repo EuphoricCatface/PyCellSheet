@@ -33,7 +33,6 @@ from ..dialogs import (
     ApproveWarningDialog,
     DataEntryDialog,
     DiscardChangesDialog,
-    StartupGreeterDialog,
     ExpressionParserSelectionDialog,
     ExpressionParserMigrationDialog,
     SheetScriptDraftDialog,
@@ -184,17 +183,3 @@ def test_expression_parser_migration_dialog_requires_different_modes():
     assert "must be different" in dialog.summary.toPlainText().lower()
     assert not dialog.apply_button.isEnabled()
 
-
-def test_startup_greeter_dialog_new_action_sets_payload():
-    class _Settings:
-        parser_custom_presets = []
-        startup_parser_mode_id = "mixed"
-        initscript_preset_choice = "simple"
-        initscript_preset_custom = ""
-
-    dialog = StartupGreeterDialog(None, _Settings(), current_parser_code="return cell")
-    dialog._done("new")
-
-    assert dialog.action == "new"
-    assert dialog.parser_code
-    assert dialog.initscript_template
