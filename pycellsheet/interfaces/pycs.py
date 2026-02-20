@@ -134,7 +134,7 @@ class PycsReader:
         # take place after the cell attribute readout
         self.cell_attributes_postfixes = []
 
-        # [macros] section persists sheet scripts in legacy key naming.
+        # Legacy [macros] section stores per-sheet script blocks.
         self.current_sheet_script = -1
         self.current_sheet_script_remaining = 0
         self._macro_header_re = re.compile(r"^\(macro:(.+)\)\s+([0-9]+)$")
@@ -401,7 +401,7 @@ class PycsReader:
             pass
 
     def _pycs2sheet_scripts(self, line: str):
-        """Updates sheet scripts in code_array from legacy [macros] section.
+        """Updates sheet scripts in code_array from legacy save section.
 
         :param line: Pycs file line to be parsed
 
@@ -418,7 +418,7 @@ class PycsReader:
         header_line = line.rstrip("\r\n")
         header_match = self._macro_header_re.fullmatch(header_line)
         if header_match is None:
-            raise ValueError("The save file does not follow the macro name conventions")
+            raise ValueError("The save file does not follow sheet script header conventions")
         raw_sheet_identifier, line_count_str = header_match.groups()
 
         try:
@@ -430,7 +430,7 @@ class PycsReader:
         try:
             new_sheet_number = int(parsed_identifier)
             if self.current_sheet_script + 1 != new_sheet_number:
-                raise ValueError("The save file does not follow the macro name conventions")
+                raise ValueError("The save file does not follow sheet script header conventions")
         except ValueError:
             # Sheet identifier is a name, not a number - look it up
             sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
@@ -444,11 +444,6 @@ class PycsReader:
         self.current_sheet_script = new_sheet_number
 
         self.current_sheet_script_remaining = int(line_count_str)
-
-    def _pycs2macros(self, line: str):
-        """Compatibility alias for legacy reader method naming."""
-
-        self._pycs2sheet_scripts(line)
 
 class PycsWriter(object):
     """Interface between code_array and pycs file data
@@ -643,8 +638,3 @@ class PycsWriter(object):
                 ""  # To append a linebreak at the end
             ]
             yield str.join("\n", macro_list)
-
-    def _macros2pycs(self) -> Iterable[str]:
-        """Compatibility alias for legacy writer method naming."""
-
-        yield from self._sheet_scripts2pycs()

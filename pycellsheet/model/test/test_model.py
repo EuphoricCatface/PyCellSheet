@@ -184,7 +184,7 @@ class TestCellAttributes(object):
 
 
 def test_sheet_script_alias_property():
-    """sheet_scripts aliases macros."""
+    """sheet_scripts remain aligned by table resize."""
 
     code_array = CodeArray((2, 2, 2), Settings())
     code_array.sheet_scripts = ["a = 1", "b = 2"]
@@ -205,7 +205,7 @@ def test_execute_sheet_script_alias():
 
 
 def test_sheet_scripts_alias_tracks_shape_resize():
-    """sheet_scripts should stay aligned with macros when table count changes."""
+    """sheet_scripts should stay aligned when table count changes."""
 
     code_array = CodeArray((2, 2, 2), Settings())
     code_array.sheet_scripts = ["a = 1", "b = 2"]
