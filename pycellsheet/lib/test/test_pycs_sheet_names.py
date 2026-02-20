@@ -177,10 +177,10 @@ def test_pycs2sheet_scripts_parses_named_and_numeric_headers():
     code_array.dict_grid.sheet_names = ["Alpha", "Beta"]
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2sheet_scripts("(macro:'Alpha') 2\n")
+    reader._pycs2sheet_scripts("(sheet_script:'Alpha') 2\n")
     reader._pycs2sheet_scripts("a = 1\n")
     reader._pycs2sheet_scripts("b = 2\n")
-    reader._pycs2sheet_scripts("(macro:1) 1\n")
+    reader._pycs2sheet_scripts("(sheet_script:1) 1\n")
     reader._pycs2sheet_scripts("x = 3\n")
 
     assert code_array.sheet_scripts[0] == "a = 1\nb = 2"
@@ -192,7 +192,7 @@ def test_pycs2sheet_scripts_unknown_sheet_name_falls_back_sequential_index():
     code_array.dict_grid.sheet_names = ["Alpha", "Beta"]
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2sheet_scripts("(macro:'Unknown') 1\n")
+    reader._pycs2sheet_scripts("(sheet_script:'Unknown') 1\n")
     reader._pycs2sheet_scripts("u = 1\n")
 
     assert code_array.sheet_scripts[0] == "u = 1"
@@ -215,9 +215,9 @@ def test_writer_macros_section_uses_normalized_sheet_names():
 
     sheet_scripts_lines = list(writer._sheet_scripts2pycs())
 
-    assert sheet_scripts_lines[0].startswith("(macro:'Main') 1\n")
-    assert sheet_scripts_lines[1].startswith("(macro:'Sheet 1') 1\n")
-    assert sheet_scripts_lines[2].startswith("(macro:'Main_1') 1\n")
+    assert sheet_scripts_lines[0].startswith("(sheet_script:'Main') 1\n")
+    assert sheet_scripts_lines[1].startswith("(sheet_script:'Sheet 1') 1\n")
+    assert sheet_scripts_lines[2].startswith("(sheet_script:'Main_1') 1\n")
 
 
 def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
@@ -315,7 +315,7 @@ def test_pycs2sheet_scripts_nonsequential_numeric_header_falls_back_to_sequentia
     code_array = _DummyCodeArray(2)
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2sheet_scripts("(macro:2) 1\n")
+    reader._pycs2sheet_scripts("(sheet_script:2) 1\n")
     reader._pycs2sheet_scripts("x = 1\n")
 
     assert code_array.sheet_scripts[0] == "x = 1"

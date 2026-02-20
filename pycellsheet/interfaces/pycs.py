@@ -123,7 +123,7 @@ class PycsReader:
             "[PyCellSheet save file version]\n": self._pycs_version,
             "[shape]\n": self._pycs2shape,
             "[sheet_names]\n": self._pycs2sheet_names,
-            "[macros]\n": self._pycs2sheet_scripts,
+            "[sheet_scripts]\n": self._pycs2sheet_scripts,
             "[grid]\n": self._pycs2code,
             "[attributes]\n": self._pycs2attributes,
             "[row_heights]\n": self._pycs2row_heights,
@@ -134,10 +134,10 @@ class PycsReader:
         # take place after the cell attribute readout
         self.cell_attributes_postfixes = []
 
-        # Legacy [macros] section stores per-sheet script blocks.
+        # [sheet_scripts] section stores per-sheet script blocks.
         self.current_sheet_script = -1
         self.current_sheet_script_remaining = 0
-        self._macro_header_re = re.compile(r"^\(macro:(.+)\)\s+([0-9]+)$")
+        self._sheet_script_header_re = re.compile(r"^\(sheet_script:(.+)\)\s+([0-9]+)$")
 
     def __iter__(self):
         """Iterates over self.pycs_file, replacing everything in code_array"""
@@ -416,7 +416,7 @@ class PycsReader:
             return
 
         header_line = line.rstrip("\r\n")
-        header_match = self._macro_header_re.fullmatch(header_line)
+        header_match = self._sheet_script_header_re.fullmatch(header_line)
         if header_match is None:
             raise ValueError("The save file does not follow sheet script header conventions")
         raw_sheet_identifier, line_count_str = header_match.groups()
@@ -466,7 +466,7 @@ class PycsWriter(object):
             ("[PyCellSheet save file version]\n", self._version2pycs),
             ("[shape]\n", self._shape2pycs),
             ("[sheet_names]\n", self._sheet_names2pycs),
-            ("[macros]\n", self._sheet_scripts2pycs),
+            ("[sheet_scripts]\n", self._sheet_scripts2pycs),
             ("[grid]\n", self._code2pycs),
             ("[attributes]\n", self._attributes2pycs),
             ("[row_heights]\n", self._row_heights2pycs),
@@ -504,7 +504,7 @@ class PycsWriter(object):
         lines += len(self.code_array.dict_grid.row_heights)
         lines += len(self.code_array.dict_grid.col_widths)
         sheet_scripts = self.code_array.dict_grid.sheet_scripts
-        lines += sheet_scripts.count('\n')
+        lines += sum(sheet_script.count('\n') + 1 for sheet_script in sheet_scripts)
 
         return lines
 
@@ -633,7 +633,7 @@ class PycsWriter(object):
             sheet_identifier = sheet_names[i] if i < len(sheet_names) else str(i)
             sheet_script_count = sheet_script.count('\n') + 1
             macro_list = [
-                f"(macro:{sheet_identifier!r}) {sheet_script_count}",
+                f"(sheet_script:{sheet_identifier!r}) {sheet_script_count}",
                 sheet_script,
                 ""  # To append a linebreak at the end
             ]
