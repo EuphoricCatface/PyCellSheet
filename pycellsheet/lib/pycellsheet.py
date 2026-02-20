@@ -741,10 +741,8 @@ class PythonEvaluator:
                 if ro == 0 and co == 0:
                     continue
                 target_key = (r1 + ro, c1 + co, current_table)
-                marker_payload = f"RangeOutput.OFFSET({ro}, {co})"
-                marker_obj = PythonCode(marker_payload)
-                # Backward compatibility: clean legacy string markers too.
-                if code_array(target_key) in (marker_obj, marker_payload, f">{marker_payload}"):
+                marker_obj = PythonCode(f"RangeOutput.OFFSET({ro}, {co})")
+                if code_array(target_key) == marker_obj:
                     code_array[target_key] = ""
 
     @staticmethod
