@@ -98,6 +98,3 @@ def test_mode_api_contracts():
         ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
     ) == "pure_spreadsheet"
     assert ExpressionParser.detect_mode_id("return cell.strip()") is None
-    assert ExpressionParser.detect_mode_id(
-        ExpressionParser.LEGACY_PARSERS["Reverse Mixed"]
-    ) == "reverse_mixed_legacy"

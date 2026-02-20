@@ -1153,8 +1153,8 @@ class TestGridTableModel:
         assert not self.model.code_array.row_heights
         assert not self.model.code_array.col_widths
         tables = self.model.shape[2]
-        assert self.model.code_array.macros == [INITSCRIPT_DEFAULT for _ in range(tables)]
-        assert self.model.code_array.macros_draft == [None for _ in range(tables)]
+        assert self.model.code_array.sheet_scripts == [INITSCRIPT_DEFAULT for _ in range(tables)]
+        assert self.model.code_array.sheet_scripts_draft == [None for _ in range(tables)]
         assert self.model.code_array.sheet_globals_copyable == [dict() for _ in range(tables)]
         assert self.model.code_array.sheet_globals_uncopyable == [dict() for _ in range(tables)]
 

@@ -35,7 +35,7 @@ sys.path.pop(0)
 class _DummyDictGrid:
     def __init__(self):
         self.sheet_names = []
-        self.macros = []
+        self.sheet_scripts = []
         self.row_heights = {}
         self.col_widths = {}
         self._grid = {}
@@ -55,7 +55,7 @@ class _DummyCodeArray:
         self.shape = (1, 1, tables)
         self.dict_grid = _DummyDictGrid()
         self.macros = ["" for _ in range(tables)]
-        self.dict_grid.macros = self.macros
+        self.dict_grid.sheet_scripts = self.macros
         self.row_heights = {}
         self.col_widths = {}
         self.cell_attributes = []
@@ -67,6 +67,7 @@ class _DummyCodeArray:
     @sheet_scripts.setter
     def sheet_scripts(self, value):
         self.macros = value
+        self.dict_grid.sheet_scripts = value
 
 
 class _DummyWriterCodeArray:
@@ -74,7 +75,7 @@ class _DummyWriterCodeArray:
         self.shape = (1, 1, len(macros))
         self.dict_grid = _DummyDictGrid()
         self.dict_grid.sheet_names = sheet_names
-        self.dict_grid.macros = macros
+        self.dict_grid.sheet_scripts = macros
         self.cell_attributes = []
         self.dict_grid.row_heights = {}
         self.dict_grid.col_widths = {}

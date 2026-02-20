@@ -59,14 +59,6 @@ def test_preview_pure_spreadsheet_to_mixed_skips_ambiguous_literals():
     assert report.entries[0].classification == RISKY_SKIPPED
 
 
-def test_preview_legacy_reverse_mixed_quotes_numeric_literal():
-    code_array = _DummyCodeArray({(0, 0, 0): "42"})
-    report = preview_migration(code_array, "reverse_mixed_legacy", "pure_spreadsheet")
-
-    assert report.entries[0].classification == SAFE_CHANGED
-    assert report.entries[0].new_text == "'42"
-
-
 def test_apply_migration_updates_only_safe_changes():
     code_array = _DummyCodeArray({
         (0, 0, 0): "1 + 2",

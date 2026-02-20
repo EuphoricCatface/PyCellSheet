@@ -481,18 +481,6 @@ class DictGrid(KeyValueStore):
 
         return
 
-    @property
-    def macros(self) -> list[str]:
-        """Compatibility alias for legacy save/load naming."""
-
-        return self.sheet_scripts
-
-    @macros.setter
-    def macros(self, macros: list[str]):
-        """Compatibility alias setter for legacy save/load naming."""
-
-        self.sheet_scripts = macros
-
 # End of class DictGrid
 
 # -----------------------------------------------------------------------------
@@ -564,9 +552,6 @@ class DataArray:
         :type row_heights: defaultdict[Tuple[int, int], float]
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
-        :param macros: Legacy sheet script key for compatibility
-        :type macros: list[str]
-
         """
 
         data = {}
@@ -576,7 +561,6 @@ class DataArray:
         data["attributes"] = list(self.cell_attributes)
         data["row_heights"] = self.row_heights
         data["col_widths"] = self.col_widths
-        data["macros"] = self.sheet_scripts
         data["sheet_scripts"] = self.sheet_scripts
         data["exp_parser_code"] = self.exp_parser_code
 
@@ -601,9 +585,6 @@ class DataArray:
         :type row_heights: defaultdict[Tuple[int, int], float]
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
-        :param macros: Legacy sheet script key for compatibility
-        :type macros: list[str]
-
         """
 
         if "shape" in kwargs:
@@ -624,8 +605,6 @@ class DataArray:
 
         if "sheet_scripts" in kwargs:
             self.sheet_scripts = kwargs["sheet_scripts"]
-        elif "macros" in kwargs:
-            self.sheet_scripts = kwargs["macros"]
 
         if "exp_parser_code" in kwargs:
             self.exp_parser_code = kwargs["exp_parser_code"]
@@ -681,32 +660,8 @@ class DataArray:
         self.dict_grid.sheet_scripts = sheet_scripts
 
     @property
-    def macros(self) -> list[str]:
-        """Legacy alias of `sheet_scripts` for compatibility."""
-
-        return self.sheet_scripts
-
-    @macros.setter
-    def macros(self, macros: list[str]):
-        """Legacy alias setter of `sheet_scripts` for compatibility."""
-
-        self.sheet_scripts = macros
-
-    @property
-    def macros_draft(self) -> list[typing.Optional[str]]:
-        """Legacy alias of `sheet_scripts_draft` for compatibility."""
-
-        return self.sheet_scripts_draft
-
-    @macros_draft.setter
-    def macros_draft(self, macros_draft: list[typing.Optional[str]]):
-        """Legacy alias setter of `sheet_scripts_draft` for compatibility."""
-
-        self.sheet_scripts_draft = macros_draft
-
-    @property
     def exp_parser_code(self) -> str:
-        """macros interface to dict_grid"""
+        """Expression parser code interface to dict_grid"""
 
         return self.dict_grid.exp_parser_code
 

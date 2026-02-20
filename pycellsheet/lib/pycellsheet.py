@@ -347,23 +347,10 @@ class ExpressionParser:
             "return cell\n"
         )
     }
-    LEGACY_PARSERS = {
-        "Reverse Mixed": (
-            "# Inspired by the python shell prompt `>>>`\n"
-            "if cell.startswith('>'):\n"
-            "    return PythonCode(cell[1:])\n"
-            "if cell.startswith('\\''):\n"
-            "    cell = cell[1:]\n"
-            "return cell\n"
-        ),
-    }
     MODE_ID_TO_LABEL = {
         "pure_pythonic": "Pure Pythonic",
         "mixed": "Mixed",
         "pure_spreadsheet": "Pure Spreadsheet",
-    }
-    LEGACY_MODE_ID_TO_LABEL = {
-        "reverse_mixed_legacy": "Reverse Mixed",
     }
 
     def __init__(self):
@@ -405,9 +392,6 @@ class ExpressionParser:
     def detect_mode_id(cls, parser_code: str) -> typing.Optional[str]:
         for mode_id, label in cls.MODE_ID_TO_LABEL.items():
             if cls.DEFAULT_PARSERS[label] == parser_code:
-                return mode_id
-        for mode_id, label in cls.LEGACY_MODE_ID_TO_LABEL.items():
-            if cls.LEGACY_PARSERS[label] == parser_code:
                 return mode_id
         return None
 

@@ -508,9 +508,7 @@ class PycsWriter(object):
         lines += len(self.code_array.cell_attributes)
         lines += len(self.code_array.dict_grid.row_heights)
         lines += len(self.code_array.dict_grid.col_widths)
-        sheet_scripts = getattr(self.code_array.dict_grid, "sheet_scripts", None)
-        if sheet_scripts is None:
-            sheet_scripts = self.code_array.dict_grid.macros
+        sheet_scripts = self.code_array.dict_grid.sheet_scripts
         lines += sheet_scripts.count('\n')
 
         return lines
@@ -633,9 +631,7 @@ class PycsWriter(object):
 
         """
 
-        sheet_scripts = getattr(self.code_array.dict_grid, "sheet_scripts", None)
-        if sheet_scripts is None:
-            sheet_scripts = self.code_array.dict_grid.macros
+        sheet_scripts = self.code_array.dict_grid.sheet_scripts
         sheet_names = self._normalized_sheet_names()
         for i, sheet_script in enumerate(sheet_scripts):
             # Use sheet name if available, otherwise fall back to index

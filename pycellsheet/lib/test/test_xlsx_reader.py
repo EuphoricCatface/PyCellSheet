@@ -42,7 +42,7 @@ class _DummyCodeArray:
 
     def __init__(self):
         self.shape = (1, 1, 1)
-        self.macros = ""
+        self.sheet_scripts = [""]
         self.row_heights = {}
         self.col_widths = {}
         self.dict_grid = {}
@@ -56,7 +56,7 @@ def _workbook_to_stream(wb) -> BytesIO:
     return stream
 
 
-def test_xlsx_reader_sets_shape_codes_and_macros():
+def test_xlsx_reader_sets_shape_codes_and_sheet_scripts():
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Main"
@@ -78,7 +78,7 @@ def test_xlsx_reader_sets_shape_codes_and_macros():
     keys = list(reader)
 
     assert code_array.shape == (3, 4, 2)
-    assert "_sheetnames = ['Main', 'Second']" in code_array.macros
+    assert "_sheetnames = ['Main', 'Second']" in code_array.sheet_scripts[0]
     assert code_array.dict_grid[(0, 0, 0)] == "42"
     assert code_array.dict_grid[(0, 1, 0)] == "'text'"
     assert code_array.dict_grid[(0, 2, 0)] == "True"
