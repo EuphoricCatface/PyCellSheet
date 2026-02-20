@@ -305,7 +305,7 @@ class TestWorkflows:
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
         old_shape = code_array.shape
-        old_drafts = list(code_array.macros_draft)
+        old_drafts = list(code_array.sheet_scripts_draft)
         old_safe_mode = main_window.safe_mode
         old_changed = main_window.settings.changed_since_save
 
@@ -323,8 +323,8 @@ class TestWorkflows:
             main_window.safe_mode = False
             main_window.settings.changed_since_save = False
             code_array.shape = (old_shape[0], old_shape[1], 1)
-            code_array.macros_draft = [None]
-            code_array.macros_draft[0] = "x = 1"
+            code_array.sheet_scripts_draft = [None]
+            code_array.sheet_scripts_draft[0] = "x = 1"
             panel.current_table = 0
             panel.update_()
 
@@ -377,10 +377,10 @@ class TestWorkflows:
 
             assert called["count"] == 0
             assert code_array.shape == (old_shape[0], old_shape[1], 1)
-            assert code_array.macros_draft[0] == "x = 1"
+            assert code_array.sheet_scripts_draft[0] == "x = 1"
         finally:
             code_array.shape = old_shape
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts_draft = old_drafts
             main_window.safe_mode = old_safe_mode
             main_window.settings.changed_since_save = old_changed
             panel.current_table = 0
@@ -392,8 +392,8 @@ class TestWorkflows:
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
         old_shape = code_array.shape
-        old_macros = list(code_array.macros)
-        old_drafts = list(code_array.macros_draft)
+        old_macros = list(code_array.sheet_scripts)
+        old_drafts = list(code_array.sheet_scripts_draft)
         old_safe_mode = main_window.safe_mode
         old_changed = main_window.settings.changed_since_save
 
@@ -411,8 +411,8 @@ class TestWorkflows:
             main_window.safe_mode = False
             main_window.settings.changed_since_save = False
             code_array.shape = (old_shape[0], old_shape[1], 1)
-            code_array.macros = [""]
-            code_array.macros_draft = ["x = 11"]
+            code_array.sheet_scripts = [""]
+            code_array.sheet_scripts_draft = ["x = 11"]
             panel.current_table = 0
             panel.update_()
 
@@ -426,13 +426,13 @@ class TestWorkflows:
 
             assert self.workflows._resolve_unapplied_sheet_script_drafts()
             assert called["count"] == 1
-            assert code_array.macros[0] == "x = 11"
-            assert code_array.macros_draft[0] is None
+            assert code_array.sheet_scripts[0] == "x = 11"
+            assert code_array.sheet_scripts_draft[0] is None
             assert main_window.settings.changed_since_save is True
         finally:
             code_array.shape = old_shape
-            code_array.macros = old_macros
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts = old_macros
+            code_array.sheet_scripts_draft = old_drafts
             main_window.safe_mode = old_safe_mode
             main_window.settings.changed_since_save = old_changed
             panel.current_table = 0
@@ -447,7 +447,7 @@ class TestWorkflows:
 
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
-        old_drafts = list(code_array.macros_draft)
+        old_drafts = list(code_array.sheet_scripts_draft)
         old_changed = main_window.settings.changed_since_save
         called = {"save": 0}
 
@@ -456,7 +456,7 @@ class TestWorkflows:
             return True
 
         try:
-            code_array.macros_draft[0] = "x = 3"
+            code_array.sheet_scripts_draft[0] = "x = 3"
             panel.current_table = 0
             panel.update_()
             main_window.settings.changed_since_save = False
@@ -471,7 +471,7 @@ class TestWorkflows:
             assert self.workflows.file_save() is False
             assert called["save"] == 0
         finally:
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts_draft = old_drafts
             main_window.settings.changed_since_save = old_changed
             panel.current_table = 0
             panel.update_()
@@ -481,8 +481,8 @@ class TestWorkflows:
 
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
-        old_drafts = list(code_array.macros_draft)
-        old_macros = list(code_array.macros)
+        old_drafts = list(code_array.sheet_scripts_draft)
+        old_macros = list(code_array.sheet_scripts)
 
         class _FailIfCalledDialog:
             def __init__(self, _parent):
@@ -495,7 +495,7 @@ class TestWorkflows:
             return 0, 0
 
         try:
-            code_array.macros = ["" for _ in range(code_array.shape[2])]
+            code_array.sheet_scripts = ["" for _ in range(code_array.shape[2])]
             panel.current_table = 0
             panel.update_()
 
@@ -510,8 +510,8 @@ class TestWorkflows:
             assert self.workflows._resolve_unapplied_sheet_script_drafts()
             assert called["count"] == 0
         finally:
-            code_array.macros = old_macros
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts = old_macros
+            code_array.sheet_scripts_draft = old_drafts
             panel.current_table = 0
             panel.update_()
 
@@ -525,8 +525,8 @@ class TestWorkflows:
             "1\t1\t1\n"
             "[sheet_names]\n"
             "Sheet 0\n"
-            "[macros]\n"
-            "(macro:'Sheet 0') 1\n"
+            "[sheet_scripts]\n"
+            "(sheet_script:'Sheet 0') 1\n"
             "VALUE = 7\n"
             "[grid]\n"
             "0\t0\t0\t'abc'\n"
@@ -972,8 +972,8 @@ class TestWorkflows:
             "1\t1\t1\n"
             "[sheet_names]\n"
             "Sheet 0\n"
-            "[macros]\n"
-            "(macro:'Sheet 0') 1\n"
+            "[sheet_scripts]\n"
+            "(sheet_script:'Sheet 0') 1\n"
             "VALUE = 7\n"
             "[grid]\n"
             "0\t0\t0\t'abc'\n"

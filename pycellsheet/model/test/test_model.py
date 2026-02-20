@@ -184,12 +184,12 @@ class TestCellAttributes(object):
 
 
 def test_sheet_script_alias_property():
-    """sheet_scripts aliases macros."""
+    """sheet_scripts remain aligned by table resize."""
 
     code_array = CodeArray((2, 2, 2), Settings())
     code_array.sheet_scripts = ["a = 1", "b = 2"]
 
-    assert code_array.macros == ["a = 1", "b = 2"]
+    assert code_array.sheet_scripts == ["a = 1", "b = 2"]
     assert code_array.sheet_scripts == ["a = 1", "b = 2"]
 
 
@@ -205,18 +205,18 @@ def test_execute_sheet_script_alias():
 
 
 def test_sheet_scripts_alias_tracks_shape_resize():
-    """sheet_scripts should stay aligned with macros when table count changes."""
+    """sheet_scripts should stay aligned when table count changes."""
 
     code_array = CodeArray((2, 2, 2), Settings())
     code_array.sheet_scripts = ["a = 1", "b = 2"]
 
     code_array.shape = (2, 2, 3)
     assert len(code_array.sheet_scripts) == 3
-    assert len(code_array.macros) == 3
+    assert len(code_array.sheet_scripts) == 3
 
     code_array.shape = (2, 2, 1)
     assert code_array.sheet_scripts == ["a = 1"]
-    assert code_array.macros == ["a = 1"]
+    assert code_array.sheet_scripts == ["a = 1"]
 
 
 class TestKeyValueStore(object):
@@ -335,7 +335,7 @@ class TestDataArray(object):
         assert data_array.sheet_scripts_draft == [None]
         assert data_array.dict_grid.sheet_names == ["Main"]
 
-    def test_data_setter_prefers_sheet_scripts_and_falls_back_to_macros(self):
+    def test_data_setter_uses_sheet_scripts(self):
         data_array = DataArray((2, 2, 1), Settings())
         DataArray.data.fset(
             data_array,
@@ -344,15 +344,20 @@ class TestDataArray(object):
             row_heights={(0, 0): 10.0},
             col_widths={(0, 0): 12.0},
             sheet_scripts=["script=1"],
-            macros=["legacy=1"],
+            exp_parser_code="return PythonCode(cell)",
         )
         assert data_array.shape == (1, 1, 1)
         assert data_array.sheet_scripts == ["script=1"]
         assert data_array.row_heights[(0, 0)] == 10.0
         assert data_array.col_widths[(0, 0)] == 12.0
+        assert data_array.exp_parser_code == "return PythonCode(cell)"
 
-        DataArray.data.fset(data_array, macros=["legacy_only=1"])
+        DataArray.data.fset(data_array, sheet_scripts=["legacy_only=1"])
         assert data_array.sheet_scripts == ["legacy_only=1"]
+
+        snapshot = data_array.data
+        assert snapshot["grid"] == {(0, 0, 0): "x"}
+        assert snapshot["exp_parser_code"] == "return PythonCode(cell)"
 
     def test_exp_parser_code_setter_updates_parser_behavior(self):
         data_array = DataArray((2, 2, 1), Settings())
@@ -788,11 +793,11 @@ class TestCodeArray(object):
         assert self.code_array.smart_cache.get_raw(key) == 2
         assert self.code_array.dep_graph.is_dirty(dependent)
 
-    def test_execute_macros(self):
-        """Unit test for execute_macros"""
+    def test_execute_sheet_script(self):
+        """Unit test for execute_sheet_script"""
 
-        self.code_array.macros = ["a = 5\ndef f(x): return x ** 2"]
-        self.code_array.execute_macros(0)
+        self.code_array.sheet_scripts = ["a = 5\ndef f(x): return x ** 2"]
+        self.code_array.execute_sheet_script(0)
         assert self.code_array._eval_cell((0, 0, 0), "a") == 5
         assert self.code_array._eval_cell((0, 0, 0), "f(2)") == 4
 

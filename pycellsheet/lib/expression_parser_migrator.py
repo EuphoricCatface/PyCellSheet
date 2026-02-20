@@ -33,7 +33,6 @@ KNOWN_MODE_IDS = {
     "pure_pythonic",
     "mixed",
     "pure_spreadsheet",
-    "reverse_mixed_legacy",
 }
 
 
@@ -142,25 +141,6 @@ def _migrate_cell(cell: str, source_mode_id: str, target_mode_id: str,
         if cell.startswith("="):
             return cell, RISKY_SKIPPED, "Leading '=' has spreadsheet-code meaning in target mode."
         return f">{cell}", SAFE_CHANGED, "Moved Python code behind pure-spreadsheet marker."
-
-    # Legacy Reverse Mixed -> Pure Spreadsheet
-    if source_mode_id == "reverse_mixed_legacy" and target_mode_id == "pure_spreadsheet":
-        if cell.startswith(">") or cell.startswith("'"):
-            return cell, UNCHANGED, "Legacy marker form remains compatible."
-        if _looks_number_literal(cell):
-            return f"'{cell}", SAFE_CHANGED, "Quoted numeric-looking literal to preserve legacy text semantics."
-        return cell, UNCHANGED, "Plain literal remains compatible."
-
-    # Legacy Reverse Mixed -> Mixed
-    if source_mode_id == "reverse_mixed_legacy" and target_mode_id == "mixed":
-        if cell.startswith(">"):
-            payload = cell[1:]
-            if payload.startswith("'"):
-                return cell, RISKY_SKIPPED, "Removing '>' would trigger mixed string marker."
-            return payload, SAFE_CHANGED, "Converted legacy Python marker to mixed Python form."
-        if cell.startswith("'"):
-            return cell, UNCHANGED, "Literal marker remains compatible."
-        return f"'{cell}", SAFE_CHANGED, "Added mixed literal marker for plain legacy text."
 
     if include_risky:
         return cell, SAFE_CHANGED, "Risky migration forced by include_risky=True."

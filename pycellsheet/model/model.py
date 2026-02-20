@@ -481,18 +481,6 @@ class DictGrid(KeyValueStore):
 
         return
 
-    @property
-    def macros(self) -> list[str]:
-        """Compatibility alias for legacy save/load naming."""
-
-        return self.sheet_scripts
-
-    @macros.setter
-    def macros(self, macros: list[str]):
-        """Compatibility alias setter for legacy save/load naming."""
-
-        self.sheet_scripts = macros
-
 # End of class DictGrid
 
 # -----------------------------------------------------------------------------
@@ -523,6 +511,7 @@ class DataArray:
         self.sheet_scripts_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
         self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
+        self.range_output_sizes: dict[Tuple[int, int, int], Tuple[int, int]] = {}
         self.pycel_formula_opt_in = bool(PYCEL_FORMULA_PROMOTION_ENABLED)
 
         self.exp_parser = ExpressionParser()
@@ -567,19 +556,15 @@ class DataArray:
         :type row_heights: defaultdict[Tuple[int, int], float]
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
-        :param macros: Legacy sheet script key for compatibility
-        :type macros: list[str]
-
         """
 
         data = {}
 
         data["shape"] = self.shape
-        data["grid"] = {}.update(self.dict_grid)
-        data["attributes"] = self.cell_attributes[:]
+        data["grid"] = dict(self.dict_grid)
+        data["attributes"] = list(self.cell_attributes)
         data["row_heights"] = self.row_heights
         data["col_widths"] = self.col_widths
-        data["macros"] = self.sheet_scripts
         data["sheet_scripts"] = self.sheet_scripts
         data["exp_parser_code"] = self.exp_parser_code
         data["pycel_formula_opt_in"] = self.pycel_formula_opt_in
@@ -605,9 +590,6 @@ class DataArray:
         :type row_heights: defaultdict[Tuple[int, int], float]
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
-        :param macros: Legacy sheet script key for compatibility
-        :type macros: list[str]
-
         """
 
         if "shape" in kwargs:
@@ -628,8 +610,6 @@ class DataArray:
 
         if "sheet_scripts" in kwargs:
             self.sheet_scripts = kwargs["sheet_scripts"]
-        elif "macros" in kwargs:
-            self.sheet_scripts = kwargs["macros"]
 
         if "exp_parser_code" in kwargs:
             self.exp_parser_code = kwargs["exp_parser_code"]
@@ -687,32 +667,8 @@ class DataArray:
         self.dict_grid.sheet_scripts = sheet_scripts
 
     @property
-    def macros(self) -> list[str]:
-        """Legacy alias of `sheet_scripts` for compatibility."""
-
-        return self.sheet_scripts
-
-    @macros.setter
-    def macros(self, macros: list[str]):
-        """Legacy alias setter of `sheet_scripts` for compatibility."""
-
-        self.sheet_scripts = macros
-
-    @property
-    def macros_draft(self) -> list[typing.Optional[str]]:
-        """Legacy alias of `sheet_scripts_draft` for compatibility."""
-
-        return self.sheet_scripts_draft
-
-    @macros_draft.setter
-    def macros_draft(self, macros_draft: list[typing.Optional[str]]):
-        """Legacy alias setter of `sheet_scripts_draft` for compatibility."""
-
-        self.sheet_scripts_draft = macros_draft
-
-    @property
     def exp_parser_code(self) -> str:
-        """macros interface to dict_grid"""
+        """Expression parser code interface to dict_grid"""
 
         return self.dict_grid.exp_parser_code
 
@@ -921,7 +877,7 @@ class DataArray:
         if value:
             merging_cell = self.cell_attributes.get_merging_cell(key)
             if ((merging_cell is None or merging_cell == key)
-                    and isinstance(value, str)):
+                    and isinstance(value, (str, PythonCode, SpreadSheetCode))):
                 self.dict_grid[key] = value
             return
 
@@ -1654,11 +1610,14 @@ class CodeArray(DataArray):
             return cell_contents
 
         #  --- ExpParser START ---  #
-        if self.exp_parser.handle_empty(cell_contents):
-            if return_warnings:
-                return EmptyCell, eval_warnings
-            return EmptyCell
-        exp_parsed = self.exp_parser.parse(cell_contents)
+        if isinstance(cell_contents, (PythonCode, SpreadSheetCode)):
+            exp_parsed = cell_contents
+        else:
+            if self.exp_parser.handle_empty(cell_contents):
+                if return_warnings:
+                    return EmptyCell, eval_warnings
+                return EmptyCell
+            exp_parsed = self.exp_parser.parse(cell_contents)
         if exp_parsed is EmptyCell and cell_contents.strip():
             eval_warnings.append(
                 "Expression parser returned EmptyCell for non-empty cell contents."
@@ -1735,6 +1694,10 @@ class CodeArray(DataArray):
                     PythonEvaluator.range_output_handler(self, result, key)
                 if isinstance(result, RangeOutput.OFFSET):
                     result = PythonEvaluator.range_offset_handler(self, result, key)
+                if not isinstance(result, RangeOutput):
+                    old_spill_size = self.range_output_sizes.pop(key, None)
+                    if old_spill_size:
+                        PythonEvaluator.range_output_cleanup(self, key, old_spill_size)
 
         except CircularRefError as err:
             # Circular reference detected during evaluation
@@ -1774,6 +1737,9 @@ class CodeArray(DataArray):
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
         self._clear_cell_warnings(key)
+        old_spill_size = self.range_output_sizes.pop(key, None)
+        if old_spill_size:
+            PythonEvaluator.range_output_cleanup(self, key, old_spill_size)
 
         return super().pop(key)
 
@@ -1987,11 +1953,6 @@ class CodeArray(DataArray):
                     )
                 self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
-
-    def execute_macros(self, current_table) -> Tuple[str, str]:
-        """Compatibility alias for execute_sheet_script()."""
-
-        return self.execute_sheet_script(current_table)
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
                      startkey: Tuple[int, int, int],
