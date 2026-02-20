@@ -1933,11 +1933,6 @@ class CodeArray(DataArray):
                 self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
 
-    def execute_macros(self, current_table) -> Tuple[str, str]:
-        """Compatibility alias for execute_sheet_script()."""
-
-        return self.execute_sheet_script(current_table)
-
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
                      startkey: Tuple[int, int, int],
                      reverse: bool = False) -> Iterable[Tuple[int, int, int]]:

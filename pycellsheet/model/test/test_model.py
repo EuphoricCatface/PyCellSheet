@@ -796,11 +796,11 @@ class TestCodeArray(object):
         assert self.code_array.smart_cache.get_raw(key) == 2
         assert self.code_array.dep_graph.is_dirty(dependent)
 
-    def test_execute_macros(self):
-        """Unit test for execute_macros"""
+    def test_execute_sheet_script(self):
+        """Unit test for execute_sheet_script"""
 
         self.code_array.sheet_scripts = ["a = 5\ndef f(x): return x ** 2"]
-        self.code_array.execute_macros(0)
+        self.code_array.execute_sheet_script(0)
         assert self.code_array._eval_cell((0, 0, 0), "a") == 5
         assert self.code_array._eval_cell((0, 0, 0), "f(2)") == 4
 
