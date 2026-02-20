@@ -67,7 +67,7 @@ try:
     from pycellsheet import commands
     from pycellsheet.dialogs \
         import (DiscardChangesDialog, SheetScriptDraftDialog,
-                FileOpenDialog, GridShapeDialog,
+                FileOpenDialog, GridShapeDialog, NewDocumentDialog,
                 FileSaveDialog, ImageFileOpenDialog, ChartDialog,
                 CellKeyDialog, FindDialog, ReplaceDialog, CsvFileImportDialog,
                 CsvImportDialog, CsvExportDialog, CsvExportAreaDialog,
@@ -88,7 +88,7 @@ except ImportError:
     import commands
     from dialogs \
         import (DiscardChangesDialog, SheetScriptDraftDialog,
-                FileOpenDialog, GridShapeDialog,
+                FileOpenDialog, GridShapeDialog, NewDocumentDialog,
                 FileSaveDialog, ImageFileOpenDialog, ChartDialog,
                 CellKeyDialog, FindDialog, ReplaceDialog, CsvFileImportDialog,
                 CsvImportDialog, CsvExportDialog, CsvExportAreaDialog,
@@ -155,24 +155,27 @@ class Workflows:
         def function_wrapper(self, *args, **kwargs):
             """Check changes and display and handle the dialog"""
 
-            if not self._resolve_unapplied_sheet_script_drafts():
-                return
-
-            if self.main_window.settings.changed_since_save:
-                choice = DiscardChangesDialog(self.main_window).choice
-                if choice is None:
+            if self.main_window.has_document:
+                if not self._resolve_unapplied_sheet_script_drafts():
                     return
-                if not choice:
-                    # We try to save to a file
-                    if self.file_save() is False:
-                        # File could not be saved --> Abort
+
+                if self.main_window.settings.changed_since_save:
+                    choice = DiscardChangesDialog(self.main_window).choice
+                    if choice is None:
                         return
+                    if not choice:
+                        # We try to save to a file
+                        if self.file_save() is False:
+                            # File could not be saved --> Abort
+                            return
             try:
-                func(self, *args, **kwargs)
+                result = func(self, *args, **kwargs)
             except TypeError:
-                func(self)  # No args accepted
-            self.reset_changed_since_save()
+                result = func(self)  # No args accepted
+            if self.main_window.has_document:
+                self.reset_changed_since_save()
             self.update_main_window_title()
+            return result
 
         return function_wrapper
 
@@ -225,6 +228,10 @@ class Workflows:
     def update_main_window_title(self):
         """Change the main window title to reflect the current file name"""
 
+        if not self.main_window.has_document:
+            self.main_window.setWindowTitle(APP_NAME)
+            return
+
         # Get the current filepath
         filepath = self.main_window.settings.last_file_input_path
         if filepath == Path.home():
@@ -261,24 +268,78 @@ class Workflows:
 
         return total_tables, tables_with_errors
 
+    def finalize_fresh_workbook(
+            self, prompt_parser_settings: bool = False,
+            exit_on_parser_cancel: bool = False) -> bool:
+        """Finalize a fresh workbook and apply Sheet Scripts.
+
+        Returns False when parser settings dialog is canceled.
+        """
+
+        self.main_window.sheet_script_panel.apply_all_drafts_to_scripts()
+        self.main_window.sheet_script_panel.update_()
+        self.main_window.safe_mode = False
+
+        if prompt_parser_settings:
+            accepted = self.main_window.on_open_expression_parser_settings_dialog(
+                exit_on_cancel=exit_on_parser_cancel
+            )
+            if not accepted:
+                self.main_window.update_action_toggles()
+                return False
+
+        tables_executed, tables_with_errors = self.apply_all_sheet_scripts()
+        self.main_window.grid.model.code_array.mark_parser_settings_applied()
+        self.main_window.set_document_state(True)
+        self.main_window.update_action_toggles()
+        if tables_executed and tables_with_errors:
+            self.main_window.statusBar().showMessage(
+                f"Applied {tables_executed} sheet scripts ({tables_with_errors} with errors).",
+                5000
+            )
+        return True
+
     @handle_changed_since_save
-    def file_new(self):
+    def file_new(
+            self, prompt_parser_settings: bool = False,
+            parser_mode_id: str = None, parser_code: str = None,
+            initscript_template: str = None, shape: Tuple[int, int, int] = None):
         """File new workflow"""
 
-        # Get grid shape from user
-        old_shape = self.main_window.grid.model.code_array.shape
-        shape = GridShapeDialog(self.main_window, old_shape).shape
+        # Interactive entrypoint: gather new-document options from dialog.
+        if shape is None:
+            old_shape = self.main_window.grid.model.code_array.shape
+            dialog = NewDocumentDialog(
+                self.main_window,
+                self.main_window.settings,
+                old_shape,
+            )
+            if not dialog.exec():
+                return False
+
+            shape = dialog.shape
+            parser_mode_id = dialog.parser_mode_id
+            parser_code = dialog.parser_code
+            initscript_choice = dialog.initscript_choice
+            initscript_template = dialog.initscript_template
+
+            if parser_mode_id == "custom":
+                parser_mode_id = None
+            elif parser_mode_id:
+                parser_code = None
+        else:
+            initscript_choice = None
 
         # Check if shape is valid
 
         if shape is None:
-            return
+            return False
 
         try:
             check_shape_validity(shape, self.main_window.settings.maxshape)
         except ValueError as err:
             self.main_window.statusBar().showMessage('Error: ' + str(err))
-            return
+            return False
 
         # Set current cell to upper left corner
         for grid in self.main_window.grids:
@@ -315,18 +376,31 @@ class Workflows:
         # Change the main window filepath state
         self.main_window.settings.changed_since_save = False
 
-        # Update macro editor
-        self.main_window.sheet_script_panel.update_()
+        code_array = self.main_window.grid.model.code_array
+        if parser_mode_id:
+            code_array.set_exp_parser_mode(parser_mode_id)
+        elif parser_code is not None:
+            code_array.exp_parser_code = parser_code
+        if initscript_template is not None:
+            for table in range(code_array.shape[2]):
+                code_array.sheet_scripts_draft[table] = initscript_template
 
-        # Exit safe mode
-        self.main_window.safe_mode = False
-
-        tables_executed, tables_with_errors = self.apply_all_sheet_scripts()
-        if tables_executed and tables_with_errors:
-            self.main_window.statusBar().showMessage(
-                f"Applied {tables_executed} sheet scripts ({tables_with_errors} with errors).",
-                5000
+        created = self.finalize_fresh_workbook(
+            prompt_parser_settings=prompt_parser_settings
+        )
+        if created:
+            self.main_window.settings.startup_parser_mode_id = (
+                parser_mode_id
+                if parser_mode_id in (
+                    "pure_pythonic", "mixed", "pure_spreadsheet"
+                )
+                else "pure_spreadsheet"
             )
+            if initscript_choice is not None:
+                self.main_window.settings.initscript_preset_choice = initscript_choice
+            if initscript_choice == "custom" and initscript_template is not None:
+                self.main_window.settings.initscript_preset_custom = initscript_template
+        return created
 
     def count_file_lines(self, filepath: Path):
         """Returns line count of file in filepath
@@ -464,6 +538,8 @@ class Workflows:
 
         # Change the main window filepath state
         self.main_window.settings.changed_since_save = False
+        code_array.mark_parser_settings_applied()
+        self.main_window.set_document_state(True)
 
         # Update macro editor
         self.main_window.sheet_script_panel.update_()
@@ -477,6 +553,7 @@ class Workflows:
                     f"Applied {tables_executed} sheet scripts ({tables_with_errors} with errors).",
                     5000
                 )
+        self.main_window.update_action_toggles()
 
         # Add to file history
         self.main_window.settings.add_to_file_history(filepath.as_posix())
@@ -487,16 +564,16 @@ class Workflows:
         return filepath
 
     @handle_changed_since_save
-    def file_open(self):
+    def file_open(self, close_if_canceled: bool = False):
         """File open workflow"""
 
         # Get filepath from user
         dial = FileOpenDialog(self.main_window)
         if not dial.file_path:
-            return  # Cancel pressed
+            return False  # Cancel pressed
         filepath = Path(dial.file_path).with_suffix(dial.suffix)
 
-        self.filepath_open(filepath)
+        return self.filepath_open(filepath)
 
     @handle_changed_since_save
     def file_open_recent(self, filepath: Path):
@@ -615,6 +692,7 @@ class Workflows:
         self.main_window.menuBar().file_menu.history_submenu.update_()
 
         self.sign_file(filepath)
+        code_array.mark_parser_settings_applied()
 
     def file_save(self):
         """File save workflow"""
@@ -1151,12 +1229,27 @@ class Workflows:
 
                     grid.itemDelegate().paint(painter, option, idx)
 
-    @handle_changed_since_save
     def file_quit(self):
         """Program exit workflow"""
 
+        if self.file_close() is False:
+            return False
         self.main_window.settings.save()
         QApplication.instance().quit()
+        return True
+
+    @handle_changed_since_save
+    def file_close(self):
+        """Close current document and transition to no-document state."""
+
+        if not self.main_window.has_document:
+            return True
+
+        self.main_window.settings.changed_since_save = False
+        self.main_window.undo_stack.clear()
+        self.main_window.set_document_state(False)
+        self.update_main_window_title()
+        return True
 
     # Edit menu
 
