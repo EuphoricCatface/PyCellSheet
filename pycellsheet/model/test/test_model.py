@@ -76,8 +76,8 @@ def test_get_isolated_builtins_returns_detached_mapping():
     assert sentinel_key not in fresh_map
 
 
-def test_pycel_formula_promotion_policy_default_off():
-    assert PYCEL_FORMULA_PROMOTION_ENABLED is False
+def test_pycel_formula_promotion_policy_always_on():
+    assert PYCEL_FORMULA_PROMOTION_ENABLED is True
 
 
 class TestCellAttributes(object):
@@ -677,19 +677,17 @@ class TestCodeArray(object):
         else:
             assert result == res
 
-    def test_spreadsheet_formula_requires_opt_in(self):
+    def test_spreadsheet_formula_evaluates_without_opt_in_gate(self):
         self.code_array[0, 0, 0] = "=1+2"
         result = self.code_array[0, 0, 0]
 
-        assert isinstance(result, RuntimeError)
-        assert "disabled" in str(result).lower()
+        assert not isinstance(result, RuntimeError)
 
     def test_spreadsheet_formula_evaluates_with_pycel_when_opted_in(self):
         excel_formula = self.code_array._eval_spreadsheet_code.__globals__["ExcelFormula"]
         if excel_formula is None:
             pytest.skip("pycel is not installed in this environment")
 
-        self.code_array.set_pycel_formula_opt_in(True)
         self.code_array[0, 0, 0] = "=1+2"
         result = self.code_array[0, 0, 0]
 
@@ -699,7 +697,6 @@ class TestCodeArray(object):
             assert "compile expression" in str(result).lower()
 
     def test_spreadsheet_formula_reports_missing_pycel(self, monkeypatch):
-        self.code_array.set_pycel_formula_opt_in(True)
         monkeypatch.setitem(self.code_array._eval_spreadsheet_code.__globals__,
                             "ExcelFormula", None)
         self.code_array[0, 0, 0] = "=1+2"

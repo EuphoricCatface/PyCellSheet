@@ -59,6 +59,8 @@ class _DummyCodeArray:
         self.row_heights = {}
         self.col_widths = {}
         self.cell_attributes = []
+        self.exp_parser_code = "return cell"
+        self.pycel_formula_opt_in = False
 
     @property
     def sheet_scripts(self):
@@ -67,6 +69,9 @@ class _DummyCodeArray:
     @sheet_scripts.setter
     def sheet_scripts(self, value):
         self.macros = value
+
+    def set_pycel_formula_opt_in(self, enabled):
+        self.pycel_formula_opt_in = bool(enabled)
 
 
 class _DummyWriterCodeArray:
@@ -79,12 +84,17 @@ class _DummyWriterCodeArray:
         self.dict_grid.row_heights = {}
         self.dict_grid.col_widths = {}
         self._code = {}
+        self.exp_parser_code = "return cell"
+        self.pycel_formula_opt_in = False
 
     def __iter__(self):
         return iter(self._code)
 
     def __call__(self, key):
         return self._code[key]
+
+    def set_pycel_formula_opt_in(self, enabled):
+        self.pycel_formula_opt_in = bool(enabled)
 
 
 def test_pycs2sheet_names_sanitizes_and_uniquifies():
@@ -248,6 +258,22 @@ def test_reader_macros_are_visible_via_sheet_scripts_alias():
 
     assert target.macros == ["x = 9"]
     assert target.sheet_scripts == ["x = 9"]
+
+
+def test_writer_reader_round_trip_preserves_parser_settings_section():
+    source = _DummyWriterCodeArray(["Main"], ["x = 9"])
+    source.exp_parser_code = "if cell.startswith('>'):\n    return cell[1:]"
+    source.pycel_formula_opt_in = True
+
+    serialized = "".join(list(PycsWriter(source))).encode("utf-8")
+    target = _DummyCodeArray(1)
+    target.set_pycel_formula_opt_in = lambda enabled: setattr(
+        target, "pycel_formula_opt_in", bool(enabled)
+    )
+    list(PycsReader(BytesIO(serialized), target))
+
+    assert target.exp_parser_code == source.exp_parser_code
+    assert target.pycel_formula_opt_in is True
 
 
 def test_color_and_weight_conversion_helpers():
