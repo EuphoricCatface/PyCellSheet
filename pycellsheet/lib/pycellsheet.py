@@ -828,6 +828,7 @@ class PythonEvaluator:
                 if ro == 0 and co == 0:
                     continue
                 target_key = (r1 + ro, c1 + co, current_table)
+                code_array.dep_graph.add_dependency(current_key, target_key)
                 if code_array(target_key) is not None:
                     spill_ref_errors.append(target_key)
         if spill_ref_errors:
@@ -843,7 +844,6 @@ class PythonEvaluator:
                     PythonEvaluator._normalize_python_code_for_cell(
                         code_array, f"RangeOutput.OFFSET({ro}, {co})"
                     )
-                code_array.dep_graph.add_dependency(current_key, target_key)
 
         code_array.range_output_sizes[current_key] = (range_output.height, range_output.width)
 
