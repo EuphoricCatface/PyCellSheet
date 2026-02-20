@@ -523,6 +523,7 @@ class DataArray:
         self.sheet_scripts_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
         self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
+        self.range_output_sizes: dict[Tuple[int, int, int], Tuple[int, int]] = {}
         self.pycel_formula_opt_in = bool(PYCEL_FORMULA_PROMOTION_ENABLED)
 
         self.exp_parser = ExpressionParser()
@@ -1713,6 +1714,10 @@ class CodeArray(DataArray):
                     PythonEvaluator.range_output_handler(self, result, key)
                 if isinstance(result, RangeOutput.OFFSET):
                     result = PythonEvaluator.range_offset_handler(self, result, key)
+                if not isinstance(result, RangeOutput):
+                    old_spill_size = self.range_output_sizes.pop(key, None)
+                    if old_spill_size:
+                        PythonEvaluator.range_output_cleanup(self, key, old_spill_size)
 
         except CircularRefError as err:
             # Circular reference detected during evaluation
@@ -1752,6 +1757,9 @@ class CodeArray(DataArray):
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
         self._clear_cell_warnings(key)
+        old_spill_size = self.range_output_sizes.pop(key, None)
+        if old_spill_size:
+            PythonEvaluator.range_output_cleanup(self, key, old_spill_size)
 
         return super().pop(key)
 
