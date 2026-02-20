@@ -900,7 +900,7 @@ class DataArray:
         if value:
             merging_cell = self.cell_attributes.get_merging_cell(key)
             if ((merging_cell is None or merging_cell == key)
-                    and isinstance(value, str)):
+                    and isinstance(value, (str, PythonCode, SpreadSheetCode))):
                 self.dict_grid[key] = value
             return
 
@@ -1633,11 +1633,14 @@ class CodeArray(DataArray):
             return cell_contents
 
         #  --- ExpParser START ---  #
-        if self.exp_parser.handle_empty(cell_contents):
-            if return_warnings:
-                return EmptyCell, eval_warnings
-            return EmptyCell
-        exp_parsed = self.exp_parser.parse(cell_contents)
+        if isinstance(cell_contents, (PythonCode, SpreadSheetCode)):
+            exp_parsed = cell_contents
+        else:
+            if self.exp_parser.handle_empty(cell_contents):
+                if return_warnings:
+                    return EmptyCell, eval_warnings
+                return EmptyCell
+            exp_parsed = self.exp_parser.parse(cell_contents)
         if exp_parsed is EmptyCell and cell_contents.strip():
             eval_warnings.append(
                 "Expression parser returned EmptyCell for non-empty cell contents."

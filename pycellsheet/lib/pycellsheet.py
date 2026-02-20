@@ -726,17 +726,6 @@ class ReferenceParser:
 
 class PythonEvaluator:
     @staticmethod
-    def _normalize_python_code_for_cell(code_array, code: str) -> str:
-        """Formats internal Python snippets to the active parser marker convention."""
-
-        mode_id = getattr(code_array, "exp_parser_mode_id", None)
-        if callable(mode_id):
-            mode_id = mode_id()
-        if mode_id in ("pure_spreadsheet", "reverse_mixed_legacy"):
-            return f">{code}"
-        return code
-
-    @staticmethod
     def range_output_cleanup(code_array, current_key, spill_size: tuple[int, int]):
         """Clears spill OFFSET placeholders previously written by an anchor cell."""
 
@@ -753,9 +742,9 @@ class PythonEvaluator:
                     continue
                 target_key = (r1 + ro, c1 + co, current_table)
                 marker_payload = f"RangeOutput.OFFSET({ro}, {co})"
-                marker = PythonEvaluator._normalize_python_code_for_cell(code_array, marker_payload)
-                # Backward compatibility: clean legacy un-prefixed markers too.
-                if code_array(target_key) in (marker, marker_payload):
+                marker_obj = PythonCode(marker_payload)
+                # Backward compatibility: clean legacy string markers too.
+                if code_array(target_key) in (marker_obj, marker_payload, f">{marker_payload}"):
                     code_array[target_key] = ""
 
     @staticmethod
@@ -840,10 +829,9 @@ class PythonEvaluator:
                 if ro == 0 and co == 0:
                     continue
                 target_key = (r1 + ro, c1 + co, current_table)
-                code_array[r1 + ro, c1 + co, current_table] = \
-                    PythonEvaluator._normalize_python_code_for_cell(
-                        code_array, f"RangeOutput.OFFSET({ro}, {co})"
-                    )
+                code_array[r1 + ro, c1 + co, current_table] = PythonCode(
+                    f"RangeOutput.OFFSET({ro}, {co})"
+                )
 
         code_array.range_output_sizes[current_key] = (range_output.height, range_output.width)
 
