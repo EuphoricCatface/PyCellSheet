@@ -347,23 +347,10 @@ class ExpressionParser:
             "return cell\n"
         )
     }
-    LEGACY_PARSERS = {
-        "Reverse Mixed": (
-            "# Inspired by the python shell prompt `>>>`\n"
-            "if cell.startswith('>'):\n"
-            "    return PythonCode(cell[1:])\n"
-            "if cell.startswith('\\''):\n"
-            "    cell = cell[1:]\n"
-            "return cell\n"
-        ),
-    }
     MODE_ID_TO_LABEL = {
         "pure_pythonic": "Pure Pythonic",
         "mixed": "Mixed",
         "pure_spreadsheet": "Pure Spreadsheet",
-    }
-    LEGACY_MODE_ID_TO_LABEL = {
-        "reverse_mixed_legacy": "Reverse Mixed",
     }
 
     def __init__(self):
@@ -405,9 +392,6 @@ class ExpressionParser:
     def detect_mode_id(cls, parser_code: str) -> typing.Optional[str]:
         for mode_id, label in cls.MODE_ID_TO_LABEL.items():
             if cls.DEFAULT_PARSERS[label] == parser_code:
-                return mode_id
-        for mode_id, label in cls.LEGACY_MODE_ID_TO_LABEL.items():
-            if cls.LEGACY_PARSERS[label] == parser_code:
                 return mode_id
         return None
 
@@ -726,6 +710,26 @@ class ReferenceParser:
 
 class PythonEvaluator:
     @staticmethod
+    def range_output_cleanup(code_array, current_key, spill_size: tuple[int, int]):
+        """Clears spill OFFSET placeholders previously written by an anchor cell."""
+
+        if spill_size is None:
+            return
+        rows, cols = spill_size
+        if rows <= 0 or cols <= 0:
+            return
+
+        r1, c1, current_table = current_key
+        for ro in range(rows):
+            for co in range(cols):
+                if ro == 0 and co == 0:
+                    continue
+                target_key = (r1 + ro, c1 + co, current_table)
+                marker_obj = PythonCode(f"RangeOutput.OFFSET({ro}, {co})")
+                if code_array(target_key) == marker_obj:
+                    code_array[target_key] = ""
+
+    @staticmethod
     def _validate_no_top_level_return(block: ast.Module):
         """Reject top-level return to keep sync-cell semantics explicit."""
 
@@ -786,21 +790,32 @@ class PythonEvaluator:
     @staticmethod
     def range_output_handler(code_array, range_output: RangeOutput, current_key):
         r1, c1, current_table = current_key
+        previous_size = code_array.range_output_sizes.get(current_key, (0, 0))
+        PythonEvaluator.range_output_cleanup(code_array, current_key, previous_size)
+
+        spill_ref_errors = []
         for ro in range(range_output.height):
             for co in range(range_output.width):
                 if ro == 0 and co == 0:
                     continue
                 target_key = (r1 + ro, c1 + co, current_table)
-                if code_array((r1 + ro, c1 + co, current_table)) == f"RangeOutput.OFFSET({ro}, {co})":
-                    code_array[r1 + ro, c1 + co, current_table] = ""
-                if code_array[r1 + ro, c1 + co, current_table] != EmptyCell:
-                    raise SpillRefError(current_key, target_key)
+                code_array.dep_graph.add_dependency(current_key, target_key)
+                if code_array(target_key) is not None:
+                    spill_ref_errors.append(target_key)
+        if spill_ref_errors:
+            code_array.range_output_sizes[current_key] = (0, 0)
+            raise SpillRefError(current_key, spill_ref_errors)
+
         for ro in range(range_output.height):
             for co in range(range_output.width):
                 if ro == 0 and co == 0:
                     continue
-                code_array[r1 + ro, c1 + co, current_table] = \
+                target_key = (r1 + ro, c1 + co, current_table)
+                code_array[r1 + ro, c1 + co, current_table] = PythonCode(
                     f"RangeOutput.OFFSET({ro}, {co})"
+                )
+
+        code_array.range_output_sizes[current_key] = (range_output.height, range_output.width)
 
     @staticmethod
     def range_offset_handler(code_array, range_offset: RangeOutput.OFFSET, current_key):

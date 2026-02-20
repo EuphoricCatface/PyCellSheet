@@ -103,10 +103,10 @@ class TestMainWindow:
         """Sheet Script globals should not leak across sheets."""
 
         code_array = main_window.grid.model.code_array
-        old_macro0 = code_array.macros[0]
-        old_macro1 = code_array.macros[1]
-        old_draft0 = code_array.macros_draft[0]
-        old_draft1 = code_array.macros_draft[1]
+        old_macro0 = code_array.sheet_scripts[0]
+        old_macro1 = code_array.sheet_scripts[1]
+        old_draft0 = code_array.sheet_scripts_draft[0]
+        old_draft1 = code_array.sheet_scripts_draft[1]
         old_copyable0 = deepcopy(code_array.sheet_globals_copyable[0])
         old_copyable1 = deepcopy(code_array.sheet_globals_copyable[1])
         # Uncopyable globals may include module objects (e.g. random),
@@ -120,8 +120,8 @@ class TestMainWindow:
 
         try:
             code_array.set_exp_parser_mode("mixed")
-            code_array.macros[0] = "RATE = 7"
-            code_array.macros[1] = ""
+            code_array.sheet_scripts[0] = "RATE = 7"
+            code_array.sheet_scripts[1] = ""
             code_array.execute_sheet_script(0)
             code_array.execute_sheet_script(1)
 
@@ -138,10 +138,10 @@ class TestMainWindow:
                     pass
                 code_array.dep_graph.remove_cell(key)
 
-            code_array.macros[0] = old_macro0
-            code_array.macros[1] = old_macro1
-            code_array.macros_draft[0] = old_draft0
-            code_array.macros_draft[1] = old_draft1
+            code_array.sheet_scripts[0] = old_macro0
+            code_array.sheet_scripts[1] = old_macro1
+            code_array.sheet_scripts_draft[0] = old_draft0
+            code_array.sheet_scripts_draft[1] = old_draft1
             code_array.sheet_globals_copyable[0] = old_copyable0
             code_array.sheet_globals_copyable[1] = old_copyable1
             code_array.sheet_globals_uncopyable[0] = old_uncopyable0

@@ -35,7 +35,7 @@ sys.path.pop(0)
 class _DummyDictGrid:
     def __init__(self):
         self.sheet_names = []
-        self.macros = []
+        self.sheet_scripts = []
         self.row_heights = {}
         self.col_widths = {}
         self._grid = {}
@@ -55,7 +55,7 @@ class _DummyCodeArray:
         self.shape = (1, 1, tables)
         self.dict_grid = _DummyDictGrid()
         self.macros = ["" for _ in range(tables)]
-        self.dict_grid.macros = self.macros
+        self.dict_grid.sheet_scripts = self.macros
         self.row_heights = {}
         self.col_widths = {}
         self.cell_attributes = []
@@ -67,6 +67,7 @@ class _DummyCodeArray:
     @sheet_scripts.setter
     def sheet_scripts(self, value):
         self.macros = value
+        self.dict_grid.sheet_scripts = value
 
 
 class _DummyWriterCodeArray:
@@ -74,7 +75,7 @@ class _DummyWriterCodeArray:
         self.shape = (1, 1, len(macros))
         self.dict_grid = _DummyDictGrid()
         self.dict_grid.sheet_names = sheet_names
-        self.dict_grid.macros = macros
+        self.dict_grid.sheet_scripts = macros
         self.cell_attributes = []
         self.dict_grid.row_heights = {}
         self.dict_grid.col_widths = {}
@@ -171,38 +172,38 @@ def test_row_heights_and_col_widths_ignore_out_of_bounds():
     assert code_array.col_widths == {(1, 0): 8.0}
 
 
-def test_pycs2macros_parses_named_and_numeric_headers():
+def test_pycs2sheet_scripts_parses_named_and_numeric_headers():
     code_array = _DummyCodeArray(2)
     code_array.dict_grid.sheet_names = ["Alpha", "Beta"]
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2macros("(macro:'Alpha') 2\n")
-    reader._pycs2macros("a = 1\n")
-    reader._pycs2macros("b = 2\n")
-    reader._pycs2macros("(macro:1) 1\n")
-    reader._pycs2macros("x = 3\n")
+    reader._pycs2sheet_scripts("(sheet_script:'Alpha') 2\n")
+    reader._pycs2sheet_scripts("a = 1\n")
+    reader._pycs2sheet_scripts("b = 2\n")
+    reader._pycs2sheet_scripts("(sheet_script:1) 1\n")
+    reader._pycs2sheet_scripts("x = 3\n")
 
-    assert code_array.macros[0] == "a = 1\nb = 2"
-    assert code_array.macros[1] == "x = 3"
+    assert code_array.sheet_scripts[0] == "a = 1\nb = 2"
+    assert code_array.sheet_scripts[1] == "x = 3"
 
 
-def test_pycs2macros_unknown_sheet_name_falls_back_sequential_index():
+def test_pycs2sheet_scripts_unknown_sheet_name_falls_back_sequential_index():
     code_array = _DummyCodeArray(2)
     code_array.dict_grid.sheet_names = ["Alpha", "Beta"]
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2macros("(macro:'Unknown') 1\n")
-    reader._pycs2macros("u = 1\n")
+    reader._pycs2sheet_scripts("(sheet_script:'Unknown') 1\n")
+    reader._pycs2sheet_scripts("u = 1\n")
 
-    assert code_array.macros[0] == "u = 1"
+    assert code_array.sheet_scripts[0] == "u = 1"
 
 
-def test_pycs2macros_raises_for_invalid_header():
+def test_pycs2sheet_scripts_raises_for_invalid_header():
     code_array = _DummyCodeArray(1)
     reader = PycsReader(BytesIO(b""), code_array)
 
     with pytest.raises(ValueError):
-        reader._pycs2macros("macro:bad header\n")
+        reader._pycs2sheet_scripts("macro:bad header\n")
 
 
 def test_writer_macros_section_uses_normalized_sheet_names():
@@ -212,11 +213,11 @@ def test_writer_macros_section_uses_normalized_sheet_names():
     )
     writer = PycsWriter(code_array)
 
-    macros_lines = list(writer._macros2pycs())
+    sheet_scripts_lines = list(writer._sheet_scripts2pycs())
 
-    assert macros_lines[0].startswith("(macro:'Main') 1\n")
-    assert macros_lines[1].startswith("(macro:'Sheet 1') 1\n")
-    assert macros_lines[2].startswith("(macro:'Main_1') 1\n")
+    assert sheet_scripts_lines[0].startswith("(sheet_script:'Main') 1\n")
+    assert sheet_scripts_lines[1].startswith("(sheet_script:'Sheet 1') 1\n")
+    assert sheet_scripts_lines[2].startswith("(sheet_script:'Main_1') 1\n")
 
 
 def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
@@ -233,7 +234,7 @@ def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
     list(reader)
 
     assert target.dict_grid.sheet_names == ["Revenue", "Revenue_1", "Sheet 2"]
-    assert target.macros == ["a = 1", "b = 2", "c = 3"]
+    assert target.sheet_scripts == ["a = 1", "b = 2", "c = 3"]
 
 
 def test_reader_macros_are_visible_via_sheet_scripts_alias():
@@ -246,7 +247,7 @@ def test_reader_macros_are_visible_via_sheet_scripts_alias():
     target = _DummyCodeArray(1)
     list(PycsReader(BytesIO(serialized), target))
 
-    assert target.macros == ["x = 9"]
+    assert target.sheet_scripts == ["x = 9"]
     assert target.sheet_scripts == ["x = 9"]
 
 
@@ -314,7 +315,7 @@ def test_pycs2sheet_scripts_nonsequential_numeric_header_falls_back_to_sequentia
     code_array = _DummyCodeArray(2)
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2sheet_scripts("(macro:2) 1\n")
+    reader._pycs2sheet_scripts("(sheet_script:2) 1\n")
     reader._pycs2sheet_scripts("x = 1\n")
 
-    assert code_array.macros[0] == "x = 1"
+    assert code_array.sheet_scripts[0] == "x = 1"
