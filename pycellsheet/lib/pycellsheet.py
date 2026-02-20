@@ -262,7 +262,7 @@ def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
     return row_num, col_num - 1  # Convert from 1-based to 0-based
 
 
-class RangeBase:
+class RangeBase(collections.abc.Sequence):
     def __init__(self, width: int, lst: typing.Optional[list] = None):
         self.lst = lst if lst else []
         self.width = width
@@ -293,6 +293,8 @@ class RangeBase:
     def append(self, item: typing.Any):
         self.lst.append(item)
 
+    def normalize(self):
+        return list(self)
 
 
 class Range(RangeBase):

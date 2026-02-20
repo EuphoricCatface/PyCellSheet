@@ -123,6 +123,7 @@ class PycsReader:
             "[PyCellSheet save file version]\n": self._pycs_version,
             "[shape]\n": self._pycs2shape,
             "[sheet_names]\n": self._pycs2sheet_names,
+            "[parser_settings]\n": self._pycs2parser_settings,
             "[macros]\n": self._pycs2sheet_scripts,
             "[grid]\n": self._pycs2code,
             "[attributes]\n": self._pycs2attributes,
@@ -450,6 +451,16 @@ class PycsReader:
 
         self._pycs2sheet_scripts(line)
 
+    def _pycs2parser_settings(self, line: str):
+        """Updates parser settings from [parser_settings] section."""
+
+        key, value_repr = self._split_tidy(line, maxsplit=1)
+        value = ast.literal_eval(value_repr)
+        if key == "exp_parser_code":
+            self.code_array.exp_parser_code = value
+        elif key == "pycel_formula_opt_in":
+            self.code_array.set_pycel_formula_opt_in(value)
+
 class PycsWriter(object):
     """Interface between code_array and pycs file data
 
@@ -471,6 +482,7 @@ class PycsWriter(object):
             ("[PyCellSheet save file version]\n", self._version2pycs),
             ("[shape]\n", self._shape2pycs),
             ("[sheet_names]\n", self._sheet_names2pycs),
+            ("[parser_settings]\n", self._parser_settings2pycs),
             ("[macros]\n", self._sheet_scripts2pycs),
             ("[grid]\n", self._code2pycs),
             ("[attributes]\n", self._attributes2pycs),
@@ -542,6 +554,12 @@ class PycsWriter(object):
 
         for name in self._normalized_sheet_names():
             yield name + u"\n"
+
+    def _parser_settings2pycs(self) -> Iterable[str]:
+        """Returns parser settings information in pycs format."""
+
+        yield f"exp_parser_code\t{self.code_array.exp_parser_code!r}\n"
+        yield f"pycel_formula_opt_in\t{bool(self.code_array.pycel_formula_opt_in)!r}\n"
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format
