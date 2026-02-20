@@ -572,12 +572,13 @@ class DataArray:
         data = {}
 
         data["shape"] = self.shape
-        data["grid"] = {}.update(self.dict_grid)
-        data["attributes"] = self.cell_attributes[:]
+        data["grid"] = dict(self.dict_grid)
+        data["attributes"] = list(self.cell_attributes)
         data["row_heights"] = self.row_heights
         data["col_widths"] = self.col_widths
         data["macros"] = self.sheet_scripts
         data["sheet_scripts"] = self.sheet_scripts
+        data["exp_parser_code"] = self.exp_parser_code
 
         return data
 
@@ -627,7 +628,7 @@ class DataArray:
             self.sheet_scripts = kwargs["macros"]
 
         if "exp_parser_code" in kwargs:
-            pass
+            self.exp_parser_code = kwargs["exp_parser_code"]
 
     @property
     def row_heights(self) -> defaultdict:

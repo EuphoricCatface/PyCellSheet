@@ -345,14 +345,20 @@ class TestDataArray(object):
             col_widths={(0, 0): 12.0},
             sheet_scripts=["script=1"],
             macros=["legacy=1"],
+            exp_parser_code="return PythonCode(cell)",
         )
         assert data_array.shape == (1, 1, 1)
         assert data_array.sheet_scripts == ["script=1"]
         assert data_array.row_heights[(0, 0)] == 10.0
         assert data_array.col_widths[(0, 0)] == 12.0
+        assert data_array.exp_parser_code == "return PythonCode(cell)"
 
         DataArray.data.fset(data_array, macros=["legacy_only=1"])
         assert data_array.sheet_scripts == ["legacy_only=1"]
+
+        snapshot = data_array.data
+        assert snapshot["grid"] == {(0, 0, 0): "x"}
+        assert snapshot["exp_parser_code"] == "return PythonCode(cell)"
 
     def test_exp_parser_code_setter_updates_parser_behavior(self):
         data_array = DataArray((2, 2, 1), Settings())
