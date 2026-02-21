@@ -55,6 +55,7 @@ from collections import defaultdict
 from copy import copy, deepcopy
 from inspect import isgenerator
 import io
+import logging
 from itertools import product
 from pydoc import plaintext, render_doc
 import re
@@ -64,6 +65,9 @@ from typing import (
         Any, Dict, Iterable, List, NamedTuple, Sequence, Tuple, Union)
 
 import numpy
+
+
+logger = logging.getLogger(__name__)
 
 from PyQt6.QtGui import QImage, QPixmap  # Needed
 
@@ -240,11 +244,9 @@ class CellAttributes(list):
         self.remove = None
         self.reverse = None
         self.sort = None
-
+        self._attr_cache = AttrDict()
+        self._table_cache = {}
     # Cache for __getattr__ maps key to tuple of len and attr_dict
-
-    _attr_cache = AttrDict()
-    _table_cache = {}
 
     def append(self, cell_attribute: CellAttribute):
         """append that clears caches
@@ -1755,8 +1757,8 @@ class CodeArray(DataArray):
                 # Access the cell - this triggers evaluation
                 _ = self[key]
             except Exception:
-                # Ignore errors during recalculation
-                pass
+                # Keep recalc resilient but emit enough detail for diagnosis.
+                logger.exception("Error while recalculating dirty cell %s", key)
 
         return len(dirty_cells)
 
@@ -1791,7 +1793,7 @@ class CodeArray(DataArray):
                 _ = self[key]
                 recalculated += 1
             except Exception:
-                pass
+                logger.exception("Error while recalculating key %s", key)
         return recalculated
 
     def recalculate_cell_only(self, key: Tuple[int, int, int]) -> int:
@@ -1814,6 +1816,7 @@ class CodeArray(DataArray):
                 except Exception:
                     changed = True
         except Exception:
+            logger.exception("Error while recalculating single cell %s", key)
             changed = True
 
         if changed:
