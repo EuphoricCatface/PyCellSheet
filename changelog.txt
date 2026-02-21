@@ -3,11 +3,11 @@ PyCellSheet Changelog
 
 Base upstream: pyspread 2.3.1 (forked November 2024)
 
-v0.5.0 (Unreleased)
+v0.5.0 (Parser + Spill Feature Expansion, Unreleased)
 -------------------
 
 Summary:
-- Parser/spill feature expansion and compatibility-surface reduction in progress.
+- 50 files changed, 3163 insertions(+), 433 deletions(-)
 
 Features:
 - Parser selector/migrator and spill conflict contracts are integrated into the active development line.
@@ -29,7 +29,7 @@ Fixes:
 - Fixed `PycsWriter.__len__` so save progress metadata matches actual emitted save-stream length.
 - Migrated bundled `share/examples/*.pysu` files to v0.5 save-format contracts (`[sheet_scripts]` + `[parser_settings]`).
 
-v0.4.0
+v0.4.0 (Internal Semantics Cleanup)
 -------------------
 
 Summary:
@@ -56,7 +56,7 @@ Tests:
 - Expanded model metadata/parser contract coverage for builtins isolation, shape-resize sheet metadata behavior, and expression-parser mode updates.
 - Current development baseline passes on active interpreter (`869 passed`).
 
-v0.3.0
+v0.3.0 (Release Engineering)
 ------
 
 Summary:
@@ -80,7 +80,7 @@ Tests:
 Maintenance:
 - Added CI gate runbook linkage and release-engineering notes to reduce drift between process docs and shipped behavior.
 
-v0.2.0
+v0.2.0 (Stabilization)
 -----------------------
 
 Summary:
@@ -101,7 +101,7 @@ Tests:
 Maintenance:
 - Codebase hygiene updates: inline-import cleanup in touched paths and attribution/GPL header normalization for user-created modules.
 
-v0.1.0
+v0.1.0 (Core Feature Release)
 ------
 
 Summary:
@@ -120,7 +120,7 @@ Highlights:
 - Final hardening pass: dependency refresh correctness fixes, undoable sheet rename, robust sheet-script header parsing, transitive-closure caching, and Python 3.11 compatibility fix.
 - Logging cleanup and additional debug logging around dependency/caching operations.
 
-v0.0.5 Proof-of-Concept
+v0.0.5 (Proof-of-Concept)
 -----------------------
 
 Summary:

@@ -14,7 +14,7 @@ The core design choice is copy-priority semantics: cell references return deep-c
 
 ## Key changes
 
-### v0.5.0 (In Progress)
+### v0.5.0 (Parser + Spill Feature Expansion)
 
 - Landed parser selector/migrator and spill-conflict feature line foundations.
 - Tightened `.pycs` persistence contracts to named `[sheet_scripts]` headers only and canonical parser settings.
