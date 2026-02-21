@@ -402,7 +402,7 @@ class PycsReader:
             pass
 
     def _pycs2sheet_scripts(self, line: str):
-        """Updates sheet scripts in code_array from legacy save section.
+        """Updates sheet scripts in code_array from [sheet_scripts] section.
 
         :param line: Pycs file line to be parsed
 
@@ -427,20 +427,21 @@ class PycsReader:
         except Exception:
             parsed_identifier = raw_sheet_identifier
 
-        # Try to parse as integer (old format), otherwise treat as sheet name
-        try:
-            new_sheet_number = int(parsed_identifier)
-            if self.current_sheet_script + 1 != new_sheet_number:
-                raise ValueError("The save file does not follow sheet script header conventions")
-        except ValueError:
-            # Sheet identifier is a name, not a number - look it up
-            sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
-            sheet_identifier = str(parsed_identifier)
-            if sheet_names and sheet_identifier in sheet_names:
-                new_sheet_number = sheet_names.index(sheet_identifier)
-            else:
-                # Fall back to sequential indexing
-                new_sheet_number = self.current_sheet_script + 1
+        # v0.5+ contract: only named sheet_script headers are accepted.
+        if isinstance(parsed_identifier, int):
+            raise ValueError(
+                "Numeric sheet_script headers are no longer supported in v0.5+. "
+                "Use named headers, e.g. (sheet_script:'Sheet 0') N."
+            )
+
+        sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
+        sheet_identifier = str(parsed_identifier)
+        if not sheet_names or sheet_identifier not in sheet_names:
+            raise ValueError(
+                f"Unknown sheet name in sheet_script header: {sheet_identifier!r}. "
+                "Ensure [sheet_names] includes the referenced sheet before [sheet_scripts]."
+            )
+        new_sheet_number = sheet_names.index(sheet_identifier)
 
         self.current_sheet_script = new_sheet_number
 
@@ -453,8 +454,11 @@ class PycsReader:
         value = ast.literal_eval(value_repr)
         if key == "exp_parser_code":
             self.code_array.exp_parser_code = value
-        elif key == "pycel_formula_opt_in":
-            self.code_array.set_pycel_formula_opt_in(value)
+        else:
+            raise ValueError(
+                f"Unknown parser_settings key: {key}. "
+                "Supported keys in v0.5+: exp_parser_code."
+            )
 
 class PycsWriter(object):
     """Interface between code_array and pycs file data
@@ -552,7 +556,6 @@ class PycsWriter(object):
         """Returns parser settings information in pycs format."""
 
         yield f"exp_parser_code\t{self.code_array.exp_parser_code!r}\n"
-        yield f"pycel_formula_opt_in\t{bool(self.code_array.pycel_formula_opt_in)!r}\n"
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format

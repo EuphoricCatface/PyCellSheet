@@ -392,7 +392,7 @@ class TestWorkflows:
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
         old_shape = code_array.shape
-        old_macros = list(code_array.sheet_scripts)
+        old_sheet_scripts = list(code_array.sheet_scripts)
         old_drafts = list(code_array.sheet_scripts_draft)
         old_safe_mode = main_window.safe_mode
         old_changed = main_window.settings.changed_since_save
@@ -431,7 +431,7 @@ class TestWorkflows:
             assert main_window.settings.changed_since_save is True
         finally:
             code_array.shape = old_shape
-            code_array.sheet_scripts = old_macros
+            code_array.sheet_scripts = old_sheet_scripts
             code_array.sheet_scripts_draft = old_drafts
             main_window.safe_mode = old_safe_mode
             main_window.settings.changed_since_save = old_changed
@@ -482,7 +482,7 @@ class TestWorkflows:
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
         old_drafts = list(code_array.sheet_scripts_draft)
-        old_macros = list(code_array.sheet_scripts)
+        old_sheet_scripts = list(code_array.sheet_scripts)
 
         class _FailIfCalledDialog:
             def __init__(self, _parent):
@@ -510,7 +510,7 @@ class TestWorkflows:
             assert self.workflows._resolve_unapplied_sheet_script_drafts()
             assert called["count"] == 0
         finally:
-            code_array.sheet_scripts = old_macros
+            code_array.sheet_scripts = old_sheet_scripts
             code_array.sheet_scripts_draft = old_drafts
             panel.current_table = 0
             panel.update_()

@@ -50,43 +50,46 @@ class _DummyDictGrid:
         return len(self._grid)
 
 
+class _DummyDictGridNoNames:
+    def __init__(self):
+        self.sheet_scripts = []
+        self.row_heights = {}
+        self.col_widths = {}
+        self._grid = {}
+
+    def __setitem__(self, key, value):
+        self._grid[key] = value
+
+    def __iter__(self):
+        return iter(self._grid)
+
+    def __len__(self):
+        return len(self._grid)
+
+
 class _DummyCodeArray:
     def __init__(self, tables: int):
         self.shape = (1, 1, tables)
         self.dict_grid = _DummyDictGrid()
-        self.macros = ["" for _ in range(tables)]
-        self.dict_grid.sheet_scripts = self.macros
+        self.sheet_scripts = ["" for _ in range(tables)]
+        self.dict_grid.sheet_scripts = self.sheet_scripts
         self.row_heights = {}
         self.col_widths = {}
         self.cell_attributes = []
         self.exp_parser_code = "return cell"
-        self.pycel_formula_opt_in = False
-
-    @property
-    def sheet_scripts(self):
-        return self.macros
-
-    @sheet_scripts.setter
-    def sheet_scripts(self, value):
-        self.macros = value
-        self.dict_grid.sheet_scripts = value
-
-    def set_pycel_formula_opt_in(self, enabled):
-        self.pycel_formula_opt_in = bool(enabled)
 
 
 class _DummyWriterCodeArray:
-    def __init__(self, sheet_names, macros):
-        self.shape = (1, 1, len(macros))
+    def __init__(self, sheet_names, sheet_scripts):
+        self.shape = (1, 1, len(sheet_scripts))
         self.dict_grid = _DummyDictGrid()
         self.dict_grid.sheet_names = sheet_names
-        self.dict_grid.sheet_scripts = macros
+        self.dict_grid.sheet_scripts = sheet_scripts
         self.cell_attributes = []
         self.dict_grid.row_heights = {}
         self.dict_grid.col_widths = {}
         self._code = {}
         self.exp_parser_code = "return cell"
-        self.pycel_formula_opt_in = False
 
     def __iter__(self):
         return iter(self._code)
@@ -94,8 +97,17 @@ class _DummyWriterCodeArray:
     def __call__(self, key):
         return self._code[key]
 
-    def set_pycel_formula_opt_in(self, enabled):
-        self.pycel_formula_opt_in = bool(enabled)
+
+class _DummyCodeArrayNoNames:
+    def __init__(self, tables: int):
+        self.shape = (1, 1, tables)
+        self.dict_grid = _DummyDictGridNoNames()
+        self.sheet_scripts = ["" for _ in range(tables)]
+        self.dict_grid.sheet_scripts = self.sheet_scripts
+        self.row_heights = {}
+        self.col_widths = {}
+        self.cell_attributes = []
+        self.exp_parser_code = "return cell"
 
 
 def test_pycs2sheet_names_sanitizes_and_uniquifies():
@@ -107,6 +119,23 @@ def test_pycs2sheet_names_sanitizes_and_uniquifies():
     reader._pycs2sheet_names("Bad\tName\n")
 
     assert code_array.dict_grid.sheet_names == ["Sheet 0", "Sheet 0_1", "BadName"]
+
+
+def test_split_tidy_honors_maxsplit():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    assert reader._split_tidy("a\tb\tc\n") == ["a", "b", "c"]
+    assert reader._split_tidy("a\tb\tc\n", maxsplit=1) == ["a", "b\tc"]
+
+
+def test_finalize_sheet_names_no_sheet_names_attr_noop():
+    code_array = _DummyCodeArrayNoNames(2)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._finalize_sheet_names()
+
+    assert not hasattr(code_array.dict_grid, "sheet_names")
 
 
 def test_finalize_sheet_names_fills_missing_defaults():
@@ -147,6 +176,20 @@ def test_reader_iter_finalizes_sheet_names():
     assert code_array.dict_grid.sheet_names == ["Only One", "Sheet 1"]
 
 
+def test_reader_iter_applies_cell_attributes_postfixes():
+    code_array = _DummyCodeArray(1)
+    payload = (
+        b"[PyCellSheet save file version]\n"
+        b"0.0\n"
+    )
+    reader = PycsReader(BytesIO(payload), code_array)
+    reader.cell_attributes_postfixes = [("sel", 0, {"x": 1})]
+
+    list(reader)
+
+    assert code_array.cell_attributes == [("sel", 0, {"x": 1})]
+
+
 def test_pycs2sheet_names_ignores_extra_names_after_table_count():
     code_array = _DummyCodeArray(2)
     reader = PycsReader(BytesIO(b""), code_array)
@@ -182,7 +225,7 @@ def test_row_heights_and_col_widths_ignore_out_of_bounds():
     assert code_array.col_widths == {(1, 0): 8.0}
 
 
-def test_pycs2sheet_scripts_parses_named_and_numeric_headers():
+def test_pycs2sheet_scripts_parses_named_headers():
     code_array = _DummyCodeArray(2)
     code_array.dict_grid.sheet_names = ["Alpha", "Beta"]
     reader = PycsReader(BytesIO(b""), code_array)
@@ -190,22 +233,20 @@ def test_pycs2sheet_scripts_parses_named_and_numeric_headers():
     reader._pycs2sheet_scripts("(sheet_script:'Alpha') 2\n")
     reader._pycs2sheet_scripts("a = 1\n")
     reader._pycs2sheet_scripts("b = 2\n")
-    reader._pycs2sheet_scripts("(sheet_script:1) 1\n")
+    reader._pycs2sheet_scripts("(sheet_script:'Beta') 1\n")
     reader._pycs2sheet_scripts("x = 3\n")
 
     assert code_array.sheet_scripts[0] == "a = 1\nb = 2"
     assert code_array.sheet_scripts[1] == "x = 3"
 
 
-def test_pycs2sheet_scripts_unknown_sheet_name_falls_back_sequential_index():
+def test_pycs2sheet_scripts_unknown_sheet_name_raises():
     code_array = _DummyCodeArray(2)
     code_array.dict_grid.sheet_names = ["Alpha", "Beta"]
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2sheet_scripts("(sheet_script:'Unknown') 1\n")
-    reader._pycs2sheet_scripts("u = 1\n")
-
-    assert code_array.sheet_scripts[0] == "u = 1"
+    with pytest.raises(ValueError, match="Unknown sheet name.*\\[sheet_names\\]"):
+        reader._pycs2sheet_scripts("(sheet_script:'Unknown') 1\n")
 
 
 def test_pycs2sheet_scripts_raises_for_invalid_header():
@@ -216,7 +257,18 @@ def test_pycs2sheet_scripts_raises_for_invalid_header():
         reader._pycs2sheet_scripts("macro:bad header\n")
 
 
-def test_writer_macros_section_uses_normalized_sheet_names():
+def test_pycs2sheet_scripts_accepts_unquoted_sheet_identifier():
+    code_array = _DummyCodeArray(1)
+    code_array.dict_grid.sheet_names = ["Main"]
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2sheet_scripts("(sheet_script:Main) 0\n")
+
+    assert reader.current_sheet_script == 0
+    assert reader.current_sheet_script_remaining == 0
+
+
+def test_writer_sheet_scripts_section_uses_normalized_sheet_names():
     code_array = _DummyWriterCodeArray(
         ["Main", " ", "Main"],
         ["a = 1", "b = 2", "c = 3"],
@@ -230,7 +282,7 @@ def test_writer_macros_section_uses_normalized_sheet_names():
     assert sheet_scripts_lines[2].startswith("(sheet_script:'Main_1') 1\n")
 
 
-def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
+def test_writer_reader_round_trip_preserves_sheet_names_and_sheet_scripts():
     source = _DummyWriterCodeArray(
         ["Revenue", "Revenue", " "],
         ["a = 1", "b = 2", "c = 3"],
@@ -247,7 +299,7 @@ def test_writer_reader_round_trip_preserves_sheet_names_and_macros():
     assert target.sheet_scripts == ["a = 1", "b = 2", "c = 3"]
 
 
-def test_reader_macros_are_visible_via_sheet_scripts_alias():
+def test_reader_sheet_scripts_round_trip():
     source = _DummyWriterCodeArray(
         ["Main"],
         ["x = 9"],
@@ -264,17 +316,21 @@ def test_reader_macros_are_visible_via_sheet_scripts_alias():
 def test_writer_reader_round_trip_preserves_parser_settings_section():
     source = _DummyWriterCodeArray(["Main"], ["x = 9"])
     source.exp_parser_code = "if cell.startswith('>'):\n    return cell[1:]"
-    source.pycel_formula_opt_in = True
 
     serialized = "".join(list(PycsWriter(source))).encode("utf-8")
     target = _DummyCodeArray(1)
-    target.set_pycel_formula_opt_in = lambda enabled: setattr(
-        target, "pycel_formula_opt_in", bool(enabled)
-    )
     list(PycsReader(BytesIO(serialized), target))
 
     assert target.exp_parser_code == source.exp_parser_code
-    assert target.pycel_formula_opt_in is True
+
+
+def test_pycs2parser_settings_sets_exp_parser_code():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2parser_settings("exp_parser_code\t'return 123'\n")
+
+    assert code_array.exp_parser_code == "return 123"
 
 
 def test_color_and_weight_conversion_helpers():
@@ -337,11 +393,62 @@ def test_pycs2attributes_parses_cell_attribute_rows():
     assert attr["angle"] == 90
 
 
-def test_pycs2sheet_scripts_nonsequential_numeric_header_falls_back_to_sequential():
+def test_pycs2sheet_scripts_nonsequential_numeric_header_rejected():
     code_array = _DummyCodeArray(2)
     reader = PycsReader(BytesIO(b""), code_array)
 
-    reader._pycs2sheet_scripts("(sheet_script:2) 1\n")
-    reader._pycs2sheet_scripts("x = 1\n")
+    with pytest.raises(ValueError, match="Numeric sheet_script headers.*Use named headers"):
+        reader._pycs2sheet_scripts("(sheet_script:2) 1\n")
 
-    assert code_array.sheet_scripts[0] == "x = 1"
+
+def test_pycs2parser_settings_rejects_unknown_key():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    with pytest.raises(ValueError, match="Unknown parser_settings key.*exp_parser_code"):
+        reader._pycs2parser_settings("pycel_formula_opt_in\tTrue\n")
+
+
+def test_writer_code_serializes_repr_when_version_gt_1():
+    code_array = _DummyWriterCodeArray(["Main"], [""])
+    code_array._code[(0, 0, 0)] = "line\nbreak"
+    writer = PycsWriter(code_array)
+    writer.version = 2.0
+
+    line = next(iter(writer._code2pycs()))
+
+    assert line == "0\t0\t0\t'line\\nbreak'\n"
+
+
+def test_writer_attributes_merges_last_duplicate_and_skips_empty_dict():
+    code_array = _DummyWriterCodeArray(["Main"], [""])
+    selection = type("Sel", (), {
+        "block_tl": [],
+        "block_br": [],
+        "rows": [],
+        "columns": [],
+        "cells": [(0, 0)],
+    })()
+    code_array.cell_attributes = [
+        (selection, 0, {"angle": 10}),
+        (selection, 0, {"justification": "justify_left"}),
+        (selection, 0, {}),
+    ]
+
+    writer = PycsWriter(code_array)
+    lines = list(writer._attributes2pycs())
+
+    assert len(lines) == 1
+    assert "'angle'" in lines[0]
+    assert "'justification'" in lines[0]
+
+
+def test_writer_row_and_col_dimensions_filtered_by_shape():
+    code_array = _DummyWriterCodeArray(["Main"], [""])
+    code_array.shape = (1, 1, 1)
+    code_array.dict_grid.row_heights = {(0, 0): 7.5, (2, 0): 9.0}
+    code_array.dict_grid.col_widths = {(0, 0): 8.5, (0, 2): 6.0}
+    writer = PycsWriter(code_array)
+
+    assert list(writer._row_heights2pycs()) == ["0\t0\t7.5\n"]
+    assert list(writer._col_widths2pycs()) == ["0\t0\t8.5\n"]

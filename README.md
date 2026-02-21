@@ -14,6 +14,12 @@ The core design choice is copy-priority semantics: cell references return deep-c
 
 ## Key changes
 
+### v0.5.0 (In Progress)
+
+- Landed parser selector/migrator and spill-conflict feature line foundations.
+- Tightened `.pycs` persistence contracts to named `[sheet_scripts]` headers only and canonical parser settings.
+- Removed compatibility fallbacks that no longer match v0.5 behavior (numeric sheet-script headers and legacy parser-settings keys).
+
 ### v0.4.0 (Internal Semantics Cleanup)
 
 - Continued internal semantics cleanup and docs/test alignment.
@@ -86,4 +92,4 @@ tox -e py310,py311,py312,py313,py314
 tox -e py314-optional
 ```
 
-Current active-interpreter baseline: `869 passed`.
+Current active-interpreter baseline: `894 passed`.

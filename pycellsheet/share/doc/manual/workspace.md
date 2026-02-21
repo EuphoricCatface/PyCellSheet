@@ -25,6 +25,10 @@ You can also launch the file via a file manager (for example Windows Explorer).
 You can exit PyCellSheet by closing the main window or by selecting
 `File -> Quit` from the menu.
 
+At startup, PyCellSheet opens a no-document workflow where you choose to create
+a new workbook or open an existing one. The same no-document state can be
+reached later via `File -> Close`.
+
 ## PyCellSheet main window
 
 The main window comprises the following components (see Figure):

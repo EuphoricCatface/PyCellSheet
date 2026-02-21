@@ -3,6 +3,24 @@ PyCellSheet Changelog
 
 Base upstream: pyspread 2.3.1 (forked November 2024)
 
+v0.5.0 (Unreleased)
+-------------------
+
+Summary:
+- Parser/spill feature expansion and compatibility-surface reduction in progress.
+
+Features:
+- Parser selector/migrator and spill conflict contracts are integrated into the active development line.
+- `.pycs` parser settings are normalized around canonical expression-parser code persistence.
+
+Breaking / Compatibility changes:
+- Dropped numeric `(sheet_script:N)` header fallback in `.pycs` sheet-script blocks; named headers are now required.
+- Dropped legacy parser-settings key acceptance for `pycel_formula_opt_in`; unknown parser settings now fail fast during load.
+
+Tests:
+- Removed legacy dataclasses-shim regression tests that no longer map to active v0.5 behavior.
+- Current development baseline passes on active interpreter (`894 passed`).
+
 v0.4.0
 -------------------
 
