@@ -194,7 +194,7 @@ def test_sheet_script_alias_property():
 
 
 def test_execute_sheet_script_alias():
-    """execute_sheet_script delegates to execute_macros."""
+    """execute_sheet_script evaluates sheet globals for the active table."""
 
     code_array = CodeArray((2, 2, 1), Settings())
     code_array.set_exp_parser_mode("mixed")

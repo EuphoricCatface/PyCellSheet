@@ -516,10 +516,7 @@ class DataArray:
 
         self.exp_parser = ExpressionParser()
         self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
-        self._saved_parser_signature = (
-            self.exp_parser_code,
-            self.pycel_formula_opt_in,
-        )
+        self._saved_parser_signature = self.exp_parser_code
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
@@ -567,8 +564,6 @@ class DataArray:
         data["col_widths"] = self.col_widths
         data["sheet_scripts"] = self.sheet_scripts
         data["exp_parser_code"] = self.exp_parser_code
-        data["pycel_formula_opt_in"] = self.pycel_formula_opt_in
-
         return data
 
     @data.setter
@@ -613,8 +608,6 @@ class DataArray:
 
         if "exp_parser_code" in kwargs:
             self.exp_parser_code = kwargs["exp_parser_code"]
-        if "pycel_formula_opt_in" in kwargs:
-            self.set_pycel_formula_opt_in(kwargs["pycel_formula_opt_in"])
 
     @property
     def row_heights(self) -> defaultdict:
@@ -710,26 +703,16 @@ class DataArray:
                 self.dep_graph.dirty.clear()
         return report
 
-    def set_pycel_formula_opt_in(self, enabled: bool):
-        # pycel mode is always enabled from v0.5 forward.
-        self.pycel_formula_opt_in = True
-
     @property
     def parser_settings_applied(self) -> bool:
         """Returns True when parser settings match last saved/loaded state."""
 
-        return (
-            self.exp_parser_code,
-            self.pycel_formula_opt_in,
-        ) == self._saved_parser_signature
+        return self.exp_parser_code == self._saved_parser_signature
 
     def mark_parser_settings_applied(self):
         """Mark current parser settings as persisted baseline."""
 
-        self._saved_parser_signature = (
-            self.exp_parser_code,
-            self.pycel_formula_opt_in,
-        )
+        self._saved_parser_signature = self.exp_parser_code
 
     def _eval_spreadsheet_code(self, key: Tuple[int, int, int],
                                formula: SpreadSheetCode):
