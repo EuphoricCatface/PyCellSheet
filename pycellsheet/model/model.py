@@ -567,7 +567,7 @@ class DataArray:
         return data
 
     @data.setter
-    def data(self, **kwargs):
+    def data(self, value: typing.Optional[dict] = None, **kwargs):
         """Sets data from given parameters
 
         Old values are deleted.
@@ -586,6 +586,14 @@ class DataArray:
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
         """
+
+        if kwargs:
+            if value is not None:
+                raise TypeError("DataArray.data setter accepts either a dict or keyword args, not both.")
+        else:
+            if not isinstance(value, dict):
+                raise TypeError("DataArray.data setter expects a dict.")
+            kwargs = value
 
         if "shape" in kwargs:
             self.shape = kwargs["shape"]

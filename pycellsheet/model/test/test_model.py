@@ -869,6 +869,22 @@ class TestCodeArray(object):
         for result, expected_result in zip(rev_sort_gen, rev_sorted_keys):
             assert result == expected_result
 
+    def test_data_property_setter_accepts_dict_assignment(self):
+        """Data property assignment should accept a dict payload."""
+
+        payload = {
+            "shape": (3, 4, 1),
+            "grid": {(0, 0, 0): "123"},
+            "sheet_scripts": ["x = 1"],
+            "exp_parser_code": ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"],
+        }
+
+        self.code_array.data = payload
+
+        assert self.code_array.shape == (3, 4, 1)
+        assert self.code_array((0, 0, 0)) == "123"
+        assert self.code_array.sheet_scripts == ["x = 1"]
+
     def test_string_match(self):
         """Tests creation of string_match"""
 
