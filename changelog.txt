@@ -16,10 +16,15 @@ Features:
 Breaking / Compatibility changes:
 - Dropped numeric `(sheet_script:N)` header fallback in `.pycs` sheet-script blocks; named headers are now required.
 - Dropped legacy parser-settings key acceptance for `pycel_formula_opt_in`; unknown parser settings now fail fast during load.
+- Removed legacy `execute_macros()` alias surface; `execute_sheet_script()` is now the canonical runtime entrypoint.
 
 Tests:
 - Removed legacy dataclasses-shim regression tests that no longer map to active v0.5 behavior.
-- Current development baseline passes on active interpreter (`894 passed`).
+- Expanded high-ROI coverage in CLI/entrypoint, parser migrator, `.pycs` reader/writer branches, and spreadsheet math/info/statistical contracts.
+- Current development baseline passes on active interpreter (`939 passed`).
+
+Fixes:
+- Fixed `COUNTUNIQUE` to skip `EmptyCell` safely instead of raising unhashable-type failures.
 
 v0.4.0
 -------------------
