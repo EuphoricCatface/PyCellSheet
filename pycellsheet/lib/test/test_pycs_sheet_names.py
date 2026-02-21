@@ -197,7 +197,7 @@ def test_pycs2sheet_scripts_raises_for_invalid_header():
         reader._pycs2sheet_scripts("macro:bad header\n")
 
 
-def test_writer_macros_section_uses_normalized_sheet_names():
+def test_writer_sheet_scripts_section_uses_normalized_sheet_names():
     code_array = _DummyWriterCodeArray(
         ["Main", " ", "Main"],
         ["a = 1", "b = 2", "c = 3"],

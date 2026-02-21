@@ -402,7 +402,7 @@ class PycsReader:
             pass
 
     def _pycs2sheet_scripts(self, line: str):
-        """Updates sheet scripts in code_array from legacy save section.
+        """Updates sheet scripts in code_array from [sheet_scripts] section.
 
         :param line: Pycs file line to be parsed
 
