@@ -23,6 +23,7 @@
 import pytest
 
 from ..pycellsheet import PythonCode, PythonEvaluator
+from ..compile_cache import CompileCache
 
 
 def test_exec_then_eval_uses_terminal_expression():
@@ -66,3 +67,20 @@ def test_exec_then_eval_rejects_top_level_return_inside_try_finally():
 def test_exec_then_eval_allows_return_inside_nested_function():
     code = PythonCode("def f(x):\n    return x + 1\nf(4)")
     assert PythonEvaluator.exec_then_eval(code, {}, {}) == 5
+
+
+def test_exec_then_eval_reuses_compile_cache_artifact():
+    cache = CompileCache()
+    key = ("table0", "parser_signature", "a = 2\na + 3")
+    code = PythonCode("a = 2\na + 3")
+
+    first = PythonEvaluator.exec_then_eval(
+        code, {}, {}, compile_cache=cache, cache_key=key
+    )
+    second = PythonEvaluator.exec_then_eval(
+        code, {}, {}, compile_cache=cache, cache_key=key
+    )
+
+    assert first == 5
+    assert second == 5
+    assert len(cache) == 1
