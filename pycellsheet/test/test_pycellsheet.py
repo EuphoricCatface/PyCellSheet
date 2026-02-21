@@ -68,7 +68,7 @@ with insert_path(PYSPREADPATH):
 app = QApplication.instance()
 if app is None:
     app = QApplication([])
-main_window = MainWindow()
+main_window = MainWindow(prompt_parser_dialog_on_startup=False)
 zoom_levels = main_window.settings.zoom_levels
 
 
@@ -89,15 +89,17 @@ class TestMainWindow:
         assert not main_window.main_window_actions.approve.isEnabled()
         assert not main_window.safe_mode
 
-    def test_startup_applies_default_sheet_script(self):
-        """Fresh startup should auto-apply default sheet scripts."""
+    def test_startup_in_no_document_state(self):
+        """Fresh startup should not initialize a workbook until New/Open."""
 
         code_array = main_window.grid.model.code_array
         tables = code_array.shape[2]
 
-        assert code_array.sheet_scripts == [INITSCRIPT_DEFAULT for _ in range(tables)]
-        assert code_array.sheet_scripts_draft == [None for _ in range(tables)]
-        assert code_array.sheet_globals_copyable[0].get("RANDOM_SEED") == 0
+        assert not main_window.has_document
+        assert code_array.sheet_scripts == ["" for _ in range(tables)]
+        assert code_array.sheet_scripts_draft == [
+            INITSCRIPT_DEFAULT for _ in range(tables)
+        ]
 
     def test_sheet_script_globals_are_isolated_per_sheet(self):
         """Sheet Script globals should not leak across sheets."""
@@ -239,3 +241,147 @@ class TestMainWindow:
         assert actions.manual.statusTip() == "Display the PyCellSheet manual"
         assert actions.tutorial.statusTip() == "Display a PyCellSheet tutorial"
         assert actions.preferences.statusTip() == "PyCellSheet setup parameters"
+
+    def test_expression_parser_actions_present(self):
+        """Tools menu should expose parser settings and migration actions."""
+
+        actions = main_window.main_window_actions
+        assert actions.expression_parser_settings.text() == "Expression Parser Settings..."
+        assert actions.migrate_expression_parser.text() == "Migrate Parser Mode..."
+
+    def test_set_expression_parser_mode_updates_state_and_status(self):
+        """Setting parser mode should update model mode and status text."""
+
+        code_array = main_window.grid.model.code_array
+        old_code = code_array.exp_parser_code
+
+        try:
+            main_window.on_set_expression_parser_mode("mixed", True)
+            assert code_array.exp_parser_mode_id == "mixed"
+            assert "expression parser mode set to mixed" in \
+                main_window.statusBar().currentMessage().lower()
+
+            main_window.on_set_expression_parser_mode("pure_spreadsheet", True)
+            assert code_array.exp_parser_mode_id == "pure_spreadsheet"
+            assert "pure_spreadsheet" in main_window.statusBar().currentMessage()
+        finally:
+            code_array.exp_parser_code = old_code
+            main_window.update_action_toggles()
+
+    def test_entryline_parser_indicator_shows_parser_mode(self):
+        """Entry line parser badge should reflect current parser mode."""
+
+        code_array = main_window.grid.model.code_array
+        old_code = code_array.exp_parser_code
+
+        try:
+            code_array.exp_parser_code = "return cell.strip()"
+            main_window.update_action_toggles()
+            assert "Parser: Custom" in main_window.entry_line.parser_indicator.text()
+
+            main_window.on_set_expression_parser_mode("mixed", True)
+            assert "Parser: Mixed" in main_window.entry_line.parser_indicator.text()
+        finally:
+            code_array.exp_parser_code = old_code
+            main_window.update_action_toggles()
+
+    def test_open_expression_parser_settings_dialog_accept(self, monkeypatch):
+        """Parser settings dialog should apply selected mode."""
+
+        code_array = main_window.grid.model.code_array
+        old_code = code_array.exp_parser_code
+
+        class _Dialog:
+            def __init__(self, *_args, **_kwargs):
+                self.selection = "mixed"
+
+            def exec(self):
+                return True
+
+        try:
+            monkeypatch.setitem(
+                main_window.on_open_expression_parser_settings_dialog.__globals__,
+                "ExpressionParserSelectionDialog",
+                _Dialog,
+            )
+            accepted = main_window.on_open_expression_parser_settings_dialog()
+            assert accepted is True
+            assert code_array.exp_parser_mode_id == "mixed"
+        finally:
+            code_array.exp_parser_code = old_code
+
+    def test_open_expression_parser_settings_dialog_cancel_exits_when_requested(
+            self, monkeypatch):
+        """Parser settings cancel should request app quit when configured."""
+
+        calls = {"quit": 0}
+
+        class _Dialog:
+            def __init__(self, *_args, **_kwargs):
+                self.selection = "mixed"
+
+            def exec(self):
+                return False
+
+        class _App:
+            def quit(self):
+                calls["quit"] += 1
+
+        def fake_single_shot(_ms, callback):
+            callback()
+
+        monkeypatch.setitem(
+            main_window.on_open_expression_parser_settings_dialog.__globals__,
+            "ExpressionParserSelectionDialog",
+            _Dialog,
+        )
+        monkeypatch.setitem(
+            main_window.on_open_expression_parser_settings_dialog.__globals__,
+            "QTimer",
+            type("_Timer", (), {"singleShot": staticmethod(fake_single_shot)}),
+        )
+        monkeypatch.setitem(
+            main_window.on_open_expression_parser_settings_dialog.__globals__,
+            "QApplication",
+            type("_QApplication", (), {"instance": staticmethod(lambda: _App())}),
+        )
+
+        accepted = main_window.on_open_expression_parser_settings_dialog(
+            exit_on_cancel=True
+        )
+        assert accepted is False
+        assert calls["quit"] == 1
+
+    def test_open_expression_parser_migration_dialog_applies_report(self, monkeypatch):
+        """Migration dialog acceptance should refresh and report migration summary."""
+
+        calls = {"refresh": 0}
+
+        class _Report:
+            summary = {"safe_changed": 2, "risky_skipped": 1, "unchanged": 3}
+
+        class _Dialog:
+            def __init__(self, _parent, _code_array, current_mode_id, current_table):
+                self.current_mode_id = current_mode_id
+                self.current_table = current_table
+                self.applied_report = _Report()
+
+            def exec(self):
+                return True
+
+        monkeypatch.setitem(
+            main_window.on_open_expression_parser_migration_dialog.__globals__,
+            "ExpressionParserMigrationDialog",
+            _Dialog,
+        )
+        monkeypatch.setattr(
+            main_window,
+            "_refresh_grid",
+            lambda: calls.__setitem__("refresh", calls["refresh"] + 1),
+        )
+
+        main_window.on_open_expression_parser_migration_dialog()
+
+        assert calls["refresh"] == 1
+        assert "Parser migration applied" in main_window.statusBar().currentMessage()
+        assert "safe: 2" in main_window.statusBar().currentMessage()

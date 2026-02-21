@@ -158,7 +158,7 @@ except ImportError:
 #     from lib import spreadsheet
 """
 
-PYCEL_FORMULA_PROMOTION_ENABLED = False
+PYCEL_FORMULA_PROMOTION_ENABLED = True
 
 
 class_format_functions = {}
@@ -516,6 +516,10 @@ class DataArray:
 
         self.exp_parser = ExpressionParser()
         self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        self._saved_parser_signature = (
+            self.exp_parser_code,
+            self.pycel_formula_opt_in,
+        )
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
@@ -563,6 +567,7 @@ class DataArray:
         data["col_widths"] = self.col_widths
         data["sheet_scripts"] = self.sheet_scripts
         data["exp_parser_code"] = self.exp_parser_code
+        data["pycel_formula_opt_in"] = self.pycel_formula_opt_in
 
         return data
 
@@ -608,6 +613,8 @@ class DataArray:
 
         if "exp_parser_code" in kwargs:
             self.exp_parser_code = kwargs["exp_parser_code"]
+        if "pycel_formula_opt_in" in kwargs:
+            self.set_pycel_formula_opt_in(kwargs["pycel_formula_opt_in"])
 
     @property
     def row_heights(self) -> defaultdict:
@@ -704,14 +711,28 @@ class DataArray:
         return report
 
     def set_pycel_formula_opt_in(self, enabled: bool):
-        self.pycel_formula_opt_in = bool(enabled)
+        # pycel mode is always enabled from v0.5 forward.
+        self.pycel_formula_opt_in = True
+
+    @property
+    def parser_settings_applied(self) -> bool:
+        """Returns True when parser settings match last saved/loaded state."""
+
+        return (
+            self.exp_parser_code,
+            self.pycel_formula_opt_in,
+        ) == self._saved_parser_signature
+
+    def mark_parser_settings_applied(self):
+        """Mark current parser settings as persisted baseline."""
+
+        self._saved_parser_signature = (
+            self.exp_parser_code,
+            self.pycel_formula_opt_in,
+        )
 
     def _eval_spreadsheet_code(self, key: Tuple[int, int, int],
                                formula: SpreadSheetCode):
-        if not self.pycel_formula_opt_in:
-            return RuntimeError(
-                "Spreadsheet formulas are disabled. Enable pycel formula mode first."
-            )
         if ExcelFormula is None:
             return ImportError(
                 "pycel is not installed. Install pycel and re-evaluate the cell."
@@ -734,7 +755,7 @@ class DataArray:
             if ":" not in addr_str:
                 return cur_sheet.cell_single_ref(addr_str)
             addr1, addr2 = addr_str.split(":", 1)
-            return cur_sheet.cell_range_ref(addr1, addr2)
+            return cur_sheet.cell_range_ref(addr1, addr2).normalize()  # pycel doesn't know how to handle Range itself
 
         eval_formula = ExcelFormula.build_eval_context(evaluate, evaluate_range)
         compiled_formula = ExcelFormula(f"={formula}")

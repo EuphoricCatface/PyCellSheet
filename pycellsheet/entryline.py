@@ -30,20 +30,66 @@ from contextlib import contextmanager
 
 from PyQt6.QtCore import Qt, QEvent
 from PyQt6.QtGui import QFontMetrics, QTextOption, QKeyEvent
-from PyQt6.QtWidgets import QWidget, QMainWindow
+from PyQt6.QtWidgets import QWidget, QMainWindow, QLabel
 
 try:
     import pycellsheet.commands as commands
     from pycellsheet.lib.spelltextedit import SpellTextEdit
+    from pycellsheet.lib.pycellsheet import ExpressionParser
     from pycellsheet.lib.string_helpers import quote
 except ImportError:
     import commands
     from lib.spelltextedit import SpellTextEdit
+    from lib.pycellsheet import ExpressionParser
     from lib.string_helpers import quote
 
 
 class Entryline(SpellTextEdit):
     """The entry line for PyCellSheet"""
+
+    class ParserIndicator(QLabel):
+        """Shows current parser mode."""
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+            self.setStyleSheet("")
+            if parent:
+                parent.installEventFilter(self)
+                try:
+                    scrollbar = parent.verticalScrollBar()
+                    scrollbar.rangeChanged.connect(lambda *_: self._reposition())
+                    scrollbar.valueChanged.connect(lambda *_: self._reposition())
+                except Exception:
+                    pass
+
+        def _reposition(self):
+            if self.parent():
+                self.adjustSize()
+                scrollbar = self.parent().verticalScrollBar()
+                scrollbar_width = scrollbar.width() if scrollbar.isVisible() else 0
+                self.move(
+                    max(0, self.parent().width() - self.width() - scrollbar_width - 6),
+                    2
+                )
+
+        def eventFilter(self, obj, event):
+            if event.type() == event.Type.Resize:
+                self._reposition()
+            return False
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self._reposition()
+
+        def update_state(self, parser_label: str):
+            self.setText(parser_label)
+            self.setToolTip(f"Expression Parser: {parser_label}")
+            self.setStyleSheet(
+                "QLabel {background-color: #1f000000; font-weight: bold; padding: 1px;}\n"
+                "QLabel { color: blue; }"
+            )
+            self._reposition()
 
     def __init__(self, main_window: QMainWindow):
         """
@@ -65,8 +111,24 @@ class Entryline(SpellTextEdit):
         self.installEventFilter(self)
 
         self.last_key = None
+        self.parser_indicator = Entryline.ParserIndicator(self)
 
         # self.highlighter.setDocument(self.document())
+
+    def update_parser_indicator(self):
+        """Update parser indicator text and state badge."""
+
+        if not hasattr(self.main_window, "grid"):
+            return
+        code_array = self.main_window.grid.model.code_array
+        mode_id = code_array.exp_parser_mode_id
+        if mode_id is None:
+            parser_label = "Parser: Custom"
+        else:
+            parser_label = "Parser: " + ExpressionParser.MODE_ID_TO_LABEL.get(
+                mode_id, mode_id
+            )
+        self.parser_indicator.update_state(parser_label=parser_label)
 
     @contextmanager
     def disable_updates(self):
