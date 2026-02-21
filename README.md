@@ -19,6 +19,8 @@ The core design choice is copy-priority semantics: cell references return deep-c
 - Landed parser selector/migrator and spill-conflict feature line foundations.
 - Tightened `.pycs` persistence contracts to named `[sheet_scripts]` headers only and canonical parser settings.
 - Removed compatibility fallbacks that no longer match v0.5 behavior (numeric sheet-script headers and legacy parser-settings keys).
+- Removed legacy `execute_macros()` alias surface; `execute_sheet_script()` is the canonical model entrypoint.
+- Fixed `COUNTUNIQUE` behavior for ranges containing `EmptyCell` (no unhashable sentinel failure).
 
 ### v0.4.0 (Internal Semantics Cleanup)
 
@@ -92,4 +94,4 @@ tox -e py310,py311,py312,py313,py314
 tox -e py314-optional
 ```
 
-Current active-interpreter baseline: `894 passed`.
+Current active-interpreter baseline: `939 passed`.
