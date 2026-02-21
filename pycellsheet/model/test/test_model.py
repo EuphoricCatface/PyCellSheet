@@ -190,7 +190,6 @@ def test_sheet_script_alias_property():
     code_array.sheet_scripts = ["a = 1", "b = 2"]
 
     assert code_array.sheet_scripts == ["a = 1", "b = 2"]
-    assert code_array.sheet_scripts == ["a = 1", "b = 2"]
 
 
 def test_execute_sheet_script_alias():
@@ -212,10 +211,8 @@ def test_sheet_scripts_alias_tracks_shape_resize():
 
     code_array.shape = (2, 2, 3)
     assert len(code_array.sheet_scripts) == 3
-    assert len(code_array.sheet_scripts) == 3
 
     code_array.shape = (2, 2, 1)
-    assert code_array.sheet_scripts == ["a = 1"]
     assert code_array.sheet_scripts == ["a = 1"]
 
 
