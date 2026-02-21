@@ -595,7 +595,7 @@ class DataArray:
             self.dict_grid.update(kwargs["grid"])
 
         if "attributes" in kwargs:
-            self.attributes[:] = kwargs["attributes"]
+            self.cell_attributes = kwargs["attributes"]
 
         if "row_heights" in kwargs:
             self.row_heights = kwargs["row_heights"]
@@ -643,9 +643,10 @@ class DataArray:
     def cell_attributes(self, value: CellAttributes):
         """cell_attributes interface to dict_grid"""
 
-        # First empty cell_attributes
-        self.cell_attributes[:] = []
-        self.cell_attributes.extend(value)
+        new_attrs = CellAttributes()
+        for cell_attribute in value:
+            new_attrs.append(cell_attribute)
+        self.dict_grid.cell_attributes = new_attrs
 
     @property
     def sheet_scripts(self) -> list[str]:

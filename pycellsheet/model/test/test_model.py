@@ -334,10 +334,12 @@ class TestDataArray(object):
 
     def test_data_setter_uses_sheet_scripts(self):
         data_array = DataArray((2, 2, 1), Settings())
+        attrs = [CellAttribute(Selection([], [], [], [], [(0, 0)]), 0, AttrDict([("angle", 45.0)]))]
         DataArray.data.fset(
             data_array,
             shape=(1, 1, 1),
             grid={(0, 0, 0): "x"},
+            attributes=attrs,
             row_heights={(0, 0): 10.0},
             col_widths={(0, 0): 12.0},
             sheet_scripts=["script=1"],
@@ -348,6 +350,7 @@ class TestDataArray(object):
         assert data_array.row_heights[(0, 0)] == 10.0
         assert data_array.col_widths[(0, 0)] == 12.0
         assert data_array.exp_parser_code == "return PythonCode(cell)"
+        assert data_array.cell_attributes[0, 0, 0]["angle"] == 45.0
 
         DataArray.data.fset(data_array, sheet_scripts=["legacy_only=1"])
         assert data_array.sheet_scripts == ["legacy_only=1"]
