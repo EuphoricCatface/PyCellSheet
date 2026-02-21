@@ -39,11 +39,6 @@ import pytest
 from PyQt6.QtCore import Qt, QItemSelectionModel
 from PyQt6.QtWidgets import QApplication
 
-try:
-    from pycellsheet.dialogs import GridShapeDialog
-except ImportError:
-    from dialogs import GridShapeDialog
-
 
 PYSPREADPATH = abspath(join(dirname(__file__) + "/.."))
 LIBPATH = abspath(PYSPREADPATH + "/lib")
@@ -64,7 +59,7 @@ with insert_path(PYSPREADPATH):
 app = QApplication.instance()
 if app is None:
     app = QApplication([])
-main_window = MainWindow()
+main_window = MainWindow(prompt_parser_dialog_on_startup=False)
 
 
 class TestWorkflows:
@@ -108,6 +103,7 @@ class TestWorkflows:
     def test_update_main_window_title(self, path, title):
         """Unit test for update_main_window_title"""
 
+        main_window.set_document_state(True)
         main_window.settings.last_file_input_path = path
         self.workflows.update_main_window_title()
         assert main_window.windowTitle() == title
@@ -133,7 +129,44 @@ class TestWorkflows:
 
         monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
                             fake_apply_all_sheet_scripts)
-        monkeypatch.setattr(GridShapeDialog, "shape", shape)
+        monkeypatch.setattr(
+            main_window,
+            "on_open_expression_parser_settings_dialog",
+            lambda **_kwargs: True,
+        )
+
+        class _NewDocumentDialog:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def exec(self):
+                return True
+
+            @property
+            def shape(self):
+                return shape
+
+            @property
+            def parser_mode_id(self):
+                return "pure_spreadsheet"
+
+            @property
+            def parser_code(self):
+                return None
+
+            @property
+            def initscript_choice(self):
+                return "verbose"
+
+            @property
+            def initscript_template(self):
+                return INITSCRIPT_DEFAULT
+
+        monkeypatch.setitem(
+            self.workflows.file_new.__globals__,
+            "NewDocumentDialog",
+            _NewDocumentDialog,
+        )
         self.workflows.file_new()
 
         assert main_window.grid.model.shape == res
@@ -150,8 +183,16 @@ class TestWorkflows:
         if msg:
             assert main_window.statusBar().currentMessage() == msg
 
-        monkeypatch.setattr(GridShapeDialog, "shape",
-                            main_window.settings.shape)
+        class _FollowupNewDocumentDialog(_NewDocumentDialog):
+            @property
+            def shape(self):
+                return main_window.settings.shape
+
+        monkeypatch.setitem(
+            self.workflows.file_new.__globals__,
+            "NewDocumentDialog",
+            _FollowupNewDocumentDialog,
+        )
         self.workflows.file_new()
 
     def test_apply_all_sheet_scripts_executes_each_table(self, monkeypatch):
@@ -264,7 +305,7 @@ class TestWorkflows:
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
         old_shape = code_array.shape
-        old_drafts = list(code_array.macros_draft)
+        old_drafts = list(code_array.sheet_scripts_draft)
         old_safe_mode = main_window.safe_mode
         old_changed = main_window.settings.changed_since_save
 
@@ -282,8 +323,8 @@ class TestWorkflows:
             main_window.safe_mode = False
             main_window.settings.changed_since_save = False
             code_array.shape = (old_shape[0], old_shape[1], 1)
-            code_array.macros_draft = [None]
-            code_array.macros_draft[0] = "x = 1"
+            code_array.sheet_scripts_draft = [None]
+            code_array.sheet_scripts_draft[0] = "x = 1"
             panel.current_table = 0
             panel.update_()
 
@@ -294,16 +335,52 @@ class TestWorkflows:
             )
             monkeypatch.setattr(self.workflows, "apply_all_sheet_scripts",
                                 fake_apply_all_sheet_scripts)
-            monkeypatch.setattr(GridShapeDialog, "shape", (5, 5, 1))
+            monkeypatch.setattr(
+                main_window,
+                "on_open_expression_parser_settings_dialog",
+                lambda **_kwargs: True,
+            )
+            class _NewDocumentDialog:
+                def __init__(self, *_args, **_kwargs):
+                    pass
+
+                def exec(self):
+                    return True
+
+                @property
+                def shape(self):
+                    return (5, 5, 1)
+
+                @property
+                def parser_mode_id(self):
+                    return "pure_spreadsheet"
+
+                @property
+                def parser_code(self):
+                    return None
+
+                @property
+                def initscript_choice(self):
+                    return "verbose"
+
+                @property
+                def initscript_template(self):
+                    return INITSCRIPT_DEFAULT
+
+            monkeypatch.setitem(
+                self.workflows.file_new.__globals__,
+                "NewDocumentDialog",
+                _NewDocumentDialog,
+            )
 
             self.workflows.file_new()
 
             assert called["count"] == 0
             assert code_array.shape == (old_shape[0], old_shape[1], 1)
-            assert code_array.macros_draft[0] == "x = 1"
+            assert code_array.sheet_scripts_draft[0] == "x = 1"
         finally:
             code_array.shape = old_shape
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts_draft = old_drafts
             main_window.safe_mode = old_safe_mode
             main_window.settings.changed_since_save = old_changed
             panel.current_table = 0
@@ -315,8 +392,8 @@ class TestWorkflows:
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
         old_shape = code_array.shape
-        old_macros = list(code_array.macros)
-        old_drafts = list(code_array.macros_draft)
+        old_macros = list(code_array.sheet_scripts)
+        old_drafts = list(code_array.sheet_scripts_draft)
         old_safe_mode = main_window.safe_mode
         old_changed = main_window.settings.changed_since_save
 
@@ -334,8 +411,8 @@ class TestWorkflows:
             main_window.safe_mode = False
             main_window.settings.changed_since_save = False
             code_array.shape = (old_shape[0], old_shape[1], 1)
-            code_array.macros = [""]
-            code_array.macros_draft = ["x = 11"]
+            code_array.sheet_scripts = [""]
+            code_array.sheet_scripts_draft = ["x = 11"]
             panel.current_table = 0
             panel.update_()
 
@@ -349,13 +426,13 @@ class TestWorkflows:
 
             assert self.workflows._resolve_unapplied_sheet_script_drafts()
             assert called["count"] == 1
-            assert code_array.macros[0] == "x = 11"
-            assert code_array.macros_draft[0] is None
+            assert code_array.sheet_scripts[0] == "x = 11"
+            assert code_array.sheet_scripts_draft[0] is None
             assert main_window.settings.changed_since_save is True
         finally:
             code_array.shape = old_shape
-            code_array.macros = old_macros
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts = old_macros
+            code_array.sheet_scripts_draft = old_drafts
             main_window.safe_mode = old_safe_mode
             main_window.settings.changed_since_save = old_changed
             panel.current_table = 0
@@ -370,7 +447,7 @@ class TestWorkflows:
 
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
-        old_drafts = list(code_array.macros_draft)
+        old_drafts = list(code_array.sheet_scripts_draft)
         old_changed = main_window.settings.changed_since_save
         called = {"save": 0}
 
@@ -379,7 +456,7 @@ class TestWorkflows:
             return True
 
         try:
-            code_array.macros_draft[0] = "x = 3"
+            code_array.sheet_scripts_draft[0] = "x = 3"
             panel.current_table = 0
             panel.update_()
             main_window.settings.changed_since_save = False
@@ -394,7 +471,7 @@ class TestWorkflows:
             assert self.workflows.file_save() is False
             assert called["save"] == 0
         finally:
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts_draft = old_drafts
             main_window.settings.changed_since_save = old_changed
             panel.current_table = 0
             panel.update_()
@@ -404,8 +481,8 @@ class TestWorkflows:
 
         code_array = main_window.grid.model.code_array
         panel = main_window.sheet_script_panel
-        old_drafts = list(code_array.macros_draft)
-        old_macros = list(code_array.macros)
+        old_drafts = list(code_array.sheet_scripts_draft)
+        old_macros = list(code_array.sheet_scripts)
 
         class _FailIfCalledDialog:
             def __init__(self, _parent):
@@ -418,7 +495,7 @@ class TestWorkflows:
             return 0, 0
 
         try:
-            code_array.macros = ["" for _ in range(code_array.shape[2])]
+            code_array.sheet_scripts = ["" for _ in range(code_array.shape[2])]
             panel.current_table = 0
             panel.update_()
 
@@ -433,8 +510,8 @@ class TestWorkflows:
             assert self.workflows._resolve_unapplied_sheet_script_drafts()
             assert called["count"] == 0
         finally:
-            code_array.macros = old_macros
-            code_array.macros_draft = old_drafts
+            code_array.sheet_scripts = old_macros
+            code_array.sheet_scripts_draft = old_drafts
             panel.current_table = 0
             panel.update_()
 
@@ -448,8 +525,8 @@ class TestWorkflows:
             "1\t1\t1\n"
             "[sheet_names]\n"
             "Sheet 0\n"
-            "[macros]\n"
-            "(macro:'Sheet 0') 1\n"
+            "[sheet_scripts]\n"
+            "(sheet_script:'Sheet 0') 1\n"
             "VALUE = 7\n"
             "[grid]\n"
             "0\t0\t0\t'abc'\n"
@@ -895,8 +972,8 @@ class TestWorkflows:
             "1\t1\t1\n"
             "[sheet_names]\n"
             "Sheet 0\n"
-            "[macros]\n"
-            "(macro:'Sheet 0') 1\n"
+            "[sheet_scripts]\n"
+            "(sheet_script:'Sheet 0') 1\n"
             "VALUE = 7\n"
             "[grid]\n"
             "0\t0\t0\t'abc'\n"

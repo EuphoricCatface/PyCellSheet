@@ -75,7 +75,7 @@ def _is_empty_cell(value) -> bool:
 app = QApplication.instance()
 if app is None:
     app = QApplication([])
-main_window = MainWindow()
+main_window = MainWindow(prompt_parser_dialog_on_startup=False)
 zoom_levels = main_window.settings.zoom_levels
 
 
@@ -1033,6 +1033,19 @@ class TestGridTableModel:
         _ = self.model.data(index, Qt.ItemDataRole.DisplayRole)
         assert not self.model.code_array.get_cell_warnings(key)
 
+    def test_tooltip_role_includes_warnings(self):
+        """Tooltip should include warning details when warning marker is active."""
+
+        key = (0, 0, 0)
+        index = self.model.index(0, 0)
+        self.model.code_array[key] = "'   "
+
+        _ = self.model.data(index, Qt.ItemDataRole.DisplayRole)
+        tooltip = self.model.data(index, Qt.ItemDataRole.ToolTipRole)
+
+        assert "Warnings:" in tooltip
+        assert "Formatter produced empty display output" in tooltip
+
     param_test_insertRows = [
         (0, 5, (0, 0, 0), "0", (5, 0, 0), "0"),
         (0, 5, (0, 0, 0), "0", (0, 0, 0), None),
@@ -1140,8 +1153,8 @@ class TestGridTableModel:
         assert not self.model.code_array.row_heights
         assert not self.model.code_array.col_widths
         tables = self.model.shape[2]
-        assert self.model.code_array.macros == [INITSCRIPT_DEFAULT for _ in range(tables)]
-        assert self.model.code_array.macros_draft == [None for _ in range(tables)]
+        assert self.model.code_array.sheet_scripts == [INITSCRIPT_DEFAULT for _ in range(tables)]
+        assert self.model.code_array.sheet_scripts_draft == [None for _ in range(tables)]
         assert self.model.code_array.sheet_globals_copyable == [dict() for _ in range(tables)]
         assert self.model.code_array.sheet_globals_uncopyable == [dict() for _ in range(tables)]
 

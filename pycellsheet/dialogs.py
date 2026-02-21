@@ -47,6 +47,8 @@
  * :class:`TutorialDialog`
  * :class:`ManualDialog`
  * :class:`PrintPreviewDialog`
+ * :class:`ExpressionParserSelectionDialog`
+ * :class:`ExpressionParserMigrationDialog`
 """
 
 from contextlib import redirect_stdout
@@ -57,14 +59,15 @@ import io
 from pathlib import Path
 from typing import List, Sequence, Tuple, Union
 
-from PyQt6.QtCore import Qt, QPoint, QSize, QEvent
+from PyQt6.QtCore import Qt, QPoint, QSize, QEvent, QAbstractTableModel, QModelIndex
 from PyQt6.QtWidgets \
     import (QApplication, QMessageBox, QFileDialog, QDialog, QLineEdit, QLabel,
             QFormLayout, QVBoxLayout, QGroupBox, QDialogButtonBox, QSplitter,
             QTextBrowser, QCheckBox, QGridLayout, QLayout, QHBoxLayout,
             QPushButton, QWidget, QComboBox, QTableView, QAbstractItemView,
             QPlainTextEdit, QToolBar, QMainWindow, QTabWidget, QInputDialog,
-            QComboBox)
+            QSpinBox,
+            )
 from PyQt6.QtGui \
     import (QIntValidator, QImageWriter, QStandardItemModel, QStandardItem,
             QValidator, QWheelEvent)
@@ -94,7 +97,9 @@ try:
     from pycellsheet.toolbar import ChartTemplatesToolBar, RChartTemplatesToolBar
     from pycellsheet.widgets import HelpBrowser, TypeMenuComboBox
     from pycellsheet.lib.csv import sniff, csv_reader, get_header, convert
+    from pycellsheet.lib.pycellsheet import ExpressionParser, Formatter
     from pycellsheet.lib.spelltextedit import SpellTextEdit
+    from pycellsheet.model.model import INITSCRIPT_DEFAULT, CodeArray
     from pycellsheet.settings import (TUTORIAL_PATH, MANUAL_PATH,
                                       MPL_TEMPLATE_PATH, RPY2_TEMPLATE_PATH,
                                       PLOT9_TEMPLATE_PATH)
@@ -103,7 +108,9 @@ except ImportError:
     from toolbar import ChartTemplatesToolBar, RChartTemplatesToolBar
     from widgets import HelpBrowser, TypeMenuComboBox
     from lib.csv import sniff, csv_reader, get_header, convert
+    from lib.pycellsheet import ExpressionParser, Formatter
     from lib.spelltextedit import SpellTextEdit
+    from model.model import INITSCRIPT_DEFAULT, CodeArray
     from settings import (TUTORIAL_PATH, MANUAL_PATH, MPL_TEMPLATE_PATH,
                           RPY2_TEMPLATE_PATH, PLOT9_TEMPLATE_PATH)
 
@@ -605,6 +612,884 @@ class PreferencesDialog(DataEntryDialog):
             for key, mapper, data in zip(self.keys, self.mappers, data):
                 data_dict[key] = mapper(data)
             return data_dict
+
+
+def simple_initscript_template() -> str:
+    """Return a compact official initscript preset without comments."""
+
+    lines = []
+    for line in INITSCRIPT_DEFAULT.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip() + "\n"
+
+
+def resolve_initscript_template(choice: str, settings) -> str:
+    """Resolve initscript preset choice to concrete script text."""
+
+    if choice == "verbose":
+        return INITSCRIPT_DEFAULT
+    if choice == "simple":
+        return simple_initscript_template()
+    if str(choice).startswith("preset:"):
+        target = str(choice).split(":", 1)[1]
+        for preset in (settings.initscript_custom_presets or []):
+            if isinstance(preset, dict) and preset.get("name") == target:
+                return preset.get("code", "")
+    return INITSCRIPT_DEFAULT
+
+
+class ExpParserAdvancedDialog(QDialog):
+    """Advanced Expression Parser configuration with 9-cell playground."""
+
+    OFFICIAL_EXAMPLES = {
+        "pure_pythonic": [
+            ('"Python"', '"This is a\\n" + "Python string"'),
+            ('"Spreadsheet (dud!)"', '=CONCAT("spread", "sheet")'),
+            ('"String"', '"text"'),
+        ],
+        "mixed": [
+            ('"Python"', '"This is a\\n" + "Python string"'),
+            ('"Spreadsheet"', '=CONCAT("spread", "sheet")'),
+            ('"String"', "'text"),
+        ],
+        "pure_spreadsheet": [
+            ('Python', '> "This is a\\n" + "Python string"'),
+            ('Spreadsheet', '=CONCAT("spread", "sheet")'),
+            ('String', "'text"),
+        ],
+    }
+
+    class PlaygroundModel(QAbstractTableModel):
+        """Small 3x3 worksheet model backed by CodeArray."""
+
+        def __init__(self, settings, parent=None):
+            super().__init__(parent)
+            self.code_array = CodeArray((3, 3, 1), settings)
+            self.code_array.sheet_scripts[0] = INITSCRIPT_DEFAULT
+            self.code_array.execute_sheet_script(0)
+
+        def rowCount(self, parent=QModelIndex()):
+            if parent.isValid():
+                return 0
+            return 3
+
+        def columnCount(self, parent=QModelIndex()):
+            if parent.isValid():
+                return 0
+            return 3
+
+        def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+            if role != Qt.ItemDataRole.DisplayRole:
+                return None
+            if orientation == Qt.Orientation.Horizontal:
+                return chr(ord("A") + section)
+            return str(section + 1)
+
+        def flags(self, index):
+            if not index.isValid():
+                return Qt.ItemFlag.NoItemFlags
+            return (
+                Qt.ItemFlag.ItemIsSelectable
+                | Qt.ItemFlag.ItemIsEnabled
+                | Qt.ItemFlag.ItemIsEditable
+            )
+
+        def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+            if not index.isValid():
+                return None
+            key = (index.row(), index.column(), 0)
+
+            if role == Qt.ItemDataRole.EditRole:
+                code = self.code_array(key)
+                return "" if code is None else str(code)
+
+            if role == Qt.ItemDataRole.DisplayRole:
+                try:
+                    return str(Formatter.display_formatter(self.code_array[key]))
+                except Exception as err:
+                    return f"{type(err).__name__}: {err}"
+
+            if role == Qt.ItemDataRole.ToolTipRole:
+                code = self.code_array(key)
+                try:
+                    result = self.code_array[key]
+                    rendered = Formatter.tooltip_formatter(result)
+                except Exception as err:
+                    rendered = f"{type(err).__name__}: {err}"
+                return f"Code: {code or ''}\nResult: {rendered}"
+            return None
+
+        def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+            if not index.isValid() or role != Qt.ItemDataRole.EditRole:
+                return False
+            self.code_array[index.row(), index.column(), 0] = str(value)
+            self._emit_all_changed()
+            return True
+
+        def set_parser_code(self, parser_code: str):
+            self.code_array.exp_parser_code = parser_code
+            self.code_array.smart_cache.clear()
+            self.code_array.dep_graph.dirty.clear()
+            self._emit_all_changed()
+
+        def load_examples(self, examples):
+            for row in range(3):
+                for col in range(3):
+                    self.code_array[row, col, 0] = ""
+            for col, (label, code) in enumerate(examples):
+                self.code_array[0, col, 0] = label
+                self.code_array[1, col, 0] = code
+            self._emit_all_changed()
+
+        def _emit_all_changed(self):
+            top_left = self.index(0, 0)
+            bottom_right = self.index(2, 2)
+            self.dataChanged.emit(top_left, bottom_right)
+
+    def __init__(self, parent: QWidget, settings, mode_id: str, parser_code: str):
+        super().__init__(parent)
+        self.settings = settings
+        self.setWindowTitle("Expression Parser Advanced")
+        self.setMinimumSize(760, 520)
+        self._mode_change_in_progress = False
+
+        self.mode_combo = QComboBox()
+        for mode in ExpressionParser.list_modes():
+            self.mode_combo.addItem(
+                f"[Official] {mode['label']}",
+                ("official", mode["id"], mode["code"]),
+            )
+        for preset in (self.settings.parser_custom_presets or []):
+            if isinstance(preset, dict):
+                self.mode_combo.addItem(
+                    preset.get("name", "Unnamed"),
+                    ("custom", preset.get("name", "Unnamed"), preset.get("code", "")),
+                )
+
+        idx = self.mode_combo.findData(
+            ("official", "pure_spreadsheet",
+             ExpressionParser.get_mode_code("pure_spreadsheet"))
+        )
+        if idx >= 0:
+            self.mode_combo.setCurrentIndex(idx)
+        else:
+            self.mode_combo.setCurrentIndex(0)
+
+        self.parser_code_editor = QPlainTextEdit()
+        self.parser_code_editor.setPlainText(parser_code or "")
+
+        self.playground_model = self.PlaygroundModel(settings, self)
+        self.playground = QTableView(self)
+        self.playground.setModel(self.playground_model)
+        self.playground.setAlternatingRowColors(True)
+        self.playground.horizontalHeader().setStretchLastSection(True)
+        self.playground.verticalHeader().setDefaultSectionSize(28)
+        self.playground.horizontalHeader().setDefaultSectionSize(220)
+        self.playground_status = QLabel("")
+        self.playground_status.setWordWrap(True)
+
+        self.save_preset_button = QPushButton("Save preset")
+        self.delete_preset_button = QPushButton("Delete preset")
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        form = QFormLayout()
+        form.addRow("Mode:", self.mode_combo)
+        form.addRow("Parser code:", self.parser_code_editor)
+
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(self.save_preset_button)
+        preset_row.addWidget(self.delete_preset_button)
+        form.addRow("Presets:", preset_row)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(QLabel("Playground (real worksheet, 9 cells):"))
+        layout.addWidget(self.playground)
+        layout.addWidget(self.playground_status)
+        layout.addWidget(buttons)
+
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        self.save_preset_button.clicked.connect(self._save_preset)
+        self.delete_preset_button.clicked.connect(self._delete_preset)
+        self.parser_code_editor.textChanged.connect(self._on_parser_code_edited)
+
+        self._on_mode_changed()
+
+    def _set_top6_examples(self, mode_id: str):
+        examples = self.OFFICIAL_EXAMPLES.get(mode_id, [])
+        self.playground_model.load_examples(examples)
+
+    def _apply_parser_to_playground(self):
+        parser_code = self.parser_code_editor.toPlainText()
+        try:
+            self.playground_model.set_parser_code(parser_code)
+        except Exception as err:
+            self.playground_status.setText(f"Parser code error: {err}")
+            return False
+        self.playground_status.setText("")
+        return True
+
+    def _on_parser_code_edited(self):
+        if self._mode_change_in_progress:
+            return
+        self._apply_parser_to_playground()
+        self._update_preset_buttons()
+
+    def _on_mode_changed(self):
+        self._mode_change_in_progress = True
+        kind, mode_id, mode_code = self.mode_combo.currentData()
+        if kind == "official" and mode_id in self.OFFICIAL_EXAMPLES:
+            self.parser_code_editor.setPlainText(mode_code)
+            self.parser_code_editor.setReadOnly(True)
+            self._set_top6_examples(mode_id)
+        else:
+            self.parser_code_editor.setPlainText(mode_code)
+            self.parser_code_editor.setReadOnly(False)
+        self._mode_change_in_progress = False
+        self._apply_parser_to_playground()
+        self._update_preset_buttons()
+
+    def _save_preset(self):
+        if not self.save_preset_button.isEnabled():
+            return
+        name, ok = QInputDialog.getText(self, "Save parser preset", "Preset name:")
+        if not ok or not name.strip():
+            return
+        trimmed = name.strip()
+        presets = list(self.settings.parser_custom_presets or [])
+        code = self.parser_code_editor.toPlainText()
+        replaced = False
+        for preset in presets:
+            if isinstance(preset, dict) and preset.get("name") == trimmed:
+                preset["code"] = code
+                replaced = True
+                break
+        if not replaced:
+            presets.append({"name": trimmed, "code": code})
+        self.settings.parser_custom_presets = presets
+        self._reload_mode_combo(select_custom_name=trimmed)
+
+    def _delete_preset(self):
+        kind, preset_name, _code = self.mode_combo.currentData()
+        if kind != "custom":
+            return
+        presets = [p for p in (self.settings.parser_custom_presets or [])
+                   if not (isinstance(p, dict) and p.get("name") == preset_name)]
+        self.settings.parser_custom_presets = presets
+        self._reload_mode_combo(select_official_id="pure_spreadsheet")
+
+    def _reload_mode_combo(self, select_custom_name: str = None, select_official_id: str = None):
+        current_data = self.mode_combo.currentData()
+        self.mode_combo.blockSignals(True)
+        self.mode_combo.clear()
+        for mode in ExpressionParser.list_modes():
+            self.mode_combo.addItem(
+                f"[Official] {mode['label']}",
+                ("official", mode["id"], mode["code"]),
+            )
+        for preset in (self.settings.parser_custom_presets or []):
+            if isinstance(preset, dict):
+                self.mode_combo.addItem(
+                    preset.get("name", "Unnamed"),
+                    ("custom", preset.get("name", "Unnamed"), preset.get("code", "")),
+                )
+        self.mode_combo.blockSignals(False)
+
+        if select_custom_name is not None:
+            idx = self.mode_combo.findData(("custom", select_custom_name, self._find_custom_code(select_custom_name)))
+            if idx >= 0:
+                self.mode_combo.setCurrentIndex(idx)
+                return
+        if select_official_id is not None:
+            target = ("official", select_official_id, ExpressionParser.get_mode_code(select_official_id))
+            idx = self.mode_combo.findData(target)
+            if idx >= 0:
+                self.mode_combo.setCurrentIndex(idx)
+                return
+        if current_data is not None:
+            idx = self.mode_combo.findData(current_data)
+            if idx >= 0:
+                self.mode_combo.setCurrentIndex(idx)
+                return
+        self.mode_combo.setCurrentIndex(0)
+
+    def _find_custom_code(self, name: str) -> str:
+        for preset in (self.settings.parser_custom_presets or []):
+            if isinstance(preset, dict) and preset.get("name") == name:
+                return preset.get("code", "")
+        return ""
+
+    def _update_preset_buttons(self):
+        current = self.mode_combo.currentData()
+        if not current:
+            self.save_preset_button.setEnabled(False)
+            self.delete_preset_button.setEnabled(False)
+            return
+        kind, _id_or_name, code = current
+        modified = self.parser_code_editor.toPlainText() != (code or "")
+        self.save_preset_button.setEnabled(modified)
+        self.delete_preset_button.setEnabled(kind == "custom")
+
+    @property
+    def selected_mode_id(self) -> str:
+        kind, mode_id, _code = self.mode_combo.currentData()
+        if kind == "official":
+            return mode_id
+        return "custom"
+
+    @property
+    def parser_code(self) -> str:
+        return self.parser_code_editor.toPlainText()
+
+
+class SheetScriptPresetAdvancedDialog(QDialog):
+    """Advanced Sheet Script preset manager with save/delete."""
+
+    def __init__(self, parent: QWidget, settings, choice: str, template: str):
+        super().__init__(parent)
+        self.settings = settings
+        self.setWindowTitle("Sheet Script Preset Advanced")
+        self.setMinimumSize(760, 460)
+
+        self.preset_combo = QComboBox()
+        self.editor = QPlainTextEdit()
+        self.save_button = QPushButton("Save preset")
+        self.delete_button = QPushButton("Delete preset")
+
+        self._load_presets()
+        idx = self.preset_combo.findData(choice)
+        if idx >= 0:
+            self.preset_combo.setCurrentIndex(idx)
+        else:
+            self.preset_combo.setCurrentIndex(0)
+        self.editor.setPlainText(template)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        row = QHBoxLayout()
+        row.addWidget(self.preset_combo)
+        row.addWidget(self.save_button)
+        row.addWidget(self.delete_button)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Preset menu"))
+        layout.addLayout(row)
+        layout.addWidget(self.editor)
+        layout.addWidget(buttons)
+
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+        self.save_button.clicked.connect(self._save_preset)
+        self.delete_button.clicked.connect(self._delete_preset)
+        self.editor.textChanged.connect(self._update_buttons)
+        self._on_preset_changed()
+
+    def _load_presets(self):
+        self.preset_combo.clear()
+        self.preset_combo.addItem("[Official] Verbose", "verbose")
+        self.preset_combo.addItem("[Official] Simple", "simple")
+        presets = self.settings.initscript_custom_presets or []
+        for preset in presets:
+            if isinstance(preset, dict):
+                preset_id = f"preset:{preset.get('name', 'Unnamed')}"
+                self.preset_combo.addItem(preset.get("name", "Unnamed"), preset_id)
+
+    def _on_preset_changed(self):
+        choice = self.preset_combo.currentData()
+        self.editor.setPlainText(
+            resolve_initscript_template(choice, self.settings)
+        )
+        self._update_buttons()
+
+    def _save_preset(self):
+        if not self.save_button.isEnabled():
+            return
+        name, ok = QInputDialog.getText(self, "Save Sheet Script preset", "Preset name:")
+        if not ok or not name.strip():
+            return
+        trimmed = name.strip()
+        presets = list(self.settings.initscript_custom_presets or [])
+        code = self.editor.toPlainText()
+        replaced = False
+        for preset in presets:
+            if isinstance(preset, dict) and preset.get("name") == trimmed:
+                preset["code"] = code
+                replaced = True
+                break
+        if not replaced:
+            presets.append({"name": trimmed, "code": code})
+        self.settings.initscript_custom_presets = presets
+        self._load_presets()
+        data = f"preset:{trimmed}"
+        idx = self.preset_combo.findData(data)
+        if idx >= 0:
+            self.preset_combo.setCurrentIndex(idx)
+        self._update_buttons()
+
+    def _delete_preset(self):
+        choice = self.preset_combo.currentData()
+        if not str(choice).startswith("preset:"):
+            return
+        target = str(choice).split(":", 1)[1]
+        presets = [p for p in (self.settings.initscript_custom_presets or [])
+                   if not (isinstance(p, dict) and p.get("name") == target)]
+        self.settings.initscript_custom_presets = presets
+        self._load_presets()
+        self.preset_combo.setCurrentIndex(0)
+        self._update_buttons()
+
+    def _current_template_code(self) -> str:
+        return resolve_initscript_template(
+            self.preset_combo.currentData(), self.settings
+        )
+
+    def _update_buttons(self):
+        baseline = self._current_template_code()
+        modified = self.editor.toPlainText() != baseline
+        self.save_button.setEnabled(modified)
+        self.delete_button.setEnabled(str(self.preset_combo.currentData()).startswith("preset:"))
+
+    @property
+    def choice(self) -> str:
+        data = self.preset_combo.currentData()
+        if str(data).startswith("preset:"):
+            return str(data)
+        return data
+
+    @property
+    def template(self) -> str:
+        return self.editor.toPlainText()
+
+
+class NewDocumentDialog(QDialog):
+    """New document setup dialog with parser/initscript and shape."""
+
+    def __init__(self, parent: QWidget, settings, current_shape: Tuple[int, int, int]):
+        super().__init__(parent)
+        self.settings = settings
+        self.setWindowTitle("New Document")
+        self.setMinimumWidth(520)
+
+        self.rows_spin = QSpinBox()
+        self.cols_spin = QSpinBox()
+        self.tabs_spin = QSpinBox()
+        self.rows_spin.setRange(1, parent.settings.maxshape[0])
+        self.cols_spin.setRange(1, parent.settings.maxshape[1])
+        self.tabs_spin.setRange(1, parent.settings.maxshape[2])
+        self.rows_spin.setValue(current_shape[0])
+        self.cols_spin.setValue(current_shape[1])
+        self.tabs_spin.setValue(current_shape[2])
+
+        self.parser_mode_combo = QComboBox()
+        for mode in ExpressionParser.list_modes():
+            self.parser_mode_combo.addItem(
+                f"[Official] {mode['label']}",
+                ("official", mode["id"], mode["code"]),
+            )
+        for preset in (self.settings.parser_custom_presets or []):
+            if isinstance(preset, dict):
+                self.parser_mode_combo.addItem(
+                    preset.get("name", "Unnamed"),
+                    ("custom", preset.get("name", "Unnamed"), preset.get("code", "")),
+                )
+        self.parser_advanced_button = QPushButton("Advanced...")
+
+        self.initscript_preset_combo = QComboBox()
+        self.initscript_preset_combo.addItem("[Official] Verbose", "verbose")
+        self.initscript_preset_combo.addItem("[Official] Simple", "simple")
+        for preset in (self.settings.initscript_custom_presets or []):
+            if isinstance(preset, dict):
+                self.initscript_preset_combo.addItem(
+                    preset.get("name", "Unnamed"),
+                    f"preset:{preset.get('name', 'Unnamed')}",
+                )
+        self.initscript_advanced_button = QPushButton("Advanced...")
+
+        self._parser_mode_id = self.settings.startup_parser_mode_id
+        if self._parser_mode_id in ExpressionParser.MODE_ID_TO_LABEL:
+            self._parser_code = ExpressionParser.get_mode_code(self._parser_mode_id)
+        else:
+            self._parser_mode_id = "pure_spreadsheet"
+            self._parser_code = ExpressionParser.get_mode_code("pure_spreadsheet")
+        self._initscript_choice = self.settings.initscript_preset_choice
+        self._initscript_template = INITSCRIPT_DEFAULT
+
+        pidx = self.parser_mode_combo.findData(
+            ("official", self._parser_mode_id, self._parser_code)
+        )
+        if pidx >= 0:
+            self.parser_mode_combo.setCurrentIndex(pidx)
+        iidx = self.initscript_preset_combo.findData(self._initscript_choice)
+        if iidx >= 0:
+            self.initscript_preset_combo.setCurrentIndex(iidx)
+        self._refresh_initscript_template()
+
+        form = QFormLayout()
+        form.addRow("Rows:", self.rows_spin)
+        form.addRow("Columns:", self.cols_spin)
+        form.addRow("Tables:", self.tabs_spin)
+        parser_row = QHBoxLayout()
+        parser_row.addWidget(self.parser_mode_combo)
+        parser_row.addWidget(self.parser_advanced_button)
+        form.addRow("Expression Parser:", parser_row)
+        script_row = QHBoxLayout()
+        script_row.addWidget(self.initscript_preset_combo)
+        script_row.addWidget(self.initscript_advanced_button)
+        form.addRow("Sheet Script Preset:", script_row)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+        self.parser_mode_combo.currentIndexChanged.connect(self._on_parser_mode_changed)
+        self.initscript_preset_combo.currentIndexChanged.connect(self._on_initscript_choice_changed)
+        self.parser_advanced_button.clicked.connect(self._open_parser_advanced)
+        self.initscript_advanced_button.clicked.connect(self._open_initscript_advanced)
+
+    def _reload_parser_preset_combo(self):
+        self.parser_mode_combo.blockSignals(True)
+        self.parser_mode_combo.clear()
+        for mode in ExpressionParser.list_modes():
+            self.parser_mode_combo.addItem(
+                f"[Official] {mode['label']}",
+                ("official", mode["id"], mode["code"]),
+            )
+        for preset in (self.settings.parser_custom_presets or []):
+            if isinstance(preset, dict):
+                self.parser_mode_combo.addItem(
+                    preset.get("name", "Unnamed"),
+                    ("custom", preset.get("name", "Unnamed"), preset.get("code", "")),
+                )
+        self.parser_mode_combo.blockSignals(False)
+
+    def _reload_initscript_preset_combo(self):
+        self.initscript_preset_combo.blockSignals(True)
+        self.initscript_preset_combo.clear()
+        self.initscript_preset_combo.addItem("[Official] Verbose", "verbose")
+        self.initscript_preset_combo.addItem("[Official] Simple", "simple")
+        for preset in (self.settings.initscript_custom_presets or []):
+            if isinstance(preset, dict):
+                self.initscript_preset_combo.addItem(
+                    preset.get("name", "Unnamed"),
+                    f"preset:{preset.get('name', 'Unnamed')}",
+                )
+        self.initscript_preset_combo.blockSignals(False)
+
+    def _refresh_initscript_template(self):
+        self._initscript_template = resolve_initscript_template(
+            self._initscript_choice, self.settings
+        )
+
+    def _on_parser_mode_changed(self):
+        kind, mode_or_name, code = self.parser_mode_combo.currentData()
+        if kind == "official":
+            self._parser_mode_id = mode_or_name
+            self._parser_code = code
+        else:
+            self._parser_mode_id = "custom"
+            self._parser_code = code
+
+    def _on_initscript_choice_changed(self):
+        self._initscript_choice = self.initscript_preset_combo.currentData()
+        self._refresh_initscript_template()
+
+    def _open_parser_advanced(self):
+        dialog = ExpParserAdvancedDialog(
+            self, self.settings, self._parser_mode_id, self._parser_code
+        )
+        if dialog.exec():
+            self._parser_mode_id = dialog.selected_mode_id
+            self._parser_code = dialog.parser_code
+            self._reload_parser_preset_combo()
+            if self._parser_mode_id in ExpressionParser.MODE_ID_TO_LABEL:
+                idx = self.parser_mode_combo.findData(
+                    ("official", self._parser_mode_id, self._parser_code)
+                )
+            else:
+                idx = self.parser_mode_combo.findData(
+                    ("custom", dialog.mode_combo.currentData()[1], self._parser_code)
+                )
+            if idx >= 0:
+                self.parser_mode_combo.setCurrentIndex(idx)
+
+    def _open_initscript_advanced(self):
+        dialog = SheetScriptPresetAdvancedDialog(
+            self, self.settings, self._initscript_choice, self._initscript_template
+        )
+        if dialog.exec():
+            self._initscript_choice = dialog.choice
+            self._initscript_template = dialog.template
+            self._reload_initscript_preset_combo()
+            idx = self.initscript_preset_combo.findData(self._initscript_choice)
+            if idx >= 0:
+                self.initscript_preset_combo.setCurrentIndex(idx)
+
+    @property
+    def shape(self) -> Tuple[int, int, int]:
+        return self.rows_spin.value(), self.cols_spin.value(), self.tabs_spin.value()
+
+    @property
+    def parser_mode_id(self) -> str:
+        return self._parser_mode_id
+
+    @property
+    def parser_code(self) -> str:
+        return self._parser_code
+
+    @property
+    def initscript_choice(self) -> str:
+        return self._initscript_choice
+
+    @property
+    def initscript_template(self) -> str:
+        return self._initscript_template
+
+
+class ExpressionParserSelectionDialog(QDialog):
+    """Dialog for selecting parser mode."""
+
+    def __init__(self, parent: QWidget, current_mode_id: str):
+        super().__init__(parent)
+
+        self._mode_labels = dict(ExpressionParser.MODE_ID_TO_LABEL)
+        self.current_mode_id = current_mode_id
+
+        self.setWindowTitle("Expression Parser Settings")
+        self.setMinimumWidth(480)
+
+        self.mode_combo = QComboBox()
+        for mode_id, label in self._mode_labels.items():
+            self.mode_combo.addItem(f"{label} ({mode_id})", mode_id)
+        if current_mode_id in self._mode_labels:
+            self.mode_combo.setCurrentIndex(self.mode_combo.findData(current_mode_id))
+
+        self.custom_mode_notice = QLabel(
+            "Current workbook uses a custom parser code. "
+            "Selecting a built-in mode will replace it."
+        )
+        self.custom_mode_notice.setWordWrap(True)
+        self.custom_mode_notice.setVisible(current_mode_id is None)
+
+        form = QFormLayout()
+        form.addRow("Expression Parser mode:", self.mode_combo)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.custom_mode_notice)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+
+    @property
+    def selection(self) -> str:
+        return self.mode_combo.currentData()
+
+
+class ExpressionParserMigrationDialog(QDialog):
+    """Preview and apply conservative Expression Parser mode migration."""
+
+    def __init__(self, parent: QWidget, code_array, current_mode_id: str,
+                 current_table: int):
+        super().__init__(parent)
+
+        self.code_array = code_array
+        self.current_mode_id = current_mode_id
+        self.current_table = current_table
+        self.applied_report = None
+        self._last_preview = None
+
+        self._mode_labels = dict(ExpressionParser.MODE_ID_TO_LABEL)
+        self._known_modes = list(self._mode_labels.items())
+
+        self._build_ui()
+        self._load_initial_values()
+
+    def _build_ui(self):
+        self.setWindowTitle("Migrate Expression Parser Mode")
+        self.setMinimumWidth(560)
+
+        if self.current_mode_id is None:
+            current_parser_text = "Current workspace parser: Custom (non-official code)"
+        else:
+            current_label = ExpressionParser.MODE_ID_TO_LABEL.get(
+                self.current_mode_id,
+                self.current_mode_id,
+            )
+            current_parser_text = (
+                f"Current workspace parser: {current_label} ({self.current_mode_id})"
+            )
+        self.current_parser_label = QLabel(current_parser_text)
+        self.current_parser_label.setWordWrap(True)
+
+        self.source_mode = QComboBox()
+        self.target_mode = QComboBox()
+        for mode_id, label in self._known_modes:
+            display = f"{label} ({mode_id})"
+            self.source_mode.addItem(display, mode_id)
+            self.target_mode.addItem(display, mode_id)
+
+        self.scope = QComboBox()
+        self.scope.addItem("All sheets", None)
+        self.scope.addItem("Current sheet only", [self.current_table])
+
+        self.include_risky = QCheckBox("Include risky rewrites")
+        self.include_risky.setChecked(False)
+
+        self.summary = QPlainTextEdit()
+        self.summary.setReadOnly(True)
+        self.summary.setPlaceholderText(
+            "Preview migration to see safe/risky/unchanged counts."
+        )
+
+        self.preview_button = QPushButton("Preview")
+        self.apply_button = QPushButton("Apply")
+        self.cancel_button = QPushButton("Cancel")
+        self.apply_button.setEnabled(False)
+
+        form = QFormLayout()
+        form.addRow(QLabel("Source mode:"), self.source_mode)
+        form.addRow(QLabel("Target mode:"), self.target_mode)
+        form.addRow(QLabel("Scope:"), self.scope)
+        form.addRow(QLabel(""), self.include_risky)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(self.preview_button)
+        buttons.addWidget(self.apply_button)
+        buttons.addWidget(self.cancel_button)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.current_parser_label)
+        layout.addLayout(form)
+        layout.addWidget(self.summary)
+        layout.addLayout(buttons)
+        self.setLayout(layout)
+
+        self.preview_button.clicked.connect(self.on_preview)
+        self.apply_button.clicked.connect(self.on_apply)
+        self.cancel_button.clicked.connect(self.reject)
+
+        self.source_mode.currentIndexChanged.connect(self._on_options_changed)
+        self.target_mode.currentIndexChanged.connect(self._on_options_changed)
+        self.scope.currentIndexChanged.connect(self._on_options_changed)
+        self.include_risky.toggled.connect(self._on_options_changed)
+
+    def _load_initial_values(self):
+        if self.current_mode_id is not None:
+            source_index = self.source_mode.findData(self.current_mode_id)
+            if source_index != -1:
+                self.source_mode.setCurrentIndex(source_index)
+        else:
+            self.summary.setPlainText(
+                "Current workspace parser is custom. Select the source mode that best matches it."
+            )
+
+        target_mode_id = "pure_spreadsheet"
+        if self.current_mode_id == target_mode_id:
+            target_mode_id = "mixed"
+        target_index = self.target_mode.findData(target_mode_id)
+        if target_index != -1:
+            self.target_mode.setCurrentIndex(target_index)
+
+        self._validate_mode_pair()
+
+    def _on_options_changed(self):
+        self._last_preview = None
+        self.applied_report = None
+        self.apply_button.setEnabled(False)
+        self._validate_mode_pair()
+
+    def _migration_args(self):
+        source_mode_id = self.source_mode.currentData()
+        target_mode_id = self.target_mode.currentData()
+        tables = self.scope.currentData()
+        include_risky = self.include_risky.isChecked()
+        return source_mode_id, target_mode_id, tables, include_risky
+
+    def _validate_mode_pair(self):
+        source_mode_id, target_mode_id, _, _ = self._migration_args()
+        if source_mode_id == target_mode_id:
+            self.summary.setPlainText(
+                "Source and target modes must be different."
+            )
+            return False
+        return True
+
+    @staticmethod
+    def _format_summary(report):
+        summary = report.summary
+        lines = [
+            "Migration preview",
+            f"- Source: {report.source_mode_id}",
+            f"- Target: {report.target_mode_id}",
+            f"- Safe changes: {summary['safe_changed']}",
+            f"- Risky skipped: {summary['risky_skipped']}",
+            f"- Unchanged: {summary['unchanged']}",
+            f"- Invalid source assumptions: {summary['invalid_source_assumption']}",
+            f"- Total examined: {summary['total']}",
+        ]
+        return "\n".join(lines)
+
+    def on_preview(self):
+        if not self._validate_mode_pair():
+            self.apply_button.setEnabled(False)
+            return
+
+        source_mode_id, target_mode_id, tables, include_risky = self._migration_args()
+        report = self.code_array.preview_expression_parser_migration(
+            source_mode_id=source_mode_id,
+            target_mode_id=target_mode_id,
+            tables=tables,
+            include_risky=include_risky,
+        )
+        self._last_preview = (source_mode_id, target_mode_id, tables, include_risky)
+        self.summary.setPlainText(self._format_summary(report))
+        self.apply_button.setEnabled(True)
+
+    def on_apply(self):
+        if not self._validate_mode_pair():
+            return
+
+        source_mode_id, target_mode_id, tables, include_risky = self._migration_args()
+        args = (source_mode_id, target_mode_id, tables, include_risky)
+        if self._last_preview != args:
+            self.on_preview()
+            if self._last_preview != args:
+                return
+
+        report = self.code_array.apply_expression_parser_migration(
+            source_mode_id=source_mode_id,
+            target_mode_id=target_mode_id,
+            tables=tables,
+            include_risky=include_risky,
+        )
+        self.applied_report = report
+        self.summary.setPlainText(self._format_summary(report))
+        self.accept()
 
 
 class CellKeyDialog(DataEntryDialog):

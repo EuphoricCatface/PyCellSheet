@@ -82,24 +82,24 @@ Application Design Note
   - MAYBE: EmptyCellType will have `__str__()` as "" and, `__int__()` and `__float__()` as zero, plus a few dunder methods, so that it will evaluate as an empty string / a zero in common calculation contexts.
   - Functions like `COUNTA()` and `AVERAGE()` will be able to detect EmptyCell and exclude them from the evaluation.
   - A warning is made, if an EmptyCell is returned from the main Expression Parser. Making a cell with its contents hidden from sight is highly discouraged.
-  - Four examples are provided for the users:
+  - Three examples are provided for the users:
   * "Pure Pythonic" mode:
     	return PythonCode(cell)
   * "Mixed" mode:
-        # Inspired by the spreadsheet string marker
         if cell.startswith('\''):
+            # Inspired by the spreadsheet string marker
             return cell[1:]
+        elif cell.startswith("="):
+            # Using pycel
+            return SpreadSheetCode(cell[1:])
         return PythonCode(cell)
-  * "Reverse-mixed" mode:
-        # Inspired by the python shell prompt `>>>`
+  * "Pure Spreadsheet" mode:
         if cell.startswith(">"):
+            # Inspired by the python shell prompt `>>>`
             return PythonCode(cell[1:])
-        if cell.startswith('\''):
-            cell = cell[1:]
-        return cell
-  * "Pure spreadsheet" mode:
-        if cell.startswith("="):
-            return PythonCode(cell[1:])
+        elif cell.startswith("="):
+            # Using pycel
+            return SpreadSheetCode(cell[1:])
         try:
             return int(cell)
         except ValueError:
@@ -111,7 +111,7 @@ Application Design Note
         if cell.startswith('\''):
             cell = cell[1:]
         return cell
-  - The "Reverse-mixed" mode is the default and "Mixed" is the recommended, to balance between attracting less experienced people, and being pythonic.
+  - The "Pure Spreadsheet" mode is the default and "Mixed" is the recommended, to balance between attracting less experienced people, and being pythonic.
   - The rationale is that if a not-tech-savvy first-timer tried out (supposedly) an office suite program, and then typing random stuff resulted in an error, then they would get frustrated and/or intimidated, and abandon the program soon.
   - Hopefully, after familiarization, they will feel "achieving something" by switching to the more "advanced" Mixed mode :3
   - MAYBE: replace PythonCode() with something like ref_resolve_and_eval(), that will execute Reference Parser and Python Evaluator, rather than having them outside the Evaluation Parser - I think I'd rather leave them separate though.

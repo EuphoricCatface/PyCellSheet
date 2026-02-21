@@ -57,6 +57,12 @@ class SheetScriptPanel(QDialog):
             self._update_text_and_style()
             if parent:
                 parent.installEventFilter(self)
+                try:
+                    scrollbar = parent.verticalScrollBar()
+                    scrollbar.rangeChanged.connect(lambda *_: self._reposition())
+                    scrollbar.valueChanged.connect(lambda *_: self._reposition())
+                except Exception:
+                    pass
 
         def _update_text_and_style(self):
             self.setText("Applied" if self._applied else "Draft")
@@ -76,8 +82,11 @@ class SheetScriptPanel(QDialog):
 
         def _reposition(self):
             if self.parent():
+                scrollbar = self.parent().verticalScrollBar()
+                scrollbar_width = scrollbar.width() if scrollbar.isVisible() else 0
                 self.move(
-                    self.parent().width() - self.width(), 0
+                    max(0, self.parent().width() - self.width() - scrollbar_width - 6),
+                    2
                 )
 
         def eventFilter(self, obj, event):

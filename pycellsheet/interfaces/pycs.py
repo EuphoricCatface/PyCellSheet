@@ -123,7 +123,8 @@ class PycsReader:
             "[PyCellSheet save file version]\n": self._pycs_version,
             "[shape]\n": self._pycs2shape,
             "[sheet_names]\n": self._pycs2sheet_names,
-            "[macros]\n": self._pycs2sheet_scripts,
+            "[parser_settings]\n": self._pycs2parser_settings,
+            "[sheet_scripts]\n": self._pycs2sheet_scripts,
             "[grid]\n": self._pycs2code,
             "[attributes]\n": self._pycs2attributes,
             "[row_heights]\n": self._pycs2row_heights,
@@ -134,10 +135,10 @@ class PycsReader:
         # take place after the cell attribute readout
         self.cell_attributes_postfixes = []
 
-        # [macros] section persists sheet scripts in legacy key naming.
+        # [sheet_scripts] section stores per-sheet script blocks.
         self.current_sheet_script = -1
         self.current_sheet_script_remaining = 0
-        self._macro_header_re = re.compile(r"^\(macro:(.+)\)\s+([0-9]+)$")
+        self._sheet_script_header_re = re.compile(r"^\(sheet_script:(.+)\)\s+([0-9]+)$")
 
     def __iter__(self):
         """Iterates over self.pycs_file, replacing everything in code_array"""
@@ -401,7 +402,7 @@ class PycsReader:
             pass
 
     def _pycs2sheet_scripts(self, line: str):
-        """Updates sheet scripts in code_array from legacy [macros] section.
+        """Updates sheet scripts in code_array from legacy save section.
 
         :param line: Pycs file line to be parsed
 
@@ -416,9 +417,9 @@ class PycsReader:
             return
 
         header_line = line.rstrip("\r\n")
-        header_match = self._macro_header_re.fullmatch(header_line)
+        header_match = self._sheet_script_header_re.fullmatch(header_line)
         if header_match is None:
-            raise ValueError("The save file does not follow the macro name conventions")
+            raise ValueError("The save file does not follow sheet script header conventions")
         raw_sheet_identifier, line_count_str = header_match.groups()
 
         try:
@@ -430,7 +431,7 @@ class PycsReader:
         try:
             new_sheet_number = int(parsed_identifier)
             if self.current_sheet_script + 1 != new_sheet_number:
-                raise ValueError("The save file does not follow the macro name conventions")
+                raise ValueError("The save file does not follow sheet script header conventions")
         except ValueError:
             # Sheet identifier is a name, not a number - look it up
             sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
@@ -445,10 +446,15 @@ class PycsReader:
 
         self.current_sheet_script_remaining = int(line_count_str)
 
-    def _pycs2macros(self, line: str):
-        """Compatibility alias for legacy reader method naming."""
+    def _pycs2parser_settings(self, line: str):
+        """Updates parser settings from [parser_settings] section."""
 
-        self._pycs2sheet_scripts(line)
+        key, value_repr = self._split_tidy(line, maxsplit=1)
+        value = ast.literal_eval(value_repr)
+        if key == "exp_parser_code":
+            self.code_array.exp_parser_code = value
+        elif key == "pycel_formula_opt_in":
+            self.code_array.set_pycel_formula_opt_in(value)
 
 class PycsWriter(object):
     """Interface between code_array and pycs file data
@@ -471,7 +477,8 @@ class PycsWriter(object):
             ("[PyCellSheet save file version]\n", self._version2pycs),
             ("[shape]\n", self._shape2pycs),
             ("[sheet_names]\n", self._sheet_names2pycs),
-            ("[macros]\n", self._sheet_scripts2pycs),
+            ("[parser_settings]\n", self._parser_settings2pycs),
+            ("[sheet_scripts]\n", self._sheet_scripts2pycs),
             ("[grid]\n", self._code2pycs),
             ("[attributes]\n", self._attributes2pycs),
             ("[row_heights]\n", self._row_heights2pycs),
@@ -508,10 +515,8 @@ class PycsWriter(object):
         lines += len(self.code_array.cell_attributes)
         lines += len(self.code_array.dict_grid.row_heights)
         lines += len(self.code_array.dict_grid.col_widths)
-        sheet_scripts = getattr(self.code_array.dict_grid, "sheet_scripts", None)
-        if sheet_scripts is None:
-            sheet_scripts = self.code_array.dict_grid.macros
-        lines += sheet_scripts.count('\n')
+        sheet_scripts = self.code_array.dict_grid.sheet_scripts
+        lines += sum(sheet_script.count('\n') + 1 for sheet_script in sheet_scripts)
 
         return lines
 
@@ -542,6 +547,12 @@ class PycsWriter(object):
 
         for name in self._normalized_sheet_names():
             yield name + u"\n"
+
+    def _parser_settings2pycs(self) -> Iterable[str]:
+        """Returns parser settings information in pycs format."""
+
+        yield f"exp_parser_code\t{self.code_array.exp_parser_code!r}\n"
+        yield f"pycel_formula_opt_in\t{bool(self.code_array.pycel_formula_opt_in)!r}\n"
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format
@@ -633,22 +644,15 @@ class PycsWriter(object):
 
         """
 
-        sheet_scripts = getattr(self.code_array.dict_grid, "sheet_scripts", None)
-        if sheet_scripts is None:
-            sheet_scripts = self.code_array.dict_grid.macros
+        sheet_scripts = self.code_array.dict_grid.sheet_scripts
         sheet_names = self._normalized_sheet_names()
         for i, sheet_script in enumerate(sheet_scripts):
             # Use sheet name if available, otherwise fall back to index
             sheet_identifier = sheet_names[i] if i < len(sheet_names) else str(i)
             sheet_script_count = sheet_script.count('\n') + 1
             macro_list = [
-                f"(macro:{sheet_identifier!r}) {sheet_script_count}",
+                f"(sheet_script:{sheet_identifier!r}) {sheet_script_count}",
                 sheet_script,
                 ""  # To append a linebreak at the end
             ]
             yield str.join("\n", macro_list)
-
-    def _macros2pycs(self) -> Iterable[str]:
-        """Compatibility alias for legacy writer method naming."""
-
-        yield from self._sheet_scripts2pycs()
