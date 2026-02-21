@@ -189,7 +189,14 @@ def COUNTIFS(*range_crit_pairs):
 
 
 def COUNTUNIQUE(r: Range):
-    return len(set(r.flatten()) - {EmptyCell})
+    l = r.flatten()
+    s = set()
+    for i in l:
+        if i is EmptyCell:
+            # EmptyCell is unhashable
+            continue
+        s.add(i)
+    return len(s)
 
 
 def CSC(x):

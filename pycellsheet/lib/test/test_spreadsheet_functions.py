@@ -93,8 +93,7 @@ def test_sumsq_squares_flattened_args():
 def test_product_countunique_and_quotient():
     assert math_fn.PRODUCT(2, [3, 4]) == 24
     assert math_fn.PRODUCT() == 0
-    with pytest.raises(TypeError, match="unhashable type"):
-        math_fn.COUNTUNIQUE(_rng(2, [1, 1, 2, math_fn.EmptyCell]))
+    assert math_fn.COUNTUNIQUE(_rng(2, [1, 1, 2, math_fn.EmptyCell])) == 2
     assert math_fn.QUOTIENT(7, 2) == 3
     assert math_fn.QUOTIENT(-7, 2) == -3
 
