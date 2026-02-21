@@ -191,9 +191,6 @@ class XlsxReader:
 
         if hasattr(self.code_array, "sheet_scripts") and self.code_array.sheet_scripts:
             self.code_array.sheet_scripts[0] += f"_sheetnames = {sheetnames}"
-        elif hasattr(self.code_array, "macros"):
-            # Compatibility path for lightweight test doubles.
-            self.code_array.macros += f"_sheetnames = {sheetnames}"
 
         shape = max_row, max_column, len(sheetnames)
         self.code_array.shape = shape

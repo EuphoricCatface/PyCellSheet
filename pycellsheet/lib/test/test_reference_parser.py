@@ -53,3 +53,27 @@ def test_cr_accepts_quoted_sheet_name():
     current_sheet = parser.Sheet("0", code_array)
 
     assert parser.CR('"Other"!A1', current_sheet) == (0, 0, 1)
+
+
+def test_parser_maps_sheet_non_cell_token_to_global_ref():
+    parser = ReferenceParser(_DummyCodeArray())
+
+    assert parser.parser(PythonCode('"0"!TOKEN')) == 'Sh("0").G("TOKEN")'
+
+
+def test_sheet_global_var_missing_raises_nameerror():
+    code_array = _DummyCodeArray()
+    parser = ReferenceParser(code_array)
+    current_sheet = parser.Sheet("0", code_array)
+
+    try:
+        parser.CR('"0"!MISSING', current_sheet)
+        assert False, "Expected NameError for missing sheet global"
+    except NameError as err:
+        assert "not found in sheet" in str(err)
+
+
+def test_parser_accepts_leading_whitespace_without_indentation_error():
+    parser = ReferenceParser(None)
+
+    assert parser.parser(PythonCode(" 123")) == "123"

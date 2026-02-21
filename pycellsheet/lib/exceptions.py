@@ -26,6 +26,7 @@
 Provides:
  * PyCellSheetError - Base exception for all PyCellSheet-specific errors
  * CircularRefError - Raised when circular reference is detected
+ * SpillRefError - Raised when RangeOutput spill collides with existing content
 
 """
 
@@ -79,3 +80,21 @@ class CircularRefError(PyCellSheetError):
     def __reduce__(self):
         """Custom pickle support to preserve cycle list"""
         return (self.__class__, (self.cycle,))
+
+
+class SpillRefError(PyCellSheetError):
+    """Raised when RangeOutput spill expansion hits a conflicting cell."""
+
+    def __init__(self, anchor_key, conflict_key):
+        self.anchor_key = anchor_key
+        if isinstance(conflict_key, (list, tuple, set)):
+            self.conflict_keys = list(conflict_key)
+        else:
+            self.conflict_keys = [conflict_key]
+        # Compatibility alias for older call sites/tests expecting a singular key.
+        self.conflict_key = self.conflict_keys[0] if self.conflict_keys else None
+        if len(self.conflict_keys) == 1:
+            msg = f"Spill conflict from {anchor_key} blocked by occupied cell {self.conflict_key}"
+        else:
+            msg = f"Spill conflict from {anchor_key} blocked by occupied cell(s) {self.conflict_keys}"
+        super().__init__(msg)

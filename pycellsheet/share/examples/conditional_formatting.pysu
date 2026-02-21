@@ -1,5 +1,5 @@
-[Pyspread save file version]
-2.0
+[PyCellSheet save file version]
+0.0
 [shape]
 1000	100	3
 [grid]
@@ -9,7 +9,10 @@
 [row_heights]
 1	0	132.0
 [col_widths]
-[macros]
+[parser_settings]
+exp_parser_code	'return PythonCode(cell)\n'
+[sheet_scripts]
+(sheet_script:'Sheet 0') 9
 def color(value, condition_func, X, Y, Z):
     if condition_func(value):
         color = 255, 0, 0

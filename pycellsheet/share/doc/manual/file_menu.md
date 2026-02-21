@@ -19,8 +19,7 @@ that grid size has been limited to 1 000 000 rows, 100 000 columns and 100 table
 ## File → Open
 
 Loading a spreadsheet from disk can be initiated with **`File → Open`**. Opening a
-file expects a file with extension `.pycsu`, `.pycs` or - if the `pycel`
-package is installed - `.xlsx`. The native format is PyCellSheet specific.
+file expects a file with extension `.pycsu`, `.pycs` or `.xlsx`. The native format is PyCellSheet specific.
 `.pycs` is the compressed variant of `.pycsu`. `pycsu` is the default option
 and is useful with version control systems such as git.
 
@@ -53,6 +52,8 @@ The `.pycsu` file format is a UTF-8 text file (without BOM) with sectioned data:
 1000 100 3
 [sheet_names]
 0 Sheet0
+[parser_settings]
+exp_parser_code '...'
 [grid]
 7 22 0 'Testcode1'
 8 9 0 'Testcode2'
@@ -66,10 +67,21 @@ The `.pycsu` file format is a UTF-8 text file (without BOM) with sectioned data:
 7 0 25.0
 [col_widths]
 0 0 80.0
-[macros]
-(macro:0) 1
+[sheet_scripts]
+(sheet_script:'Sheet0') 1
 import math
 ```
+
+Sheet-name constraints:
+- Must not be empty
+- Must not be whitespace-only
+- Must not contain control characters (including newlines and tabs)
+
+## File → Close
+
+**`File → Close`** closes the current document and transitions PyCellSheet into
+explicit no-document state. From there, use **`File → Open`** or **`File → New`**
+to continue working.
 
 ## File → Save As
 **`File → Save As`** saves the spreadsheet as does **`File → Save`**. While

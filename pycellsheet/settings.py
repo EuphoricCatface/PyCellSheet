@@ -164,6 +164,21 @@ class Settings:
     recalc_mode = "auto"
     """Recalculation mode: auto or manual"""
 
+    parser_custom_presets = []
+    """Custom expression parser presets stored locally as list of dicts."""
+
+    startup_parser_mode_id = "pure_spreadsheet"
+    """Last selected parser mode id in greeter."""
+
+    initscript_preset_choice = "verbose"
+    """Greeter initscript preset choice: verbose/simple/custom."""
+
+    initscript_preset_custom = ""
+    """Custom initscript preset text stored locally."""
+
+    initscript_custom_presets = []
+    """Custom initscript presets stored locally as list of dicts."""
+
     def __init__(self, parent: QWidget, reset_settings: bool = False):
         """
         :param parent: Parent widget, normally main window
@@ -237,6 +252,11 @@ class Settings:
         settings.setValue("signature_key", self.signature_key)
         settings.setValue("show_statusbar_sum", self.show_statusbar_sum)
         settings.setValue("recalc_mode", self.recalc_mode)
+        settings.setValue("parser_custom_presets", self.parser_custom_presets)
+        settings.setValue("startup_parser_mode_id", self.startup_parser_mode_id)
+        settings.setValue("initscript_preset_choice", self.initscript_preset_choice)
+        settings.setValue("initscript_preset_custom", self.initscript_preset_custom)
+        settings.setValue("initscript_custom_presets", self.initscript_custom_presets)
 
         # GUI state
         for widget_name in self.widget_names:
@@ -312,6 +332,11 @@ class Settings:
         setting2attr("signature_key")
         setting2attr("show_statusbar_sum", mapper=qt_bool)
         setting2attr("recalc_mode")
+        setting2attr("parser_custom_presets")
+        setting2attr("startup_parser_mode_id")
+        setting2attr("initscript_preset_choice")
+        setting2attr("initscript_preset_custom")
+        setting2attr("initscript_custom_presets")
         if self.recalc_mode not in ("auto", "manual"):
             self.recalc_mode = Settings.recalc_mode
 

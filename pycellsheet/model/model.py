@@ -83,6 +83,11 @@ except ImportError:
     Money = None
 
 try:
+    from pycel.excelformula import ExcelFormula
+except ImportError:
+    ExcelFormula = None
+
+try:
     from pycellsheet.settings import Settings
     from pycellsheet.lib.attrdict import AttrDict
     import pycellsheet.lib.charts as charts
@@ -91,13 +96,17 @@ try:
     from pycellsheet.lib.selection import Selection
     from pycellsheet.lib.string_helpers import ZEN
     from pycellsheet.lib.sheet_name import generate_unique_sheet_name
-    from pycellsheet.lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+    from pycellsheet.lib.pycellsheet import EmptyCell, PythonCode, SpreadSheetCode, Range, HelpText, ExpressionParser, \
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
+    from pycellsheet.lib.expression_parser_migrator import (
+        preview_migration as preview_expression_parser_migration,
+        apply_migration as apply_expression_parser_migration,
+    )
 
     # Dependency tracking and smart caching
     from pycellsheet.lib.dependency_graph import DependencyGraph
     from pycellsheet.lib.smart_cache import SmartCache
-    from pycellsheet.lib.exceptions import CircularRefError
+    from pycellsheet.lib.exceptions import CircularRefError, SpillRefError
 
 except ImportError:
     from settings import Settings
@@ -108,13 +117,17 @@ except ImportError:
     from lib.selection import Selection
     from lib.string_helpers import ZEN
     from lib.sheet_name import generate_unique_sheet_name
-    from lib.pycellsheet import EmptyCell, PythonCode, Range, HelpText, ExpressionParser, \
-        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker
+    from lib.pycellsheet import EmptyCell, PythonCode, SpreadSheetCode, Range, HelpText, ExpressionParser, \
+        ReferenceParser, RangeOutput, PythonEvaluator, CELL_META_GENERATOR, DependencyTracker, safe_deepcopy
+    from lib.expression_parser_migrator import (
+        preview_migration as preview_expression_parser_migration,
+        apply_migration as apply_expression_parser_migration,
+    )
 
     # Dependency tracking and smart caching
     from lib.dependency_graph import DependencyGraph
     from lib.smart_cache import SmartCache
-    from lib.exceptions import CircularRefError
+    from lib.exceptions import CircularRefError, SpillRefError
 
 
 INITSCRIPT_DEFAULT = \
@@ -144,6 +157,8 @@ except ImportError:
 # except:
 #     from lib import spreadsheet
 """
+
+PYCEL_FORMULA_PROMOTION_ENABLED = True
 
 
 class_format_functions = {}
@@ -466,18 +481,6 @@ class DictGrid(KeyValueStore):
 
         return
 
-    @property
-    def macros(self) -> list[str]:
-        """Compatibility alias for legacy save/load naming."""
-
-        return self.sheet_scripts
-
-    @macros.setter
-    def macros(self, macros: list[str]):
-        """Compatibility alias setter for legacy save/load naming."""
-
-        self.sheet_scripts = macros
-
 # End of class DictGrid
 
 # -----------------------------------------------------------------------------
@@ -508,9 +511,12 @@ class DataArray:
         self.sheet_scripts_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
         self.sheet_globals_copyable: list[dict[str, typing.Any]] = [dict() for _ in range(shape[2])]
         self.sheet_globals_uncopyable: list[dict[str, typing.Any]] = [dict() for i in range(shape[2])]
+        self.range_output_sizes: dict[Tuple[int, int, int], Tuple[int, int]] = {}
+        self.pycel_formula_opt_in = bool(PYCEL_FORMULA_PROMOTION_ENABLED)
 
         self.exp_parser = ExpressionParser()
-        self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Mixed"]  # Workaround until we make a UI
+        self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        self._saved_parser_signature = self.exp_parser_code
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
@@ -547,25 +553,21 @@ class DataArray:
         :type row_heights: defaultdict[Tuple[int, int], float]
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
-        :param macros: Legacy sheet script key for compatibility
-        :type macros: list[str]
-
         """
 
         data = {}
 
         data["shape"] = self.shape
-        data["grid"] = {}.update(self.dict_grid)
-        data["attributes"] = self.cell_attributes[:]
+        data["grid"] = dict(self.dict_grid)
+        data["attributes"] = list(self.cell_attributes)
         data["row_heights"] = self.row_heights
         data["col_widths"] = self.col_widths
-        data["macros"] = self.sheet_scripts
         data["sheet_scripts"] = self.sheet_scripts
-
+        data["exp_parser_code"] = self.exp_parser_code
         return data
 
     @data.setter
-    def data(self, **kwargs):
+    def data(self, value: typing.Optional[dict] = None, **kwargs):
         """Sets data from given parameters
 
         Old values are deleted.
@@ -583,10 +585,15 @@ class DataArray:
         :type row_heights: defaultdict[Tuple[int, int], float]
         :param col_widths: Column widths
         :type col_widths: defaultdict[Tuple[int, int], float]
-        :param macros: Legacy sheet script key for compatibility
-        :type macros: list[str]
-
         """
+
+        if kwargs:
+            if value is not None:
+                raise TypeError("DataArray.data setter accepts either a dict or keyword args, not both.")
+        else:
+            if not isinstance(value, dict):
+                raise TypeError("DataArray.data setter expects a dict.")
+            kwargs = value
 
         if "shape" in kwargs:
             self.shape = kwargs["shape"]
@@ -596,7 +603,7 @@ class DataArray:
             self.dict_grid.update(kwargs["grid"])
 
         if "attributes" in kwargs:
-            self.attributes[:] = kwargs["attributes"]
+            self.cell_attributes = kwargs["attributes"]
 
         if "row_heights" in kwargs:
             self.row_heights = kwargs["row_heights"]
@@ -606,11 +613,9 @@ class DataArray:
 
         if "sheet_scripts" in kwargs:
             self.sheet_scripts = kwargs["sheet_scripts"]
-        elif "macros" in kwargs:
-            self.sheet_scripts = kwargs["macros"]
 
         if "exp_parser_code" in kwargs:
-            pass
+            self.exp_parser_code = kwargs["exp_parser_code"]
 
     @property
     def row_heights(self) -> defaultdict:
@@ -646,9 +651,10 @@ class DataArray:
     def cell_attributes(self, value: CellAttributes):
         """cell_attributes interface to dict_grid"""
 
-        # First empty cell_attributes
-        self.cell_attributes[:] = []
-        self.cell_attributes.extend(value)
+        new_attrs = CellAttributes()
+        for cell_attribute in value:
+            new_attrs.append(cell_attribute)
+        self.dict_grid.cell_attributes = new_attrs
 
     @property
     def sheet_scripts(self) -> list[str]:
@@ -663,32 +669,8 @@ class DataArray:
         self.dict_grid.sheet_scripts = sheet_scripts
 
     @property
-    def macros(self) -> list[str]:
-        """Legacy alias of `sheet_scripts` for compatibility."""
-
-        return self.sheet_scripts
-
-    @macros.setter
-    def macros(self, macros: list[str]):
-        """Legacy alias setter of `sheet_scripts` for compatibility."""
-
-        self.sheet_scripts = macros
-
-    @property
-    def macros_draft(self) -> list[typing.Optional[str]]:
-        """Legacy alias of `sheet_scripts_draft` for compatibility."""
-
-        return self.sheet_scripts_draft
-
-    @macros_draft.setter
-    def macros_draft(self, macros_draft: list[typing.Optional[str]]):
-        """Legacy alias setter of `sheet_scripts_draft` for compatibility."""
-
-        self.sheet_scripts_draft = macros_draft
-
-    @property
     def exp_parser_code(self) -> str:
-        """macros interface to dict_grid"""
+        """Expression parser code interface to dict_grid"""
 
         return self.dict_grid.exp_parser_code
 
@@ -698,6 +680,79 @@ class DataArray:
 
         self.dict_grid.exp_parser_code = exp_parser_code
         self.exp_parser.set_parser(exp_parser_code)
+
+    @property
+    def exp_parser_mode_id(self) -> typing.Optional[str]:
+        """Returns the canonical parser mode id if this is a built-in parser."""
+
+        return ExpressionParser.detect_mode_id(self.exp_parser_code)
+
+    def set_exp_parser_mode(self, mode_id: str):
+        """Sets parser mode using a canonical parser mode id."""
+
+        self.exp_parser_code = ExpressionParser.get_mode_code(mode_id)
+
+    def preview_expression_parser_migration(
+            self, source_mode_id: str, target_mode_id: str,
+            tables: typing.Optional[list[int]] = None, include_risky: bool = False):
+        return preview_expression_parser_migration(
+            self, source_mode_id, target_mode_id, tables=tables, include_risky=include_risky
+        )
+
+    def apply_expression_parser_migration(
+            self, source_mode_id: str, target_mode_id: str,
+            tables: typing.Optional[list[int]] = None, include_risky: bool = False):
+        report = apply_expression_parser_migration(
+            self, source_mode_id, target_mode_id, tables=tables, include_risky=include_risky
+        )
+        if report.summary["safe_changed"] > 0:
+            if hasattr(self, "smart_cache"):
+                self.smart_cache.clear()
+            if hasattr(self, "dep_graph"):
+                self.dep_graph.dirty.clear()
+        return report
+
+    @property
+    def parser_settings_applied(self) -> bool:
+        """Returns True when parser settings match last saved/loaded state."""
+
+        return self.exp_parser_code == self._saved_parser_signature
+
+    def mark_parser_settings_applied(self):
+        """Mark current parser settings as persisted baseline."""
+
+        self._saved_parser_signature = self.exp_parser_code
+
+    def _eval_spreadsheet_code(self, key: Tuple[int, int, int],
+                               formula: SpreadSheetCode):
+        if ExcelFormula is None:
+            return ImportError(
+                "pycel is not installed. Install pycel and re-evaluate the cell."
+            )
+
+        cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
+
+        def _normalize_addr(addr) -> str:
+            if isinstance(addr, str):
+                return addr
+            if hasattr(addr, "address"):
+                return addr.address
+            return str(addr)
+
+        def evaluate(addr):
+            return cur_sheet.cell_single_ref(_normalize_addr(addr))
+
+        def evaluate_range(addr):
+            addr_str = _normalize_addr(addr)
+            if ":" not in addr_str:
+                return cur_sheet.cell_single_ref(addr_str)
+            addr1, addr2 = addr_str.split(":", 1)
+            return cur_sheet.cell_range_ref(addr1, addr2).normalize()  # pycel doesn't know how to handle Range itself
+
+        eval_formula = ExcelFormula.build_eval_context(evaluate, evaluate_range)
+        compiled_formula = ExcelFormula(f"={formula}")
+        with DependencyTracker.track(key):
+            return eval_formula(compiled_formula)
 
     @property
     def shape(self) -> Tuple[int, int, int]:
@@ -814,7 +869,7 @@ class DataArray:
         if value:
             merging_cell = self.cell_attributes.get_merging_cell(key)
             if ((merging_cell is None or merging_cell == key)
-                    and isinstance(value, str)):
+                    and isinstance(value, (str, PythonCode, SpreadSheetCode))):
                 self.dict_grid[key] = value
             return
 
@@ -1466,13 +1521,13 @@ class CodeArray(DataArray):
            and self.dep_graph.is_dirty(key):
             cached = self.smart_cache.get_raw(key)
             if cached is not SmartCache.INVALID:
-                return deepcopy(cached)
+                return safe_deepcopy(cached)
 
         # Smart cache handling (check even for empty cells)
         cached = self.smart_cache.get(key)
         if cached is not SmartCache.INVALID:
             # Cache hit! Return deepcopied value (cache stores original)
-            return deepcopy(cached)
+            return safe_deepcopy(cached)
 
         # Empty cells still need to be cached and have dirty flag cleared
         if code is None:
@@ -1547,19 +1602,40 @@ class CodeArray(DataArray):
             return cell_contents
 
         #  --- ExpParser START ---  #
-        if self.exp_parser.handle_empty(cell_contents):
-            if return_warnings:
-                return EmptyCell, eval_warnings
-            return EmptyCell
-        exp_parsed = self.exp_parser.parse(cell_contents)
+        if isinstance(cell_contents, (PythonCode, SpreadSheetCode)):
+            exp_parsed = cell_contents
+        else:
+            if self.exp_parser.handle_empty(cell_contents):
+                if return_warnings:
+                    return EmptyCell, eval_warnings
+                return EmptyCell
+            exp_parsed = self.exp_parser.parse(cell_contents)
         if exp_parsed is EmptyCell and cell_contents.strip():
             eval_warnings.append(
                 "Expression parser returned EmptyCell for non-empty cell contents."
             )
-        if not isinstance(exp_parsed, PythonCode):
+        if not isinstance(exp_parsed, (PythonCode, SpreadSheetCode)):
             if return_warnings:
                 return exp_parsed, eval_warnings
             return exp_parsed
+        if isinstance(exp_parsed, SpreadSheetCode):
+            self.dep_graph.remove_cell(key)
+            try:
+                self.dep_graph.check_for_cycles(key)
+            except CircularRefError as err:
+                if return_warnings:
+                    return err, eval_warnings
+                return err
+
+            try:
+                result = self._eval_spreadsheet_code(key, exp_parsed)
+            except CircularRefError as err:
+                result = err
+            except Exception as err:
+                result = err
+            if return_warnings:
+                return result, eval_warnings
+            return result
         #  --- ExpParser END ---  #
 
         #  --- RefParser ---  #
@@ -1584,7 +1660,7 @@ class CodeArray(DataArray):
             return err
 
         #  --- PythonEval START ---  #
-        env = deepcopy(self.sheet_globals_copyable[key[2]])
+        env = safe_deepcopy(self.sheet_globals_copyable[key[2]])
         env.update(self.sheet_globals_uncopyable[key[2]])
         # Keep eval globals isolated from module/runtime globals.
         env["__builtins__"] = _get_isolated_builtins()
@@ -1610,9 +1686,16 @@ class CodeArray(DataArray):
                     PythonEvaluator.range_output_handler(self, result, key)
                 if isinstance(result, RangeOutput.OFFSET):
                     result = PythonEvaluator.range_offset_handler(self, result, key)
+                if not isinstance(result, RangeOutput):
+                    old_spill_size = self.range_output_sizes.pop(key, None)
+                    if old_spill_size:
+                        PythonEvaluator.range_output_cleanup(self, key, old_spill_size)
 
         except CircularRefError as err:
             # Circular reference detected during evaluation
+            result = err
+
+        except SpillRefError as err:
             result = err
 
         except AttributeError as err:
@@ -1646,6 +1729,9 @@ class CodeArray(DataArray):
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
         self._clear_cell_warnings(key)
+        old_spill_size = self.range_output_sizes.pop(key, None)
+        if old_spill_size:
+            PythonEvaluator.range_output_cleanup(self, key, old_spill_size)
 
         return super().pop(key)
 
@@ -1859,11 +1945,6 @@ class CodeArray(DataArray):
                     )
                 self.sheet_globals_uncopyable[current_table][k] = v
         return results, errs
-
-    def execute_macros(self, current_table) -> Tuple[str, str]:
-        """Compatibility alias for execute_sheet_script()."""
-
-        return self.execute_sheet_script(current_table)
 
     def _sorted_keys(self, keys: Iterable[Tuple[int, int, int]],
                      startkey: Tuple[int, int, int],

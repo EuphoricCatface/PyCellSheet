@@ -142,6 +142,12 @@ class MainWindowActions(AttrDict):
                            shortcut='Ctrl+s' if self.shortcuts else "",
                            statustip='Save spreadsheet')
 
+        self.close = Action(
+            self.parent, "&Close",
+            self.parent.workflows.file_close,
+            shortcut='Ctrl+w' if self.shortcuts else "",
+            statustip='Close current document')
+
         self.save_as = Action(
             self.parent, "Save &As",
             self.parent.workflows.file_save_as,
@@ -397,6 +403,20 @@ class MainWindowActions(AttrDict):
 
     def create_tools_actions(self):
         """actions for Tools menu"""
+
+        self.expression_parser_settings = Action(
+            self.parent,
+            "Expression Parser Settings...",
+            self.parent.on_open_expression_parser_settings_dialog,
+            statustip="Select expression parser mode behavior",
+        )
+
+        self.migrate_expression_parser = Action(
+            self.parent,
+            "Migrate Parser Mode...",
+            self.parent.on_open_expression_parser_migration_dialog,
+            statustip="Preview and apply conservative parser-mode migration",
+        )
 
         self.toggle_auto_recalculate = Action(
             self.parent, "Auto Recalculate",

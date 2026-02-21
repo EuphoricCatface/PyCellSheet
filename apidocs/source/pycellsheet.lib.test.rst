@@ -28,14 +28,6 @@ pycellsheet.lib.test.test\_csv module
    :show-inheritance:
    :undoc-members:
 
-pycellsheet.lib.test.test\_dataclasses\_shim\_removal module
-------------------------------------------------------------
-
-.. automodule:: pycellsheet.lib.test.test_dataclasses_shim_removal
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 pycellsheet.lib.test.test\_dependency\_graph module
 ---------------------------------------------------
 
@@ -56,6 +48,14 @@ pycellsheet.lib.test.test\_expression\_parser module
 ----------------------------------------------------
 
 .. automodule:: pycellsheet.lib.test.test_expression_parser
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+pycellsheet.lib.test.test\_expression\_parser\_migrator module
+--------------------------------------------------------------
+
+.. automodule:: pycellsheet.lib.test.test_expression_parser_migrator
    :members:
    :show-inheritance:
    :undoc-members:
@@ -136,6 +136,14 @@ pycellsheet.lib.test.test\_smart\_cache module
 ----------------------------------------------
 
 .. automodule:: pycellsheet.lib.test.test_smart_cache
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+pycellsheet.lib.test.test\_spreadsheet\_functions module
+--------------------------------------------------------
+
+.. automodule:: pycellsheet.lib.test.test_spreadsheet_functions
    :members:
    :show-inheritance:
    :undoc-members:
