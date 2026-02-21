@@ -474,7 +474,7 @@ class Workflows:
         # Process events before showing the modal progress dialog
         QApplication.instance().processEvents()
 
-        # Change into file directory
+        old_cwd = Path.cwd()
         os.chdir(filepath.parent)
 
         # Load file into grid
@@ -482,35 +482,38 @@ class Workflows:
         label = f"Opening {filepath.name}..."
 
         try:
-            with fopen(filepath, "rb") as infile:
-                reader = freader(infile, code_array)
-                try:
-                    for i, _ in file_progress_gen(self.main_window, reader,
-                                                  title, label, filelines):
-                        pass
-                except Exception as error:
-                    logging.error(error)
-                    grid.model.reset()
-                    self.main_window.statusBar().showMessage(str(error))
-                    self.main_window.safe_mode = False
-                    return
-                except ProgressDialogCanceled:
-                    msg = f"File open stopped by user at line {i}."
-                    logging.info(msg)
-                    self.main_window.statusBar().showMessage(msg)
-                    grid.model.reset()
-                    self.main_window.safe_mode = False
-                    return
+            try:
+                with fopen(filepath, "rb") as infile:
+                    reader = freader(infile, code_array)
+                    try:
+                        for i, _ in file_progress_gen(self.main_window, reader,
+                                                      title, label, filelines):
+                            pass
+                    except Exception as error:
+                        logging.error(error)
+                        grid.model.reset()
+                        self.main_window.statusBar().showMessage(str(error))
+                        self.main_window.safe_mode = False
+                        return
+                    except ProgressDialogCanceled:
+                        msg = f"File open stopped by user at line {i}."
+                        logging.info(msg)
+                        self.main_window.statusBar().showMessage(msg)
+                        grid.model.reset()
+                        self.main_window.safe_mode = False
+                        return
 
-        except Exception as err:
-            # A lot may got wrong with a malformed pys file, includes OSError
-            msg_tpl = "Error opening file {filepath}: {err}."
-            msg = msg_tpl.format(filepath=filepath, err=err)
-            self.main_window.statusBar().showMessage(msg)
-            # Reset grid
-            grid.model.reset()
-            self.main_window.safe_mode = False
-            return
+            except Exception as err:
+                # A lot may got wrong with a malformed pys file, includes OSError
+                msg_tpl = "Error opening file {filepath}: {err}."
+                msg = msg_tpl.format(filepath=filepath, err=err)
+                self.main_window.statusBar().showMessage(msg)
+                # Reset grid
+                grid.model.reset()
+                self.main_window.safe_mode = False
+                return
+        finally:
+            os.chdir(old_cwd)
         # Explicitly set the grid shape
         shape = code_array.shape
         grid.model.shape = shape
