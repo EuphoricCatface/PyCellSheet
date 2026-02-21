@@ -1,5 +1,5 @@
-[Pyspread save file version]
-2.0
+[PyCellSheet save file version]
+0.0
 [shape]
 1000	100	3
 [grid]
@@ -42,4 +42,7 @@
 2	0	259.0
 3	0	259.0
 0	0	33.0
-[macros]
+[parser_settings]
+exp_parser_code	'return PythonCode(cell)\n'
+[sheet_scripts]
+(sheet_script:'Sheet 0') 0

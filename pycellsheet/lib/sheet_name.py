@@ -32,7 +32,14 @@ def _is_printable_name(name: str) -> bool:
 def validate_sheet_name(name: str,
                         existing_names: Iterable[str],
                         current_name: str = None) -> tuple[bool, str]:
-    """Validate a sheet name according to PyCellSheet stabilization rules."""
+    """Validate a sheet name according to PyCellSheet rules.
+
+    Rules:
+    - no empty names
+    - no whitespace-only names
+    - no control characters (including tabs/newlines)
+    - no duplicate names (except the current sheet being edited)
+    """
 
     if not isinstance(name, str):
         return False, "Sheet name must be a string."

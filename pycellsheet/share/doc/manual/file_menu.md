@@ -72,6 +72,11 @@ exp_parser_code '...'
 import math
 ```
 
+Sheet-name constraints:
+- Must not be empty
+- Must not be whitespace-only
+- Must not contain control characters (including newlines and tabs)
+
 ## File → Close
 
 **`File → Close`** closes the current document and transitions PyCellSheet into

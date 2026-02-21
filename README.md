@@ -14,13 +14,17 @@ The core design choice is copy-priority semantics: cell references return deep-c
 
 ## Key changes
 
-### v0.5.0 (In Progress)
+### v0.5.0 (Parser + Spill Feature Expansion)
 
 - Landed parser selector/migrator and spill-conflict feature line foundations.
 - Tightened `.pycs` persistence contracts to named `[sheet_scripts]` headers only and canonical parser settings.
 - Removed compatibility fallbacks that no longer match v0.5 behavior (numeric sheet-script headers and legacy parser-settings keys).
 - Removed legacy `execute_macros()` alias surface; `execute_sheet_script()` is the canonical model entrypoint.
 - Fixed `COUNTUNIQUE` behavior for ranges containing `EmptyCell` (no unhashable sentinel failure).
+- Fixed `DataArray.data` setter contract to support direct dict assignment and preserve setter call compatibility.
+- Fixed `PycsWriter.__len__` to match emitted save-stream length for accurate progress metadata.
+- Migrated bundled `share/examples/*.pysu` files to v0.5 loader contracts (`[sheet_scripts]` + `[parser_settings]`).
+- Sheet-name rule is now explicitly documented and enforced: no empty, whitespace-only, or control-character names.
 
 ### v0.4.0 (Internal Semantics Cleanup)
 
@@ -94,4 +98,4 @@ tox -e py310,py311,py312,py313,py314
 tox -e py314-optional
 ```
 
-Current active-interpreter baseline: `939 passed`.
+Current active-interpreter baseline: `941 passed`.

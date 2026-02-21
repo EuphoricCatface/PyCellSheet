@@ -1,5 +1,5 @@
-[Pyspread save file version]
-2.0
+[PyCellSheet save file version]
+0.0
 [shape]
 29	24	1
 [grid]
@@ -457,5 +457,8 @@
 2	0	79.91001977928403
 23	0	79.91001977928403
 13	0	79.91001977928403
-[macros]
+[parser_settings]
+exp_parser_code	'return PythonCode(cell)\n'
+[sheet_scripts]
+(sheet_script:'Sheet 0') 1
 from fractions import Fraction
