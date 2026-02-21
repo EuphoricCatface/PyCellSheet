@@ -92,4 +92,4 @@ tox -e py310,py311,py312,py313,py314
 tox -e py314-optional
 ```
 
-Current active-interpreter baseline: `896 passed`.
+Current active-interpreter baseline: `894 passed`.

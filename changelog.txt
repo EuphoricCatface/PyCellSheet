@@ -18,7 +18,8 @@ Breaking / Compatibility changes:
 - Dropped legacy parser-settings key acceptance for `pycel_formula_opt_in`; unknown parser settings now fail fast during load.
 
 Tests:
-- Current development baseline passes on active interpreter (`896 passed`).
+- Removed legacy dataclasses-shim regression tests that no longer map to active v0.5 behavior.
+- Current development baseline passes on active interpreter (`894 passed`).
 
 v0.4.0
 -------------------

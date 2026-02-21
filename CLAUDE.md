@@ -178,7 +178,7 @@ python pycellsheet/__main__.py
 - `pycellsheet/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
 - `pycellsheet/model/test/test_dependency_integration.py` - 17 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection, dynamic refs)
 
-As of 2026-02-21, `QT_QPA_PLATFORM=offscreen PYTHONPATH=pycellsheet pytest -q` passes with 896 tests on the active interpreter.
+As of 2026-02-21, `QT_QPA_PLATFORM=offscreen PYTHONPATH=pycellsheet pytest -q` passes with 894 tests on the active interpreter.
 
 Legacy test suites under `pycellsheet/test/` and `pycellsheet/lib/test/` are part of the active regression baseline and should remain aligned with shipped PyCellSheet behavior.
 
