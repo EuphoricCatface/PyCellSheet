@@ -429,12 +429,18 @@ class PycsReader:
 
         # v0.5+ contract: only named sheet_script headers are accepted.
         if isinstance(parsed_identifier, int):
-            raise ValueError("Numeric sheet_script headers are no longer supported")
+            raise ValueError(
+                "Numeric sheet_script headers are no longer supported in v0.5+. "
+                "Use named headers, e.g. (sheet_script:'Sheet 0') N."
+            )
 
         sheet_names = getattr(self.code_array.dict_grid, 'sheet_names', None)
         sheet_identifier = str(parsed_identifier)
         if not sheet_names or sheet_identifier not in sheet_names:
-            raise ValueError("Unknown sheet name in sheet_script header")
+            raise ValueError(
+                f"Unknown sheet name in sheet_script header: {sheet_identifier!r}. "
+                "Ensure [sheet_names] includes the referenced sheet before [sheet_scripts]."
+            )
         new_sheet_number = sheet_names.index(sheet_identifier)
 
         self.current_sheet_script = new_sheet_number
@@ -449,7 +455,10 @@ class PycsReader:
         if key == "exp_parser_code":
             self.code_array.exp_parser_code = value
         else:
-            raise ValueError(f"Unknown parser_settings key: {key}")
+            raise ValueError(
+                f"Unknown parser_settings key: {key}. "
+                "Supported keys in v0.5+: exp_parser_code."
+            )
 
 class PycsWriter(object):
     """Interface between code_array and pycs file data

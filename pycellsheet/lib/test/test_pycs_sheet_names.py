@@ -185,7 +185,7 @@ def test_pycs2sheet_scripts_unknown_sheet_name_raises():
     code_array.dict_grid.sheet_names = ["Alpha", "Beta"]
     reader = PycsReader(BytesIO(b""), code_array)
 
-    with pytest.raises(ValueError, match="Unknown sheet name"):
+    with pytest.raises(ValueError, match="Unknown sheet name.*\\[sheet_names\\]"):
         reader._pycs2sheet_scripts("(sheet_script:'Unknown') 1\n")
 
 
@@ -317,7 +317,7 @@ def test_pycs2sheet_scripts_nonsequential_numeric_header_rejected():
     code_array = _DummyCodeArray(2)
     reader = PycsReader(BytesIO(b""), code_array)
 
-    with pytest.raises(ValueError, match="Numeric sheet_script headers"):
+    with pytest.raises(ValueError, match="Numeric sheet_script headers.*Use named headers"):
         reader._pycs2sheet_scripts("(sheet_script:2) 1\n")
 
 
@@ -325,5 +325,5 @@ def test_pycs2parser_settings_rejects_unknown_key():
     code_array = _DummyCodeArray(1)
     reader = PycsReader(BytesIO(b""), code_array)
 
-    with pytest.raises(ValueError, match="Unknown parser_settings key"):
+    with pytest.raises(ValueError, match="Unknown parser_settings key.*exp_parser_code"):
         reader._pycs2parser_settings("pycel_formula_opt_in\tTrue\n")
