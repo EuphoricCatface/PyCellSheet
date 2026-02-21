@@ -490,7 +490,7 @@ class Workflows:
                                                       title, label, filelines):
                             pass
                     except Exception as error:
-                        logging.error(error)
+                        logging.exception("Error while reading file %s", filepath)
                         grid.model.reset()
                         self.main_window.statusBar().showMessage(str(error))
                         self.main_window.safe_mode = False
