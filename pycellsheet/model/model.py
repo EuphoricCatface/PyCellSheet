@@ -1421,7 +1421,7 @@ class CodeArray(DataArray):
         warnings = []
         try:
             tree = ast.parse(sheet_script, mode="exec")
-        except Exception:
+        except (SyntaxError, ValueError, TypeError):
             return warnings
 
         bindings: dict[str, int] = defaultdict(int)
@@ -1467,6 +1467,15 @@ class CodeArray(DataArray):
             self._eval_warnings[key] = list(warnings)
             return
         self._eval_warnings.pop(key, None)
+
+    @staticmethod
+    def _values_differ(old: Any, new: Any) -> bool:
+        """Return whether two values differ, tolerating hostile ``__eq__``."""
+
+        try:
+            return new != old
+        except Exception:
+            return True
 
     def set_format_warning(self, key: Tuple[int, int, int], warning: typing.Optional[str]):
         if warning:
@@ -1841,10 +1850,7 @@ class CodeArray(DataArray):
             self.smart_cache.drop(key)
             new = self[key]
             if old is not SmartCache.INVALID:
-                try:
-                    changed = (new != old)
-                except Exception:
-                    changed = True
+                changed = self._values_differ(old, new)
         except Exception:
             logger.exception("Error while recalculating single cell %s", key)
             changed = True
@@ -1880,10 +1886,7 @@ class CodeArray(DataArray):
         self.dep_graph.clear_dirty(key)
 
         if old is not SmartCache.INVALID:
-            try:
-                changed = (result != old)
-            except Exception:
-                changed = True
+            changed = self._values_differ(old, result)
 
         if changed:
             direct_dependents = self.dep_graph.dependents.get(key, set())
@@ -2080,13 +2083,14 @@ class CodeArray(DataArray):
         table = startkey[2]
         keys = [key for key in self.keys() if key[2] == table]
 
-        for key in self._sorted_keys(keys, startkey, reverse=up):
+        if regexp:
             try:
-                if is_matching(key, find_string, word, case, regexp):
-                    return key
+                re.compile(find_string)
+            except re.error:
+                return None
 
-            except Exception:
-                # re errors are cryptical: sre_constants,...
-                pass
+        for key in self._sorted_keys(keys, startkey, reverse=up):
+            if is_matching(key, find_string, word, case, regexp):
+                return key
 
 # End of class CodeArray

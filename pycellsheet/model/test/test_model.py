@@ -969,3 +969,4 @@ class TestCodeArray(object):
         assert code_array[3, 0, 0] == 3
         assert code_array.findnextmatch((0, 0, 0), "3", False) == (3, 0, 0)
         assert code_array.findnextmatch((0, 0, 0), "99", True) == (99, 0, 0)
+        assert code_array.findnextmatch((0, 0, 0), "(", regexp=True) is None
