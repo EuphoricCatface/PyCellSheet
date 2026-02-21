@@ -662,6 +662,7 @@ class Grid(QTableView):
         """Selection changed event handler"""
 
         if not self.main_window.settings.show_statusbar_sum:
+            self.main_window.statusBar().clearMessage()
             return
 
         try:
@@ -688,7 +689,7 @@ class Grid(QTableView):
             try:
                 msg += msg_tpl.format(sum(sum_list), max(sum_list),
                                       min(sum_list))
-            except Exception:
+            except (TypeError, ValueError):
                 pass
 
         self.main_window.statusBar().showMessage(msg)
