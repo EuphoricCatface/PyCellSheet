@@ -21,10 +21,13 @@ Breaking / Compatibility changes:
 Tests:
 - Removed legacy dataclasses-shim regression tests that no longer map to active v0.5 behavior.
 - Expanded high-ROI coverage in CLI/entrypoint, parser migrator, `.pycs` reader/writer branches, and spreadsheet math/info/statistical contracts.
-- Current development baseline passes on active interpreter (`939 passed`).
+- Current development baseline passes on active interpreter (`941 passed`).
 
 Fixes:
 - Fixed `COUNTUNIQUE` to skip `EmptyCell` safely instead of raising unhashable-type failures.
+- Fixed `DataArray.data` setter to accept dict assignment while preserving existing direct-setter invocation contracts.
+- Fixed `PycsWriter.__len__` so save progress metadata matches actual emitted save-stream length.
+- Migrated bundled `share/examples/*.pysu` files to v0.5 save-format contracts (`[sheet_scripts]` + `[parser_settings]`).
 
 v0.4.0
 -------------------
