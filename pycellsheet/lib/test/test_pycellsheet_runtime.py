@@ -99,7 +99,7 @@ def test_range_output_from_range_copies_shape_and_data():
 
 
 def test_cell_meta_generator_requires_explicit_init():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         CELL_META_GENERATOR.get_instance()
 
 

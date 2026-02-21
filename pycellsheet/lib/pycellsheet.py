@@ -883,10 +883,16 @@ class CELL_META_GENERATOR:
     @classmethod
     def get_instance(cls, code_array=None):
         if cls.__INSTANCE is None:
-            assert code_array is not None, "CELL_META_GENERATOR initialization, code_array is not supplied"
+            if code_array is None:
+                raise ValueError(
+                    "CELL_META_GENERATOR initialization requires code_array."
+                )
             cls(code_array)
         else:
-            assert code_array is None, "CELL_META_GENERATOR non-initialization, code_array is supplied"
+            if code_array is not None:
+                raise ValueError(
+                    "CELL_META_GENERATOR is already initialized; do not resupply code_array."
+                )
         return cls.__INSTANCE
 
     def set_context(self, key):
