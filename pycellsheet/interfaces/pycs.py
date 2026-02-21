@@ -514,15 +514,8 @@ class PycsWriter(object):
     def __len__(self) -> int:
         """Returns how many lines will be written when saving the code_array"""
 
-        lines = 9  # Headers + 1 line version + 1 line shape
-        lines += len(self.code_array.dict_grid)
-        lines += len(self.code_array.cell_attributes)
-        lines += len(self.code_array.dict_grid.row_heights)
-        lines += len(self.code_array.dict_grid.col_widths)
-        sheet_scripts = self.code_array.dict_grid.sheet_scripts
-        lines += sum(sheet_script.count('\n') + 1 for sheet_script in sheet_scripts)
-
-        return lines
+        # Keep progress lengths exact by counting the same stream __iter__ emits.
+        return sum(1 for _ in self)
 
     def _version2pycs(self) -> Iterable[str]:
         """Returns pycs file version information in pycs format

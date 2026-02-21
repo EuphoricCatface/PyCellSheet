@@ -158,6 +158,18 @@ def test_writer_normalizes_sheet_names_for_output():
     assert writer._normalized_sheet_names() == ["Good", "Sheet 1", "BadName", "Good_1"]
 
 
+def test_writer_len_matches_emitted_line_count():
+    code_array = _DummyWriterCodeArray(
+        ["Main", "Sheet 1"],
+        ["x = 1", "y = 2\nz = 3"],
+    )
+    code_array._code[(0, 0, 0)] = "1"
+    writer = PycsWriter(code_array)
+
+    emitted = list(writer)
+    assert len(writer) == len(emitted)
+
+
 def test_reader_iter_finalizes_sheet_names():
     code_array = _DummyCodeArray(1)
     payload = (
