@@ -2009,7 +2009,8 @@ class GridTableModel(QAbstractTableModel):
                 try:
                     arr = numpy.array(value)
                     return array2qimage(arr)
-                except Exception:
+                except (TypeError, ValueError):
+                    logger.debug("Falling back to raw decoration value for key %s", key)
                     return value
 
         if role == Qt.ItemDataRole.BackgroundRole:
