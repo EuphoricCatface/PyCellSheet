@@ -77,6 +77,14 @@ class _DummyCodeArray:
         self.col_widths = {}
         self.cell_attributes = []
         self.exp_parser_code = "return cell"
+        self.active_parser_id = "parser_main"
+        self.parser_specs = [{
+            "id": "parser_main",
+            "name": "Active Parser",
+            "kind": "custom",
+            "version": None,
+            "code": self.exp_parser_code,
+        }]
 
 
 class _DummyWriterCodeArray:
@@ -90,6 +98,14 @@ class _DummyWriterCodeArray:
         self.dict_grid.col_widths = {}
         self._code = {}
         self.exp_parser_code = "return cell"
+        self.active_parser_id = "parser_main"
+        self.parser_specs = [{
+            "id": "parser_main",
+            "name": "Active Parser",
+            "kind": "custom",
+            "version": None,
+            "code": self.exp_parser_code,
+        }]
 
     def __iter__(self):
         return iter(self._code)
@@ -108,6 +124,14 @@ class _DummyCodeArrayNoNames:
         self.col_widths = {}
         self.cell_attributes = []
         self.exp_parser_code = "return cell"
+        self.active_parser_id = "parser_main"
+        self.parser_specs = [{
+            "id": "parser_main",
+            "name": "Active Parser",
+            "kind": "custom",
+            "version": None,
+            "code": self.exp_parser_code,
+        }]
 
 
 def test_pycs2sheet_names_sanitizes_and_uniquifies():
@@ -345,6 +369,48 @@ def test_pycs2parser_settings_sets_exp_parser_code():
     assert code_array.exp_parser_code == "return 123"
 
 
+def test_pycs2parser_settings_sets_active_parser_id():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2parser_settings("active_parser_id\t'parser_custom'\n")
+    list(reader)
+
+    assert code_array.active_parser_id == "parser_custom"
+
+
+def test_writer_reader_round_trip_preserves_parser_specs_section():
+    source = _DummyWriterCodeArray(["Main"], ["x = 9"])
+    source.parser_specs = [
+        {
+            "id": "parser_main",
+            "name": "Default",
+            "kind": "official",
+            "version": "pure_spreadsheet",
+            "code": None,
+        },
+        {
+            "id": "parser_custom",
+            "name": "Custom",
+            "kind": "custom",
+            "version": None,
+            "code": "if cell.startswith('>'):\n    return PythonCode(cell[1:])\nreturn cell",
+        },
+    ]
+    source.active_parser_id = "parser_custom"
+    source.exp_parser_code = source.parser_specs[1]["code"]
+
+    serialized = "".join(list(PycsWriter(source))).encode("utf-8")
+    target = _DummyCodeArray(1)
+    list(PycsReader(BytesIO(serialized), target))
+
+    assert len(target.parser_specs) == 2
+    assert target.parser_specs[0]["id"] == "parser_main"
+    assert target.parser_specs[1]["id"] == "parser_custom"
+    assert target.active_parser_id == "parser_custom"
+    assert "PythonCode" in target.parser_specs[1]["code"]
+
+
 def test_color_and_weight_conversion_helpers():
     assert wxcolor2rgb(0x112233) == (0x11, 0x22, 0x33)
     assert qt52qt6_fontweights(50) == 405
@@ -417,7 +483,7 @@ def test_pycs2parser_settings_rejects_unknown_key():
     code_array = _DummyCodeArray(1)
     reader = PycsReader(BytesIO(b""), code_array)
 
-    with pytest.raises(ValueError, match="Unknown parser_settings key.*exp_parser_code"):
+    with pytest.raises(ValueError, match="Unknown parser_settings key.*active_parser_id"):
         reader._pycs2parser_settings("pycel_formula_opt_in\tTrue\n")
 
 

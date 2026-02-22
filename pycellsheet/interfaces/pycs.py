@@ -123,6 +123,7 @@ class PycsReader:
             "[PyCellSheet save file version]\n": self._pycs_version,
             "[shape]\n": self._pycs2shape,
             "[sheet_names]\n": self._pycs2sheet_names,
+            "[parser_specs]\n": self._pycs2parser_specs,
             "[parser_settings]\n": self._pycs2parser_settings,
             "[sheet_scripts]\n": self._pycs2sheet_scripts,
             "[grid]\n": self._pycs2code,
@@ -139,6 +140,12 @@ class PycsReader:
         self.current_sheet_script = -1
         self.current_sheet_script_remaining = 0
         self._sheet_script_header_re = re.compile(r"^\(sheet_script:(.+)\)\s+([0-9]+)$")
+        self.current_parser_spec_id = None
+        self.current_parser_spec_remaining = 0
+        self.current_parser_spec_lines = []
+        self._parser_spec_header_re = re.compile(r"^\(parser_spec:(.+)\)\s+([0-9]+)$")
+        self._loaded_parser_specs = []
+        self._pending_active_parser_id = None
 
     def __iter__(self):
         """Iterates over self.pycs_file, replacing everything in code_array"""
@@ -162,6 +169,10 @@ class PycsReader:
 
         # Ensure sheet_names length always matches table count after load.
         self._finalize_sheet_names()
+        if self._loaded_parser_specs:
+            self.code_array.parser_specs = self._loaded_parser_specs
+        if self._pending_active_parser_id is not None:
+            self.code_array.active_parser_id = self._pending_active_parser_id
 
     # Decorators
 
@@ -454,11 +465,44 @@ class PycsReader:
         value = ast.literal_eval(value_repr)
         if key == "exp_parser_code":
             self.code_array.exp_parser_code = value
+        elif key == "active_parser_id":
+            self._pending_active_parser_id = str(value)
         else:
             raise ValueError(
                 f"Unknown parser_settings key: {key}. "
-                "Supported keys in v0.5+: exp_parser_code."
+                "Supported keys in v0.6+: exp_parser_code, active_parser_id."
             )
+
+    def _pycs2parser_specs(self, line: str):
+        """Updates parser specs from [parser_specs] section."""
+
+        if self.current_parser_spec_remaining:
+            if self.current_parser_spec_remaining == 1:
+                line = line.rstrip("\r\n")
+            self.current_parser_spec_lines.append(line)
+            self.current_parser_spec_remaining -= 1
+            if self.current_parser_spec_remaining == 0:
+                payload = "\n".join(self.current_parser_spec_lines)
+                parsed = ast.literal_eval(payload)
+                if not isinstance(parsed, dict):
+                    raise ValueError("parser_spec payload must be a dict literal.")
+                parsed["id"] = self.current_parser_spec_id
+                self._loaded_parser_specs.append(parsed)
+                self.current_parser_spec_lines = []
+            return
+
+        header_line = line.rstrip("\r\n")
+        header_match = self._parser_spec_header_re.fullmatch(header_line)
+        if header_match is None:
+            raise ValueError("The save file does not follow parser_spec header conventions")
+        raw_parser_identifier, line_count_str = header_match.groups()
+        try:
+            parsed_identifier = ast.literal_eval(raw_parser_identifier)
+        except Exception:
+            parsed_identifier = raw_parser_identifier
+
+        self.current_parser_spec_id = str(parsed_identifier)
+        self.current_parser_spec_remaining = int(line_count_str)
 
 class PycsWriter(object):
     """Interface between code_array and pycs file data
@@ -481,6 +525,7 @@ class PycsWriter(object):
             ("[PyCellSheet save file version]\n", self._version2pycs),
             ("[shape]\n", self._shape2pycs),
             ("[sheet_names]\n", self._sheet_names2pycs),
+            ("[parser_specs]\n", self._parser_specs2pycs),
             ("[parser_settings]\n", self._parser_settings2pycs),
             ("[sheet_scripts]\n", self._sheet_scripts2pycs),
             ("[grid]\n", self._code2pycs),
@@ -548,7 +593,27 @@ class PycsWriter(object):
     def _parser_settings2pycs(self) -> Iterable[str]:
         """Returns parser settings information in pycs format."""
 
+        active_parser_id = getattr(self.code_array, "active_parser_id", None)
+        if active_parser_id is not None:
+            yield f"active_parser_id\t{active_parser_id!r}\n"
         yield f"exp_parser_code\t{self.code_array.exp_parser_code!r}\n"
+
+    def _parser_specs2pycs(self) -> Iterable[str]:
+        """Returns parser spec blocks in pycs format."""
+
+        parser_specs = getattr(self.code_array, "parser_specs", None) or []
+        for parser_spec in parser_specs:
+            parser_id = str(parser_spec.get("id"))
+            payload = dict(parser_spec)
+            payload.pop("id", None)
+            payload_str = repr(payload)
+            payload_count = payload_str.count("\n") + 1
+            block = [
+                f"(parser_spec:{parser_id!r}) {payload_count}",
+                payload_str,
+                "",
+            ]
+            yield "\n".join(block)
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format
