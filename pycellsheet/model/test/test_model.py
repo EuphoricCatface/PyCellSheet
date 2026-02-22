@@ -49,6 +49,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          CodeArray, CellAttribute, DefaultCellAttributeDict,
                          INITSCRIPT_DEFAULT, _get_isolated_builtins,
                          PYCEL_FORMULA_PROMOTION_ENABLED)
+from model.storage_backend import Dict3DBackend
 
 from lib.attrdict import AttrDict
 from lib.exceptions import SpillRefError
@@ -291,6 +292,9 @@ class TestDataArray(object):
 
         assert sorted(self.data_array.keys()) == [(1, 2, 3), (1, 2, 4)]
 
+    def test_storage_backend_defaults_to_dict3d_adapter(self):
+        assert isinstance(self.data_array.storage_backend, Dict3DBackend)
+
     def test_pop(self):
         """Unit test for pop"""
 
@@ -311,6 +315,14 @@ class TestDataArray(object):
 
         self.data_array.shape = (10000, 100, 100)
         assert self.data_array.shape == (10000, 100, 100)
+
+    def test_setitem_auto_grows_shape_for_positive_overflow(self):
+        data_array = DataArray((2, 2, 1), Settings())
+
+        data_array[(3, 4, 2)] = "x"
+
+        assert data_array.shape == (4, 5, 3)
+        assert data_array[(3, 4, 2)] == "x"
 
     def test_shape_resize_updates_sheet_scoped_lists_and_names(self):
         data_array = DataArray((2, 2, 2), Settings())
@@ -849,6 +861,34 @@ class TestCodeArray(object):
         assert sys.stdout is old_stdout
         assert sys.stderr is old_stderr
 
+    def test_compile_cache_populated_and_cleared_on_cell_edit(self):
+        key = (0, 0, 0)
+        self.code_array[key] = "x = 1\nx + 1"
+
+        assert len(self.code_array.compile_cache) == 0
+        assert self.code_array[key] == 2
+        assert len(self.code_array.compile_cache) == 1
+
+        # Cache re-used without additional compile artifacts.
+        assert self.code_array[key] == 2
+        assert len(self.code_array.compile_cache) == 1
+
+        # Editing code invalidates compile cache explicitly.
+        self.code_array[key] = "x = 2\nx + 1"
+        assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_cleared_on_parser_change_and_sheet_script_apply(self):
+        key = (0, 0, 0)
+        self.code_array[key] = "3 + 4"
+        assert self.code_array[key] == 7
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        assert len(self.code_array.compile_cache) == 0
+
+        self.code_array.execute_sheet_script(0)
+        assert len(self.code_array.compile_cache) == 0
+
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""
 
@@ -929,3 +969,4 @@ class TestCodeArray(object):
         assert code_array[3, 0, 0] == 3
         assert code_array.findnextmatch((0, 0, 0), "3", False) == (3, 0, 0)
         assert code_array.findnextmatch((0, 0, 0), "99", True) == (99, 0, 0)
+        assert code_array.findnextmatch((0, 0, 0), "(", regexp=True) is None

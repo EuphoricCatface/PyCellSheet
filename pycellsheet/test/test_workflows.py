@@ -583,8 +583,8 @@ class TestWorkflows:
 
             assert main_window.safe_mode is False
             assert apply_calls["count"] == 1
+            assert os.getcwd() == old_cwd
         finally:
-            os.chdir(old_cwd)
             main_window.safe_mode = old_safe_mode
 
     param_count_file_lines = [
@@ -1014,6 +1014,6 @@ class TestWorkflows:
             assert apply_calls["count"] == 1
             assert main_window.statusBar().currentMessage() == \
                 "Applied 2 sheet scripts (1 with errors)."
+            assert os.getcwd() == old_cwd
         finally:
-            os.chdir(old_cwd)
             main_window.safe_mode = old_safe_mode

@@ -61,7 +61,7 @@ class SheetScriptPanel(QDialog):
                     scrollbar = parent.verticalScrollBar()
                     scrollbar.rangeChanged.connect(lambda *_: self._reposition())
                     scrollbar.valueChanged.connect(lambda *_: self._reposition())
-                except Exception:
+                except AttributeError:
                     pass
 
         def _update_text_and_style(self):
@@ -209,7 +209,7 @@ class SheetScriptPanel(QDialog):
         try:
             ast.parse(self.code_array.sheet_scripts[current_table])
 
-        except Exception:
+        except (SyntaxError, ValueError):
             # Grab the traceback and return it
             stringio = StringIO()
             excinfo = exc_info()
