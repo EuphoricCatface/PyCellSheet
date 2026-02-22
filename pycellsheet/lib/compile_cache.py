@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-
+#
 # Copyright Seongyong Park (EuphCat)
 # Distributed under the terms of the GNU General Public License
-
+#
 # --------------------------------------------------------------------
 # pycellsheet is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,24 +18,27 @@
 # along with pycellsheet.  If not, see <http://www.gnu.org/licenses/>.
 # --------------------------------------------------------------------
 
-"""Regression tests for removing the vendored dataclasses compatibility shim."""
-from pathlib import Path
+"""Compile-cache storage for evaluator code artifacts."""
 
 
-MODULE_FILES = {
-    "pycellsheet.dialogs": Path("pycellsheet/dialogs.py"),
-    "pycellsheet.installer": Path("pycellsheet/installer.py"),
-    "pycellsheet.grid_renderer": Path("pycellsheet/grid_renderer.py"),
-}
+class CompileCache:
+    """In-memory cache for compiled evaluator artifacts."""
 
+    def __init__(self):
+        self._cache = {}
 
-def test_no_legacy_dataclasses_fallback_imports():
-    for path in MODULE_FILES.values():
-        source = path.read_text(encoding="utf-8")
-        assert "pycellsheet.lib.dataclasses" not in source
-        assert "lib.dataclasses" not in source
+    def get(self, key):
+        return self._cache.get(key)
 
-def test_module_sources_compile():
-    for path in MODULE_FILES.values():
-        source = path.read_text(encoding="utf-8")
-        compile(source, str(path), "exec")
+    def set(self, key, value):
+        self._cache[key] = value
+
+    def pop(self, key):
+        self._cache.pop(key, None)
+
+    def clear(self):
+        self._cache.clear()
+
+    def __len__(self):
+        return len(self._cache)
+

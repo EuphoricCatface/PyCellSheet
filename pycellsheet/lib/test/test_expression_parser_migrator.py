@@ -18,9 +18,15 @@
 # along with pycellsheet.  If not, see <http://www.gnu.org/licenses/>.
 # --------------------------------------------------------------------
 
+import pytest
+
 from ..expression_parser_migrator import (
+    KNOWN_MODE_IDS,
     SAFE_CHANGED,
+    UNCHANGED,
     RISKY_SKIPPED,
+    INVALID_SOURCE_ASSUMPTION,
+    _migrate_cell,
     preview_migration,
     apply_migration,
 )
@@ -70,3 +76,50 @@ def test_apply_migration_updates_only_safe_changes():
     assert report.summary[SAFE_CHANGED] == 2
     assert code_array.dict_grid[(0, 0, 0)] == ">1 + 2"
     assert code_array.dict_grid[(0, 1, 0)] == ">plain text"
+
+
+def test_preview_migration_validates_mode_ids():
+    code_array = _DummyCodeArray({})
+
+    with pytest.raises(ValueError, match="Unknown source parser mode id"):
+        preview_migration(code_array, "unknown", "mixed")
+    with pytest.raises(ValueError, match="Unknown target parser mode id"):
+        preview_migration(code_array, "mixed", "unknown")
+
+
+def test_preview_migration_filters_tables():
+    code_array = _DummyCodeArray({
+        (0, 0, 0): "1+2",
+        (0, 1, 1): "3+4",
+    })
+
+    report = preview_migration(code_array, "mixed", "pure_spreadsheet", tables=[1])
+
+    assert [entry.key for entry in report.entries] == [(0, 1, 1)]
+    assert report.entries[0].new_text == ">3+4"
+
+
+def test_apply_migration_does_not_write_unchanged_entries():
+    code_array = _DummyCodeArray({(0, 0, 0): "'literal"})
+    report = apply_migration(code_array, "mixed", "pure_spreadsheet")
+
+    assert report.summary[UNCHANGED] == 1
+    assert code_array.dict_grid[(0, 0, 0)] == "'literal"
+
+
+def test_migrate_cell_include_risky_for_unsupported_pair():
+    _, cls_risky, _ = _migrate_cell("x", "unknown_source", "unknown_target", include_risky=False)
+    _, cls_forced, reason = _migrate_cell("x", "unknown_source", "unknown_target", include_risky=True)
+
+    assert cls_risky == RISKY_SKIPPED
+    assert cls_forced == SAFE_CHANGED
+    assert "include_risky=True" in reason
+
+
+def test_migration_report_summary_counts_include_all_classifications():
+    code_array = _DummyCodeArray({(0, 0, 0): "x"})
+    report = preview_migration(code_array, "pure_spreadsheet", "mixed")
+    counts = report.summary
+
+    assert set([SAFE_CHANGED, UNCHANGED, RISKY_SKIPPED, INVALID_SOURCE_ASSUMPTION, "total"]).issubset(counts)
+    assert counts["total"] == 1

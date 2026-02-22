@@ -49,6 +49,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          CodeArray, CellAttribute, DefaultCellAttributeDict,
                          INITSCRIPT_DEFAULT, _get_isolated_builtins,
                          PYCEL_FORMULA_PROMOTION_ENABLED)
+from model.storage_backend import Dict3DBackend
 
 from lib.attrdict import AttrDict
 from lib.exceptions import SpillRefError
@@ -76,8 +77,8 @@ def test_get_isolated_builtins_returns_detached_mapping():
     assert sentinel_key not in fresh_map
 
 
-def test_pycel_formula_promotion_policy_default_off():
-    assert PYCEL_FORMULA_PROMOTION_ENABLED is False
+def test_pycel_formula_promotion_policy_always_on():
+    assert PYCEL_FORMULA_PROMOTION_ENABLED is True
 
 
 class TestCellAttributes(object):
@@ -190,11 +191,10 @@ def test_sheet_script_alias_property():
     code_array.sheet_scripts = ["a = 1", "b = 2"]
 
     assert code_array.sheet_scripts == ["a = 1", "b = 2"]
-    assert code_array.sheet_scripts == ["a = 1", "b = 2"]
 
 
 def test_execute_sheet_script_alias():
-    """execute_sheet_script delegates to execute_macros."""
+    """execute_sheet_script evaluates sheet globals for the active table."""
 
     code_array = CodeArray((2, 2, 1), Settings())
     code_array.set_exp_parser_mode("mixed")
@@ -212,10 +212,8 @@ def test_sheet_scripts_alias_tracks_shape_resize():
 
     code_array.shape = (2, 2, 3)
     assert len(code_array.sheet_scripts) == 3
-    assert len(code_array.sheet_scripts) == 3
 
     code_array.shape = (2, 2, 1)
-    assert code_array.sheet_scripts == ["a = 1"]
     assert code_array.sheet_scripts == ["a = 1"]
 
 
@@ -294,6 +292,9 @@ class TestDataArray(object):
 
         assert sorted(self.data_array.keys()) == [(1, 2, 3), (1, 2, 4)]
 
+    def test_storage_backend_defaults_to_dict3d_adapter(self):
+        assert isinstance(self.data_array.storage_backend, Dict3DBackend)
+
     def test_pop(self):
         """Unit test for pop"""
 
@@ -314,6 +315,14 @@ class TestDataArray(object):
 
         self.data_array.shape = (10000, 100, 100)
         assert self.data_array.shape == (10000, 100, 100)
+
+    def test_setitem_auto_grows_shape_for_positive_overflow(self):
+        data_array = DataArray((2, 2, 1), Settings())
+
+        data_array[(3, 4, 2)] = "x"
+
+        assert data_array.shape == (4, 5, 3)
+        assert data_array[(3, 4, 2)] == "x"
 
     def test_shape_resize_updates_sheet_scoped_lists_and_names(self):
         data_array = DataArray((2, 2, 2), Settings())
@@ -337,10 +346,12 @@ class TestDataArray(object):
 
     def test_data_setter_uses_sheet_scripts(self):
         data_array = DataArray((2, 2, 1), Settings())
+        attrs = [CellAttribute(Selection([], [], [], [], [(0, 0)]), 0, AttrDict([("angle", 45.0)]))]
         DataArray.data.fset(
             data_array,
             shape=(1, 1, 1),
             grid={(0, 0, 0): "x"},
+            attributes=attrs,
             row_heights={(0, 0): 10.0},
             col_widths={(0, 0): 12.0},
             sheet_scripts=["script=1"],
@@ -351,6 +362,7 @@ class TestDataArray(object):
         assert data_array.row_heights[(0, 0)] == 10.0
         assert data_array.col_widths[(0, 0)] == 12.0
         assert data_array.exp_parser_code == "return PythonCode(cell)"
+        assert data_array.cell_attributes[0, 0, 0]["angle"] == 45.0
 
         DataArray.data.fset(data_array, sheet_scripts=["legacy_only=1"])
         assert data_array.sheet_scripts == ["legacy_only=1"]
@@ -682,19 +694,17 @@ class TestCodeArray(object):
         else:
             assert result == res
 
-    def test_spreadsheet_formula_requires_opt_in(self):
+    def test_spreadsheet_formula_evaluates_without_opt_in_gate(self):
         self.code_array[0, 0, 0] = "=1+2"
         result = self.code_array[0, 0, 0]
 
-        assert isinstance(result, RuntimeError)
-        assert "disabled" in str(result).lower()
+        assert not isinstance(result, RuntimeError)
 
     def test_spreadsheet_formula_evaluates_with_pycel_when_opted_in(self):
         excel_formula = self.code_array._eval_spreadsheet_code.__globals__["ExcelFormula"]
         if excel_formula is None:
             pytest.skip("pycel is not installed in this environment")
 
-        self.code_array.set_pycel_formula_opt_in(True)
         self.code_array[0, 0, 0] = "=1+2"
         result = self.code_array[0, 0, 0]
 
@@ -704,7 +714,6 @@ class TestCodeArray(object):
             assert "compile expression" in str(result).lower()
 
     def test_spreadsheet_formula_reports_missing_pycel(self, monkeypatch):
-        self.code_array.set_pycel_formula_opt_in(True)
         monkeypatch.setitem(self.code_array._eval_spreadsheet_code.__globals__,
                             "ExcelFormula", None)
         self.code_array[0, 0, 0] = "=1+2"
@@ -852,6 +861,34 @@ class TestCodeArray(object):
         assert sys.stdout is old_stdout
         assert sys.stderr is old_stderr
 
+    def test_compile_cache_populated_and_cleared_on_cell_edit(self):
+        key = (0, 0, 0)
+        self.code_array[key] = "x = 1\nx + 1"
+
+        assert len(self.code_array.compile_cache) == 0
+        assert self.code_array[key] == 2
+        assert len(self.code_array.compile_cache) == 1
+
+        # Cache re-used without additional compile artifacts.
+        assert self.code_array[key] == 2
+        assert len(self.code_array.compile_cache) == 1
+
+        # Editing code invalidates compile cache explicitly.
+        self.code_array[key] = "x = 2\nx + 1"
+        assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_cleared_on_parser_change_and_sheet_script_apply(self):
+        key = (0, 0, 0)
+        self.code_array[key] = "3 + 4"
+        assert self.code_array[key] == 7
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        assert len(self.code_array.compile_cache) == 0
+
+        self.code_array.execute_sheet_script(0)
+        assert len(self.code_array.compile_cache) == 0
+
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""
 
@@ -871,6 +908,22 @@ class TestCodeArray(object):
         rev_sort_gen = code_array._sorted_keys(keys, (0, 3, 0), reverse=True)
         for result, expected_result in zip(rev_sort_gen, rev_sorted_keys):
             assert result == expected_result
+
+    def test_data_property_setter_accepts_dict_assignment(self):
+        """Data property assignment should accept a dict payload."""
+
+        payload = {
+            "shape": (3, 4, 1),
+            "grid": {(0, 0, 0): "123"},
+            "sheet_scripts": ["x = 1"],
+            "exp_parser_code": ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"],
+        }
+
+        self.code_array.data = payload
+
+        assert self.code_array.shape == (3, 4, 1)
+        assert self.code_array((0, 0, 0)) == "123"
+        assert self.code_array.sheet_scripts == ["x = 1"]
 
     def test_string_match(self):
         """Tests creation of string_match"""
@@ -916,3 +969,4 @@ class TestCodeArray(object):
         assert code_array[3, 0, 0] == 3
         assert code_array.findnextmatch((0, 0, 0), "3", False) == (3, 0, 0)
         assert code_array.findnextmatch((0, 0, 0), "99", True) == (99, 0, 0)
+        assert code_array.findnextmatch((0, 0, 0), "(", regexp=True) is None

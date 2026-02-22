@@ -111,6 +111,7 @@ class FileMenu(QMenu):
         self.addSeparator()
         self.addAction(actions.save)
         self.addAction(actions.save_as)
+        self.addAction(actions.close)
         self.addSeparator()
         self.addAction(actions.imprt)
         self.addAction(actions.export)
@@ -200,6 +201,12 @@ class ToolsMenu(QMenu):
         self.recalculate_submenu.addAction(actions.recalculate_children)
         self.recalculate_submenu.addAction(actions.recalculate_all)
         self.addAction(actions.toggle_auto_recalculate)
+
+        self.addSeparator()
+
+        self.expression_parser_submenu = self.addMenu('Expression Parser')
+        self.expression_parser_submenu.addAction(actions.expression_parser_settings)
+        self.expression_parser_submenu.addAction(actions.migrate_expression_parser)
 
         self.addSeparator()
 

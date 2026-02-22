@@ -55,6 +55,7 @@ from collections import defaultdict
 from copy import copy, deepcopy
 from inspect import isgenerator
 import io
+import logging
 from itertools import product
 from pydoc import plaintext, render_doc
 import re
@@ -64,6 +65,9 @@ from typing import (
         Any, Dict, Iterable, List, NamedTuple, Sequence, Tuple, Union)
 
 import numpy
+
+
+logger = logging.getLogger(__name__)
 
 from PyQt6.QtGui import QImage, QPixmap  # Needed
 
@@ -102,6 +106,8 @@ try:
         preview_migration as preview_expression_parser_migration,
         apply_migration as apply_expression_parser_migration,
     )
+    from pycellsheet.model.storage_backend import create_storage_backend
+    from pycellsheet.lib.compile_cache import CompileCache
 
     # Dependency tracking and smart caching
     from pycellsheet.lib.dependency_graph import DependencyGraph
@@ -123,6 +129,8 @@ except ImportError:
         preview_migration as preview_expression_parser_migration,
         apply_migration as apply_expression_parser_migration,
     )
+    from model.storage_backend import create_storage_backend
+    from lib.compile_cache import CompileCache
 
     # Dependency tracking and smart caching
     from lib.dependency_graph import DependencyGraph
@@ -158,7 +166,7 @@ except ImportError:
 #     from lib import spreadsheet
 """
 
-PYCEL_FORMULA_PROMOTION_ENABLED = False
+PYCEL_FORMULA_PROMOTION_ENABLED = True
 
 
 class_format_functions = {}
@@ -240,11 +248,9 @@ class CellAttributes(list):
         self.remove = None
         self.reverse = None
         self.sort = None
-
+        self._attr_cache = AttrDict()
+        self._table_cache = {}
     # Cache for __getattr__ maps key to tuple of len and attr_dict
-
-    _attr_cache = AttrDict()
-    _table_cache = {}
 
     def append(self, cell_attribute: CellAttribute):
         """append that clears caches
@@ -506,6 +512,7 @@ class DataArray:
         """
 
         self.dict_grid = DictGrid(shape)
+        self.storage_backend = create_storage_backend(self.dict_grid)
         self.settings = settings
 
         self.sheet_scripts_draft: list[typing.Optional[str]] = [INITSCRIPT_DEFAULT for _ in range(shape[2])]
@@ -516,6 +523,7 @@ class DataArray:
 
         self.exp_parser = ExpressionParser()
         self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        self._saved_parser_signature = self.exp_parser_code
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
@@ -557,17 +565,16 @@ class DataArray:
         data = {}
 
         data["shape"] = self.shape
-        data["grid"] = dict(self.dict_grid)
+        data["grid"] = self.storage_backend.as_dict()
         data["attributes"] = list(self.cell_attributes)
         data["row_heights"] = self.row_heights
         data["col_widths"] = self.col_widths
         data["sheet_scripts"] = self.sheet_scripts
         data["exp_parser_code"] = self.exp_parser_code
-
         return data
 
     @data.setter
-    def data(self, **kwargs):
+    def data(self, value: typing.Optional[dict] = None, **kwargs):
         """Sets data from given parameters
 
         Old values are deleted.
@@ -587,15 +594,22 @@ class DataArray:
         :type col_widths: defaultdict[Tuple[int, int], float]
         """
 
+        if kwargs:
+            if value is not None:
+                raise TypeError("DataArray.data setter accepts either a dict or keyword args, not both.")
+        else:
+            if not isinstance(value, dict):
+                raise TypeError("DataArray.data setter expects a dict.")
+            kwargs = value
+
         if "shape" in kwargs:
             self.shape = kwargs["shape"]
 
         if "grid" in kwargs:
-            self.dict_grid.clear()
-            self.dict_grid.update(kwargs["grid"])
+            self.storage_backend.replace_from_dict(kwargs["grid"])
 
         if "attributes" in kwargs:
-            self.attributes[:] = kwargs["attributes"]
+            self.cell_attributes = kwargs["attributes"]
 
         if "row_heights" in kwargs:
             self.row_heights = kwargs["row_heights"]
@@ -643,9 +657,10 @@ class DataArray:
     def cell_attributes(self, value: CellAttributes):
         """cell_attributes interface to dict_grid"""
 
-        # First empty cell_attributes
-        self.cell_attributes[:] = []
-        self.cell_attributes.extend(value)
+        new_attrs = CellAttributes()
+        for cell_attribute in value:
+            new_attrs.append(cell_attribute)
+        self.dict_grid.cell_attributes = new_attrs
 
     @property
     def sheet_scripts(self) -> list[str]:
@@ -671,6 +686,8 @@ class DataArray:
 
         self.dict_grid.exp_parser_code = exp_parser_code
         self.exp_parser.set_parser(exp_parser_code)
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
 
     @property
     def exp_parser_mode_id(self) -> typing.Optional[str]:
@@ -703,15 +720,19 @@ class DataArray:
                 self.dep_graph.dirty.clear()
         return report
 
-    def set_pycel_formula_opt_in(self, enabled: bool):
-        self.pycel_formula_opt_in = bool(enabled)
+    @property
+    def parser_settings_applied(self) -> bool:
+        """Returns True when parser settings match last saved/loaded state."""
+
+        return self.exp_parser_code == self._saved_parser_signature
+
+    def mark_parser_settings_applied(self):
+        """Mark current parser settings as persisted baseline."""
+
+        self._saved_parser_signature = self.exp_parser_code
 
     def _eval_spreadsheet_code(self, key: Tuple[int, int, int],
                                formula: SpreadSheetCode):
-        if not self.pycel_formula_opt_in:
-            return RuntimeError(
-                "Spreadsheet formulas are disabled. Enable pycel formula mode first."
-            )
         if ExcelFormula is None:
             return ImportError(
                 "pycel is not installed. Install pycel and re-evaluate the cell."
@@ -734,7 +755,7 @@ class DataArray:
             if ":" not in addr_str:
                 return cur_sheet.cell_single_ref(addr_str)
             addr1, addr2 = addr_str.split(":", 1)
-            return cur_sheet.cell_range_ref(addr1, addr2)
+            return cur_sheet.cell_range_ref(addr1, addr2).normalize()  # pycel doesn't know how to handle Range itself
 
         eval_formula = ExcelFormula.build_eval_context(evaluate, evaluate_range)
         compiled_formula = ExcelFormula(f"={formula}")
@@ -764,13 +785,14 @@ class DataArray:
 
         if any(new_axis < old_axis
                for new_axis, old_axis in zip(shape, old_shape)):
-            for key in list(self.dict_grid.keys()):
+            for key in list(self.storage_backend.iter_keys()):
                 if any(key_ele >= new_axis
                        for key_ele, new_axis in zip(key, shape)):
                     deleted_cells[key] = self.pop(key)
 
         # Set dict_grid shape attribute
         self.dict_grid.shape = shape
+        self.storage_backend.resize(shape)
 
         # Adjust sheet-specific lists to match new table count
         old_tables = old_shape[2]
@@ -804,7 +826,7 @@ class DataArray:
     def __iter__(self) -> Iterable:
         """Returns iterator over self.dict_grid"""
 
-        return iter(self.dict_grid)
+        return self.storage_backend.iter_keys()
 
     def __contains__(self, key: Tuple[int, int, int]) -> bool:
         """True if key is contained in grid
@@ -839,7 +861,7 @@ class DataArray:
         if any(is_stringlike(key_ele) for key_ele in key):
             raise NotImplementedError("Cell string based access not implemented")
 
-        return self.dict_grid[key]
+        return self.storage_backend.get_code(key)
 
     def __setitem__(self, key: Tuple[int, int, int], value: str):
         """Accepts index keys
@@ -853,11 +875,23 @@ class DataArray:
         if any(is_stringlike(key_ele) for key_ele in key):
             raise NotImplementedError("Cell string based assignment not implemented")
 
+        # Exact-fit auto-growth for positive out-of-bounds writes.
+        # This removes routine manual shape management for callers.
+        row, col, tab = key
+        rows, cols, tabs = self.shape
+        target_shape = (
+            max(rows, row + 1) if row >= 0 else rows,
+            max(cols, col + 1) if col >= 0 else cols,
+            max(tabs, tab + 1) if tab >= 0 else tabs,
+        )
+        if target_shape != self.shape:
+            self.shape = target_shape
+
         if value:
             merging_cell = self.cell_attributes.get_merging_cell(key)
             if ((merging_cell is None or merging_cell == key)
                     and isinstance(value, (str, PythonCode, SpreadSheetCode))):
-                self.dict_grid[key] = value
+                self.storage_backend.set_code(key, value)
             return
 
         try:
@@ -907,7 +941,7 @@ class DataArray:
     def keys(self) -> List[Tuple[int, int, int]]:
         """Returns keys in self.dict_grid"""
 
-        return list(self.dict_grid.keys())
+        return list(self.storage_backend.iter_keys())
 
     def pop(self, key: Tuple[int, int, int]) -> Any:
         """dict_grid pop wrapper
@@ -916,7 +950,7 @@ class DataArray:
 
         """
 
-        return self.dict_grid.pop(key)
+        return self.storage_backend.pop_code(key)
 
     def get_last_filled_cell(self, table: int = None) -> Tuple[int, int, int]:
         """Returns key for the bottommost rightmost cell with content
@@ -928,7 +962,7 @@ class DataArray:
         maxrow = 0
         maxcol = 0
 
-        for row, col, tab in self.dict_grid:
+        for row, col, tab in self.storage_backend.iter_keys():
             if table is None or tab == table:
                 maxrow = max(row, maxrow)
                 maxcol = max(col, maxcol)
@@ -1211,7 +1245,7 @@ class DataArray:
         new_keys = {}
         del_keys = []
 
-        for key in list(self.dict_grid.keys()):
+        for key in list(self.storage_backend.iter_keys()):
             if key[axis] >= insertion_point and (tab is None or tab == key[2]):
                 new_key = list(key)
                 new_key[axis] += no_to_insert
@@ -1269,7 +1303,7 @@ class DataArray:
         del_keys = []
 
         # Note that the loop goes over a list that copies all dict keys
-        for key in list(self.dict_grid.keys()):
+        for key in list(self.storage_backend.iter_keys()):
             if tab is None or tab == key[2]:
                 if deletion_point <= key[axis] < deletion_point + no_to_delete:
                     del_keys.append(key)
@@ -1370,6 +1404,7 @@ class CodeArray(DataArray):
 
         self.dep_graph = DependencyGraph()
         self.smart_cache = SmartCache(self.dep_graph)
+        self.compile_cache = CompileCache()
         self._eval_warnings: dict[Tuple[int, int, int], list[str]] = {}
         self._format_warnings: dict[Tuple[int, int, int], str] = {}
 
@@ -1386,7 +1421,7 @@ class CodeArray(DataArray):
         warnings = []
         try:
             tree = ast.parse(sheet_script, mode="exec")
-        except Exception:
+        except (SyntaxError, ValueError, TypeError):
             return warnings
 
         bindings: dict[str, int] = defaultdict(int)
@@ -1432,6 +1467,15 @@ class CodeArray(DataArray):
             self._eval_warnings[key] = list(warnings)
             return
         self._eval_warnings.pop(key, None)
+
+    @staticmethod
+    def _values_differ(old: Any, new: Any) -> bool:
+        """Return whether two values differ, tolerating hostile ``__eq__``."""
+
+        try:
+            return new != old
+        except Exception:
+            return True
 
     def set_format_warning(self, key: Tuple[int, int, int], warning: typing.Optional[str]):
         if warning:
@@ -1491,6 +1535,7 @@ class CodeArray(DataArray):
             # Remove dependencies for this cell (will be re-tracked on next eval)
             # Reverse edges are preserved by default for cycle detection
             self.dep_graph.remove_cell(key)
+            self.compile_cache.clear()
 
     def __getitem__(self, key: Tuple[int, int, int]) -> Any:
         """Returns _eval_cell
@@ -1668,7 +1713,15 @@ class CodeArray(DataArray):
             # Track dependencies during evaluation
             with DependencyTracker.track(key):
                 # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-                result = PythonEvaluator.exec_then_eval(ref_parsed.lstrip(), env, local)
+                parser_signature = self.exp_parser_code
+                cache_key = (key[2], parser_signature, ref_parsed.lstrip())
+                result = PythonEvaluator.exec_then_eval(
+                    ref_parsed.lstrip(),
+                    env,
+                    local,
+                    compile_cache=self.compile_cache,
+                    cache_key=cache_key,
+                )
                 if isinstance(result, RangeOutput):
                     PythonEvaluator.range_output_handler(self, result, key)
                 if isinstance(result, RangeOutput.OFFSET):
@@ -1715,6 +1768,7 @@ class CodeArray(DataArray):
         # when the cell is re-added
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
+        self.compile_cache.clear()
         self._clear_cell_warnings(key)
         old_spill_size = self.range_output_sizes.pop(key, None)
         if old_spill_size:
@@ -1742,8 +1796,8 @@ class CodeArray(DataArray):
                 # Access the cell - this triggers evaluation
                 _ = self[key]
             except Exception:
-                # Ignore errors during recalculation
-                pass
+                # Keep recalc resilient but emit enough detail for diagnosis.
+                logger.exception("Error while recalculating dirty cell %s", key)
 
         return len(dirty_cells)
 
@@ -1778,7 +1832,7 @@ class CodeArray(DataArray):
                 _ = self[key]
                 recalculated += 1
             except Exception:
-                pass
+                logger.exception("Error while recalculating key %s", key)
         return recalculated
 
     def recalculate_cell_only(self, key: Tuple[int, int, int]) -> int:
@@ -1796,11 +1850,9 @@ class CodeArray(DataArray):
             self.smart_cache.drop(key)
             new = self[key]
             if old is not SmartCache.INVALID:
-                try:
-                    changed = (new != old)
-                except Exception:
-                    changed = True
+                changed = self._values_differ(old, new)
         except Exception:
+            logger.exception("Error while recalculating single cell %s", key)
             changed = True
 
         if changed:
@@ -1834,10 +1886,7 @@ class CodeArray(DataArray):
         self.dep_graph.clear_dirty(key)
 
         if old is not SmartCache.INVALID:
-            try:
-                changed = (result != old)
-            except Exception:
-                changed = True
+            changed = self._values_differ(old, result)
 
         if changed:
             direct_dependents = self.dep_graph.dependents.get(key, set())
@@ -1867,7 +1916,7 @@ class CodeArray(DataArray):
     def recalculate_all(self) -> int:
         """Recalculate all cells in the workspace"""
 
-        keys = self._filter_recalc_keys(list(self.dict_grid.keys()))
+        keys = self._filter_recalc_keys(self.keys())
         return self._recalculate_keys(keys)
 
     def execute_sheet_script(self, current_table) -> Tuple[str, str]:
@@ -1918,6 +1967,7 @@ class CodeArray(DataArray):
 
         # Reset cache - clear all since init scripts affect globals
         self.smart_cache.clear()
+        self.compile_cache.clear()
         self.sheet_globals_copyable[current_table] = dict()
         self.sheet_globals_uncopyable[current_table] = dict()
 
@@ -2033,13 +2083,14 @@ class CodeArray(DataArray):
         table = startkey[2]
         keys = [key for key in self.keys() if key[2] == table]
 
-        for key in self._sorted_keys(keys, startkey, reverse=up):
+        if regexp:
             try:
-                if is_matching(key, find_string, word, case, regexp):
-                    return key
+                re.compile(find_string)
+            except re.error:
+                return None
 
-            except Exception:
-                # re errors are cryptical: sre_constants,...
-                pass
+        for key in self._sorted_keys(keys, startkey, reverse=up):
+            if is_matching(key, find_string, word, case, regexp):
+                return key
 
 # End of class CodeArray

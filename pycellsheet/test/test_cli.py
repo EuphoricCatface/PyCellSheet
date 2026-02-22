@@ -33,6 +33,8 @@ from os.path import abspath, dirname, join
 import sys
 from unittest.mock import patch
 from pathlib import Path, PosixPath
+import types
+from importlib.util import spec_from_file_location, module_from_spec
 
 import pytest
 
@@ -48,6 +50,7 @@ def insert_path(path):
 
 
 with insert_path(PYCELLSHEETPATH):
+    from .. import cli
     from ..cli import PyCellSheetArgumentParser
 
 param_test_cli = [
@@ -80,3 +83,62 @@ def test_cli(argv, res):
         else:
             args, unknown = parser.parse_known_args()
             assert args == res
+
+
+def test_check_mandatory_dependencies_warns_for_missing_and_old_modules(monkeypatch):
+    class _Dep:
+        def __init__(self, name, installed, version, required):
+            self.name = name
+            self._installed = installed
+            self.version = version
+            self.required_version = required
+
+        def is_installed(self):
+            return self._installed
+
+    monkeypatch.setattr(cli, "pyqtsvg", None)
+    monkeypatch.setattr(
+        cli,
+        "REQUIRED_DEPENDENCIES",
+        [
+            _Dep("okmod", True, "1.0", "1.0"),
+            _Dep("missingmod", False, "0", "1.0"),
+            _Dep("oldmod", True, "0.1", "1.0"),
+        ],
+    )
+    monkeypatch.setattr(cli, "sys", types.SimpleNamespace(
+        version_info=types.SimpleNamespace(major=3, minor=5, micro=9),
+        stdout=sys.stdout,
+    ))
+
+    with patch("sys.stdout.write") as write_mock:
+        cli.check_mandatory_dependencies()
+
+    written = "".join(call.args[0] for call in write_mock.call_args_list)
+    assert "Python has version 3.5.9" in written
+    assert "Required module missingmod not found." in written
+    assert "Module oldmod has version 0.1but 1.0 is required." in written
+    assert "Required module PyQt6.QtSvg not found." in written
+
+
+def test_main_module_invokes_main(monkeypatch):
+    called = {"count": 0}
+
+    fake_entry = types.ModuleType("pycellsheet.pycellsheet")
+
+    def _fake_main():
+        called["count"] += 1
+
+    fake_entry.main = _fake_main
+    fake_pkg = types.ModuleType("pycellsheet")
+    fake_pkg.main = _fake_main
+    monkeypatch.setitem(sys.modules, "pycellsheet", fake_pkg)
+    monkeypatch.setitem(sys.modules, "pycellsheet.pycellsheet", fake_entry)
+    monkeypatch.setitem(sys.modules, "pycellsheet.pycellsheet.pycellsheet", fake_entry)
+
+    main_path = Path(PYCELLSHEETPATH) / "__main__.py"
+    spec = spec_from_file_location("test_pycellsheet_main", main_path)
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert called["count"] == 1

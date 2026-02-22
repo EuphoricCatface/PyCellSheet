@@ -42,7 +42,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent, QTimer, QRectF
 from PyQt6.QtWidgets import (QWidget, QMainWindow, QApplication,
                              QMessageBox, QDockWidget, QVBoxLayout,
-                             QStyleOptionViewItem, QSplitter)
+                             QStyleOptionViewItem, QSplitter, QStackedWidget)
 try:
     from PyQt6.QtSvgWidgets import QSvgWidget
 except ImportError:
@@ -65,7 +65,9 @@ try:
     from pycellsheet.widgets import Widgets
     from pycellsheet.dialogs import (ApproveWarningDialog, PreferencesDialog,
                                      ManualDialog, TutorialDialog,
-                                     PrintAreaDialog, PrintPreviewDialog)
+                                     PrintAreaDialog, PrintPreviewDialog,
+                                     ExpressionParserSelectionDialog,
+                                     ExpressionParserMigrationDialog)
     from pycellsheet.installer import DependenciesDialog
     from pycellsheet.interfaces.pycs import qt62qt5_fontweights
     from pycellsheet.panels import SheetScriptPanel
@@ -84,7 +86,9 @@ except ImportError:
     from workflows import Workflows
     from widgets import Widgets
     from dialogs import (ApproveWarningDialog, PreferencesDialog, ManualDialog,
-                         TutorialDialog, PrintAreaDialog, PrintPreviewDialog)
+                         TutorialDialog, PrintAreaDialog, PrintPreviewDialog,
+                         ExpressionParserSelectionDialog,
+                         ExpressionParserMigrationDialog)
     from installer import DependenciesDialog
     from interfaces.pycs import qt62qt5_fontweights
     from panels import SheetScriptPanel
@@ -103,10 +107,13 @@ class MainWindow(QMainWindow):
     gui_update = pyqtSignal(dict)
 
     def __init__(self, filepath: Optional[Path] = None,
-                 default_settings: bool = False):
+                 default_settings: bool = False,
+                 prompt_parser_dialog_on_startup: bool = True):
         """
         :param filepath: File path for inital file to be opened
         :param default_settings: Ignore stored `QSettings` and use defaults
+        :param prompt_parser_dialog_on_startup:
+            Show parser settings dialog for fresh startup workbook
 
         """
 
@@ -114,6 +121,7 @@ class MainWindow(QMainWindow):
 
         self._loading = True  # For initial loading of PyCellSheet
         self.prevent_updates = False  # Prevents setData updates in grid
+        self.has_document = False
 
         self.settings = Settings(self, reset_settings=default_settings)
         self.workflows = Workflows(self)
@@ -158,16 +166,8 @@ class MainWindow(QMainWindow):
             else:
                 msg = f"File '{filepath}' could not be opened."
                 self.statusBar().showMessage(msg)
-        else:
-            # Fresh startup without an input file should initialize and execute
-            # default sheet scripts so spreadsheet helpers are available.
-            self.sheet_script_panel.apply_all_drafts_to_scripts()
-            tables_executed, tables_with_errors = self.workflows.apply_all_sheet_scripts()
-            if tables_executed and tables_with_errors:
-                self.statusBar().showMessage(
-                    f"Applied {tables_executed} sheet scripts ({tables_with_errors} with errors).",
-                    5000
-                )
+
+        self.set_document_state(self.has_document)
 
     def _init_window(self):
         """Initialize main window components"""
@@ -250,6 +250,10 @@ class MainWindow(QMainWindow):
         self.sheet_script_panel = SheetScriptPanel(self, self.grid.model.code_array)
 
         self.main_panel = QWidget(self)
+        self.no_document_panel = QWidget(self)
+        self.no_document_panel.setAutoFillBackground(True)
+        self.no_document_panel.setBackgroundRole(QPalette.ColorRole.Window)
+        self.central_stack = QStackedWidget(self)
 
         self.entry_line_dock = QDockWidget("Entry Line", self)
         self.entry_line_dock.setObjectName("Entry Line Panel")
@@ -310,7 +314,9 @@ class MainWindow(QMainWindow):
         self.hsplitter_2.setSizes([1, 0])
 
         self.main_panel.setLayout(self.central_layout)
-        self.setCentralWidget(self.main_panel)
+        self.central_stack.addWidget(self.no_document_panel)
+        self.central_stack.addWidget(self.main_panel)
+        self.setCentralWidget(self.central_stack)
 
     def eventFilter(self, source: QWidget, event: QEvent) -> bool:
         """Overloaded event filter for handling QDockWidget close events
@@ -375,6 +381,47 @@ class MainWindow(QMainWindow):
         auto_mode = self.settings.recalc_mode == "auto"
         actions.recalculate_ancestors.setEnabled(not auto_mode)
         actions.recalculate_children.setEnabled(not auto_mode)
+        self.entry_line.update_parser_indicator()
+        self._update_no_document_ui()
+
+    def _update_no_document_ui(self):
+        """Apply UI enabled/disabled state for no-document mode."""
+
+        has_document = self.has_document
+
+        self.central_stack.setCurrentWidget(
+            self.main_panel if has_document else self.no_document_panel
+        )
+
+        self.entry_line.setEnabled(has_document)
+        self.table_choice.setEnabled(has_document)
+        self.grid.setEnabled(has_document)
+        self.grid_2.setEnabled(has_document)
+        self.grid_3.setEnabled(has_document)
+        self.grid_4.setEnabled(has_document)
+
+        self.entry_line_dock.setVisible(has_document)
+        self.sheet_script_dock.setVisible(has_document)
+
+        menu_bar = self.menuBar()
+        menu_bar.edit_menu.setEnabled(has_document)
+        menu_bar.view_menu.setEnabled(has_document)
+        menu_bar.format_menu.setEnabled(has_document)
+        menu_bar.tools_menu.setEnabled(has_document)
+
+        actions = self.main_window_actions
+        file_requires_document = [
+            actions.close, actions.save, actions.save_as, actions.imprt, actions.export,
+            actions.approve, actions.print_preview, actions.print,
+        ]
+        for action in file_requires_document:
+            action.setEnabled(has_document)
+
+    def set_document_state(self, has_document: bool):
+        """Switch app between explicit no-document and document-open states."""
+
+        self.has_document = bool(has_document)
+        self.update_action_toggles()
 
     @property
     def focused_grid(self):
@@ -551,6 +598,79 @@ class MainWindow(QMainWindow):
             return
         if toggled:
             self.on_recalculate()
+
+    def on_set_expression_parser_mode(self, mode_id: str, checked: bool = True):
+        """Set expression parser mode for this workbook."""
+
+        if not checked:
+            return
+
+        code_array = self.grid.model.code_array
+        code_array.set_exp_parser_mode(mode_id)
+        code_array.smart_cache.clear()
+        if hasattr(code_array, "dep_graph"):
+            code_array.dep_graph.dirty.clear()
+        self._refresh_grid()
+        self.update_action_toggles()
+
+        self.statusBar().showMessage(
+            f"Expression Parser mode set to {mode_id}", 3500
+        )
+
+    def _apply_initscript_template_to_all_sheets(self, template: str):
+        """Apply initscript template as draft for every sheet."""
+
+        code_array = self.grid.model.code_array
+        for table in range(code_array.shape[2]):
+            code_array.sheet_scripts_draft[table] = template
+        self.sheet_script_panel.update_()
+
+    def on_open_expression_parser_settings_dialog(
+            self, exit_on_cancel: bool = False):
+        """Open parser settings dialog and apply selection."""
+
+        code_array = self.grid.model.code_array
+        dialog = ExpressionParserSelectionDialog(
+            self,
+            current_mode_id=code_array.exp_parser_mode_id,
+        )
+
+        if not dialog.exec():
+            if exit_on_cancel:
+                QTimer.singleShot(0, QApplication.instance().quit)
+            return False
+
+        mode_id = dialog.selection
+        self.on_set_expression_parser_mode(mode_id, True)
+        return True
+
+    def on_open_expression_parser_migration_dialog(self):
+        """Open parser migration dialog and apply selected migration."""
+
+        dialog = ExpressionParserMigrationDialog(
+            self,
+            self.grid.model.code_array,
+            current_mode_id=self.grid.model.code_array.exp_parser_mode_id,
+            current_table=self.grid.table,
+        )
+
+        if not dialog.exec():
+            return
+
+        report = dialog.applied_report
+        if report is None:
+            return
+
+        self._refresh_grid()
+        self.update_action_toggles()
+        summary = report.summary
+        self.statusBar().showMessage(
+            "Parser migration applied "
+            f"(safe: {summary['safe_changed']}, "
+            f"risky skipped: {summary['risky_skipped']}, "
+            f"unchanged: {summary['unchanged']})",
+            5000,
+        )
 
     def _refresh_grid(self):
         """Emit dataChanged for the full grid"""

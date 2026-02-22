@@ -262,7 +262,7 @@ def spreadsheet_ref_to_coord(addr: str) -> tuple[int, int]:
     return row_num, col_num - 1  # Convert from 1-based to 0-based
 
 
-class RangeBase:
+class RangeBase(collections.abc.Sequence):
     def __init__(self, width: int, lst: typing.Optional[list] = None):
         self.lst = lst if lst else []
         self.width = width
@@ -293,6 +293,8 @@ class RangeBase:
     def append(self, item: typing.Any):
         self.lst.append(item)
 
+    def normalize(self):
+        return list(self)
 
 
 class Range(RangeBase):
@@ -755,7 +757,8 @@ class PythonEvaluator:
 
     @staticmethod
     def exec_then_eval(code: PythonCode,
-                       _globals: dict = None, _locals: dict = None):
+                       _globals: dict = None, _locals: dict = None,
+                       compile_cache=None, cache_key=None):
         """Execute suite and evaluate terminal expression if present.
 
         :param code: Code to be executed / evaled
@@ -770,21 +773,42 @@ class PythonEvaluator:
         if _locals is None:
             _locals = {}
 
-        block = ast.parse(code, mode='exec')
-        PythonEvaluator._validate_no_top_level_return(block)
+        artifact = None
+        if compile_cache is not None and cache_key is not None:
+            artifact = compile_cache.get(cache_key)
 
-        if block.body and isinstance(block.body[-1], ast.Expr):
-            expr = block.body[-1].value
-            stmt_block = ast.Module(body=block.body[:-1], type_ignores=[])
-            stmt_block = ast.fix_missing_locations(stmt_block)
-            expr_block = ast.Expression(body=expr)
-            expr_block = ast.fix_missing_locations(expr_block)
+        if artifact is None:
+            block = ast.parse(code, mode='exec')
+            PythonEvaluator._validate_no_top_level_return(block)
 
-            if stmt_block.body:
-                exec(compile(stmt_block, '<string>', mode='exec'), _globals, _locals)
-            return eval(compile(expr_block, '<string>', mode='eval'), _globals, _locals)
+            if block.body and isinstance(block.body[-1], ast.Expr):
+                expr = block.body[-1].value
+                stmt_block = ast.Module(body=block.body[:-1], type_ignores=[])
+                stmt_block = ast.fix_missing_locations(stmt_block)
+                expr_block = ast.Expression(body=expr)
+                expr_block = ast.fix_missing_locations(expr_block)
+                artifact = {
+                    "kind": "terminal_expr",
+                    "stmt_compiled": compile(stmt_block, '<string>', mode='exec')
+                    if stmt_block.body else None,
+                    "expr_compiled": compile(expr_block, '<string>', mode='eval'),
+                }
+            else:
+                artifact = {
+                    "kind": "exec_only",
+                    "exec_compiled": compile(
+                        ast.fix_missing_locations(block), '<string>', mode='exec'
+                    ),
+                }
+            if compile_cache is not None and cache_key is not None:
+                compile_cache.set(cache_key, artifact)
 
-        exec(compile(ast.fix_missing_locations(block), '<string>', mode='exec'), _globals, _locals)
+        if artifact["kind"] == "terminal_expr":
+            if artifact["stmt_compiled"] is not None:
+                exec(artifact["stmt_compiled"], _globals, _locals)
+            return eval(artifact["expr_compiled"], _globals, _locals)
+
+        exec(artifact["exec_compiled"], _globals, _locals)
         return None
 
     @staticmethod
@@ -881,10 +905,16 @@ class CELL_META_GENERATOR:
     @classmethod
     def get_instance(cls, code_array=None):
         if cls.__INSTANCE is None:
-            assert code_array is not None, "CELL_META_GENERATOR initialization, code_array is not supplied"
+            if code_array is None:
+                raise ValueError(
+                    "CELL_META_GENERATOR initialization requires code_array."
+                )
             cls(code_array)
         else:
-            assert code_array is None, "CELL_META_GENERATOR non-initialization, code_array is supplied"
+            if code_array is not None:
+                raise ValueError(
+                    "CELL_META_GENERATOR is already initialized; do not resupply code_array."
+                )
         return cls.__INSTANCE
 
     def set_context(self, key):

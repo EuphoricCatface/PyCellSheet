@@ -4,7 +4,7 @@
 
 PyCellSheet is a fork of pyspread v2.3.1 that aims to be a comfortable middle ground between a conventional spreadsheet and pyspread's purely Pythonic approach. The key philosophical difference from pyspread is **copy-priority semantics**: cell references return `deepcopy`'d values by default, so cells behave like independent values in a normal spreadsheet, rather than pyspread's reference-priority system where cells share mutable objects.
 
-v0.1.0, v0.2.0, and v0.3.0 are released. Current development is on the v0.4.0 internal-semantics cleanup cycle.
+v0.1.0, v0.2.0, v0.3.0, and v0.4.0 are released. Current development is on the v0.5.0 parser/spill feature expansion cycle.
 
 ## Design Philosophy
 
@@ -90,10 +90,10 @@ def some_method(self):
 - `pycellsheet/lib/spreadsheet/__init__.py` - Re-exports all function modules via `__all__`
 
 ### Modified core files
-- `pycellsheet/model/model.py` - Data model layers (DictGrid -> DataArray -> CodeArray). `_eval_cell()` runs the full pipeline. `execute_sheet_script()` is canonical and compatibility alias `execute_macros()` is retained.
+- `pycellsheet/model/model.py` - Data model layers (DictGrid -> DataArray -> CodeArray). `_eval_cell()` runs the full pipeline. `execute_sheet_script()` is the canonical sheet-script execution entrypoint.
 - `pycellsheet/panels.py` - Sheet Script editor UI with draft/applied buffer and AST validation
 - `pycellsheet/grid.py` - Cell display: `DisplayRole` and `ToolTipRole` delegate to `Formatter` class
-- `pycellsheet/interfaces/pycs.py` - File format: `[macros]` section stores per-sheet init scripts as `(macro:X) linecount` for compatibility
+- `pycellsheet/interfaces/pycs.py` - File format: `[sheet_scripts]` section stores per-sheet init scripts as `(sheet_script:'Name') linecount`; parser settings are persisted under `[parser_settings]`
 - `pycellsheet/lib/string_helpers.py` - Modified `wrap_text()` to preserve newlines (for tooltips)
 
 ### Inherited pyspread lineage (largely unchanged architecture)
@@ -107,8 +107,8 @@ def some_method(self):
 Four-layer model (inherited from pyspread, modified):
 
 - **Layer 0 - KeyValueStore**: `dict` with default `None` for missing keys
-- **Layer 1 - DictGrid**: Stores cell contents as `{(row, col, table): str}`. Also holds `cell_attributes`, `macros` (list of init script strings per sheet), `exp_parser_code`, row/col sizes.
-- **Layer 2 - DataArray**: Adds slicing, insertion/deletion. Holds non-persisted state: `macros_draft`, `sheet_globals_copyable`, `sheet_globals_uncopyable`, `exp_parser` instance, `dep_graph`, `smart_cache`.
+- **Layer 1 - DictGrid**: Stores cell contents as `{(row, col, table): str}`. Also holds `cell_attributes`, `sheet_scripts` (list of init script strings per sheet), `exp_parser_code`, row/col sizes.
+- **Layer 2 - DataArray**: Adds slicing, insertion/deletion. Holds non-persisted state: `sheet_scripts_draft`, `sheet_globals_copyable`, `sheet_globals_uncopyable`, `exp_parser` instance, `dep_graph`, `smart_cache`.
 - **Layer 3 - CodeArray**: Evaluates cells on access via `__getitem__` -> `_eval_cell()`. Uses `SmartCache` for dependency-aware caching and `DependencyGraph` for tracking cell relationships and circular reference detection.
 
 The grid is currently a 3D dict keyed by `(row, col, table)` where the key format is **(row, col, table)**, not (col, row, table). A later goal is to replace this with an array of 2D matrices.
@@ -157,7 +157,7 @@ The grid is currently a 3D dict keyed by `(row, col, table)` where the key forma
 - ~~No dependency graph or recalculation ordering yet~~ ✅ **DONE** - DependencyGraph implemented with smart caching
 - ~~No circular reference detection~~ ✅ **DONE** - Circular references detected via DFS during evaluation
 - Dirty visualization/recalc baseline is implemented (dirty indicator + recalc actions), but dependency-inspector-style UI is still a later goal
-- Named sheets and sheet renaming are implemented; persistence remains backward-compatible with legacy `[macros]` sections
+- Named sheets and sheet renaming are implemented. Current `.pycs` contract uses `[sheet_scripts]` headers with named sheet identifiers.
 
 ## Build and Run
 
@@ -178,7 +178,7 @@ python pycellsheet/__main__.py
 - `pycellsheet/lib/test/test_smart_cache.py` - 20 tests for SmartCache (INVALID sentinel, dirty checking, invalidation propagation)
 - `pycellsheet/model/test/test_dependency_integration.py` - 17 integration tests (C()/R()/Sh() tracking, cache invalidation chains, circular reference detection, dynamic refs)
 
-As of 2026-02-19, `QT_QPA_PLATFORM=offscreen PYTHONPATH=pycellsheet pytest -q` passes with 848 tests on the active interpreter.
+As of 2026-02-21, `QT_QPA_PLATFORM=offscreen PYTHONPATH=pycellsheet pytest -q` passes with 894 tests on the active interpreter.
 
 Legacy test suites under `pycellsheet/test/` and `pycellsheet/lib/test/` are part of the active regression baseline and should remain aligned with shipped PyCellSheet behavior.
 
