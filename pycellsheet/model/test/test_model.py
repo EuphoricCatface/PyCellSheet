@@ -370,6 +370,37 @@ class TestDataArray(object):
         snapshot = data_array.data
         assert snapshot["grid"] == {(0, 0, 0): "x"}
         assert snapshot["exp_parser_code"] == "return PythonCode(cell)"
+        assert snapshot["active_parser_id"] == data_array.active_parser_id
+        assert snapshot["parser_specs"]
+
+    def test_data_setter_accepts_parser_specs_and_active_parser_id(self):
+        data_array = DataArray((2, 2, 1), Settings())
+        parser_specs = [
+            {
+                "id": "parser_official",
+                "name": "Official",
+                "kind": "official",
+                "version": "pure_spreadsheet",
+                "code": None,
+            },
+            {
+                "id": "parser_custom",
+                "name": "Custom",
+                "kind": "custom",
+                "version": None,
+                "code": "return PythonCode(cell)",
+            },
+        ]
+
+        DataArray.data.fset(
+            data_array,
+            parser_specs=parser_specs,
+            active_parser_id="parser_custom",
+        )
+
+        assert data_array.active_parser_id == "parser_custom"
+        assert len(data_array.parser_specs) == 2
+        assert data_array.exp_parser_code == "return PythonCode(cell)"
 
     def test_exp_parser_code_setter_updates_parser_behavior(self):
         data_array = DataArray((2, 2, 1), Settings())
@@ -888,6 +919,38 @@ class TestCodeArray(object):
 
         self.code_array.execute_sheet_script(0)
         assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_key_includes_parser_binding(self):
+        self.code_array.parser_specs = [
+            {
+                "id": "parser_a",
+                "name": "Parser A",
+                "kind": "custom",
+                "version": None,
+                "code": "return PythonCode(cell)",
+            },
+            {
+                "id": "parser_b",
+                "name": "Parser B",
+                "kind": "custom",
+                "version": None,
+                "code": "return PythonCode(cell)",
+            },
+        ]
+        self.code_array.active_parser_id = "parser_a"
+        self.code_array[0, 0, 0] = PythonCode("1 + 2", parser_id="parser_a")
+        self.code_array[0, 1, 0] = PythonCode("1 + 2", parser_id="parser_b")
+
+        assert self.code_array[0, 0, 0] == 3
+        assert self.code_array[0, 1, 0] == 3
+        assert len(self.code_array.compile_cache) == 2
+
+    def test_unresolved_parser_id_returns_error(self):
+        self.code_array[0, 0, 0] = PythonCode("1 + 2", parser_id="missing_parser")
+
+        result = self.code_array[0, 0, 0]
+        assert isinstance(result, ValueError)
+        assert "Unresolved parser_id" in str(result)
 
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""

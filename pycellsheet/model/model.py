@@ -167,9 +167,46 @@ except ImportError:
 """
 
 PYCEL_FORMULA_PROMOTION_ENABLED = True
+DEFAULT_PARSER_SPEC_ID = "parser_main"
 
 
 class_format_functions = {}
+
+
+def _default_parser_specs(parser_code: str) -> list[dict[str, typing.Any]]:
+    return [{
+        "id": DEFAULT_PARSER_SPEC_ID,
+        "name": "Active Parser",
+        "kind": "custom",
+        "version": None,
+        "code": parser_code,
+    }]
+
+
+def _normalize_parser_spec(spec: dict[str, typing.Any], fallback_index: int) -> dict[str, typing.Any]:
+    parser_id = str(spec.get("id") or f"parser_{fallback_index}")
+    kind = str(spec.get("kind") or "custom")
+    if kind not in {"official", "custom"}:
+        kind = "custom"
+
+    normalized = {
+        "id": parser_id,
+        "name": str(spec.get("name") or parser_id),
+        "kind": kind,
+        "version": spec.get("version"),
+        "code": spec.get("code"),
+    }
+
+    if kind == "official":
+        normalized["code"] = None
+        version = normalized.get("version")
+        normalized["version"] = str(version) if version is not None else "pure_spreadsheet"
+    else:
+        code = normalized.get("code")
+        normalized["version"] = None
+        normalized["code"] = "" if code is None else str(code)
+
+    return normalized
 
 
 def _get_isolated_builtins() -> dict[str, Any]:
@@ -463,6 +500,8 @@ class DictGrid(KeyValueStore):
         # Sheet names corresponding to table indices
         self.sheet_names: list[str] = [f"Sheet {i}" for i in range(shape[2])]
         self.exp_parser_code = u""
+        self.parser_specs: list[dict[str, typing.Any]] = []
+        self.active_parser_id = DEFAULT_PARSER_SPEC_ID
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
         self.col_widths = defaultdict(float)  # Keys have format (col, table)
@@ -522,8 +561,12 @@ class DataArray:
         self.pycel_formula_opt_in = bool(PYCEL_FORMULA_PROMOTION_ENABLED)
 
         self.exp_parser = ExpressionParser()
-        self.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
-        self._saved_parser_signature = self.exp_parser_code
+        default_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
+        self.dict_grid.exp_parser_code = default_parser_code
+        self.dict_grid.parser_specs = _default_parser_specs(default_parser_code)
+        self.dict_grid.active_parser_id = DEFAULT_PARSER_SPEC_ID
+        self.exp_parser.set_parser(default_parser_code)
+        self._saved_parser_signature = self._parser_settings_signature()
 
     def __eq__(self, other) -> bool:
         if not hasattr(other, "dict_grid") or \
@@ -571,6 +614,8 @@ class DataArray:
         data["col_widths"] = self.col_widths
         data["sheet_scripts"] = self.sheet_scripts
         data["exp_parser_code"] = self.exp_parser_code
+        data["parser_specs"] = deepcopy(self.parser_specs)
+        data["active_parser_id"] = self.active_parser_id
         return data
 
     @data.setter
@@ -620,8 +665,18 @@ class DataArray:
         if "sheet_scripts" in kwargs:
             self.sheet_scripts = kwargs["sheet_scripts"]
 
+        if "parser_specs" in kwargs:
+            self.parser_specs = kwargs["parser_specs"]
+
+        if "active_parser_id" in kwargs:
+            self.active_parser_id = kwargs["active_parser_id"]
+
         if "exp_parser_code" in kwargs:
             self.exp_parser_code = kwargs["exp_parser_code"]
+        elif "active_parser_id" in kwargs or "parser_specs" in kwargs:
+            active_spec = self.get_parser_spec(self.active_parser_id)
+            if active_spec is not None:
+                self.exp_parser_code = self._parser_code_from_spec(active_spec)
 
     @property
     def row_heights(self) -> defaultdict:
@@ -674,6 +729,78 @@ class DataArray:
 
         self.dict_grid.sheet_scripts = sheet_scripts
 
+    @staticmethod
+    def _parser_code_from_spec(spec: dict[str, typing.Any]) -> str:
+        """Resolve runtime parser code from a parser spec."""
+
+        kind = spec.get("kind")
+        if kind == "official":
+            mode_id = str(spec.get("version") or "pure_spreadsheet")
+            return ExpressionParser.get_mode_code(mode_id)
+        return str(spec.get("code") or "")
+
+    def get_parser_spec(self, parser_id: str) -> typing.Optional[dict[str, typing.Any]]:
+        for spec in self.dict_grid.parser_specs:
+            if spec.get("id") == parser_id:
+                return spec
+        return None
+
+    @property
+    def parser_specs(self) -> list[dict[str, typing.Any]]:
+        return self.dict_grid.parser_specs
+
+    @parser_specs.setter
+    def parser_specs(self, specs: list[dict[str, typing.Any]]):
+        normalized = []
+        seen_ids = set()
+        for i, spec in enumerate(specs or []):
+            if not isinstance(spec, dict):
+                continue
+            normalized_spec = _normalize_parser_spec(spec, fallback_index=i)
+            parser_id = normalized_spec["id"]
+            if parser_id in seen_ids:
+                continue
+            seen_ids.add(parser_id)
+            normalized.append(normalized_spec)
+
+        if not normalized:
+            normalized = _default_parser_specs(self.exp_parser_code)
+
+        self.dict_grid.parser_specs = normalized
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+
+    @property
+    def active_parser_id(self) -> str:
+        return self.dict_grid.active_parser_id
+
+    @active_parser_id.setter
+    def active_parser_id(self, parser_id: str):
+        parser_id = str(parser_id)
+        self.dict_grid.active_parser_id = parser_id
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+        spec = self.get_parser_spec(parser_id)
+        if spec is None:
+            # Keep unresolved binding explicit; do not silently remap.
+            return
+        self.exp_parser_code = self._parser_code_from_spec(spec)
+
+    def parser_signature_for_id(self, parser_id: str) -> typing.Optional[str]:
+        spec = self.get_parser_spec(parser_id)
+        if spec is None:
+            return None
+        code = self._parser_code_from_spec(spec)
+        return f"{spec.get('kind')}::{spec.get('version')}::{code}"
+
+    def _parser_settings_signature(self) -> str:
+        parser_specs_snapshot = [
+            (spec.get("id"), spec.get("name"), spec.get("kind"),
+             spec.get("version"), spec.get("code"))
+            for spec in self.parser_specs
+        ]
+        return repr((self.active_parser_id, parser_specs_snapshot, self.exp_parser_code))
+
     @property
     def exp_parser_code(self) -> str:
         """Expression parser code interface to dict_grid"""
@@ -686,6 +813,9 @@ class DataArray:
 
         self.dict_grid.exp_parser_code = exp_parser_code
         self.exp_parser.set_parser(exp_parser_code)
+        active_spec = self.get_parser_spec(self.active_parser_id)
+        if active_spec and active_spec.get("kind") == "custom":
+            active_spec["code"] = exp_parser_code
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
 
@@ -724,12 +854,12 @@ class DataArray:
     def parser_settings_applied(self) -> bool:
         """Returns True when parser settings match last saved/loaded state."""
 
-        return self.exp_parser_code == self._saved_parser_signature
+        return self._parser_settings_signature() == self._saved_parser_signature
 
     def mark_parser_settings_applied(self):
         """Mark current parser settings as persisted baseline."""
 
-        self._saved_parser_signature = self.exp_parser_code
+        self._saved_parser_signature = self._parser_settings_signature()
 
     def _eval_spreadsheet_code(self, key: Tuple[int, int, int],
                                formula: SpreadSheetCode):
@@ -1477,6 +1607,38 @@ class CodeArray(DataArray):
         except Exception:
             return True
 
+    def _bind_code_parser_id(self, code_obj: Union[PythonCode, SpreadSheetCode]):
+        """Attach active parser_id to code objects that do not carry one yet."""
+
+        parser_id = getattr(code_obj, "parser_id", None)
+        if parser_id:
+            return code_obj
+        return code_obj.with_parser_id(self.active_parser_id)
+
+    def _resolve_code_parser_signature(
+            self, key: Tuple[int, int, int], code_obj: Union[PythonCode, SpreadSheetCode]
+    ) -> tuple[str, str]:
+        """Return parser binding id/signature for a code object.
+
+        Raises ValueError when explicit parser_id no longer resolves.
+        """
+
+        parser_id = getattr(code_obj, "parser_id", None)
+        if parser_id:
+            signature = self.parser_signature_for_id(parser_id)
+            if signature is None:
+                raise ValueError(
+                    f"Unresolved parser_id {parser_id!r} for cell {key}. "
+                    "Rebind parser explicitly."
+                )
+            return parser_id, signature
+
+        parser_id = self.active_parser_id
+        signature = self.parser_signature_for_id(parser_id)
+        if signature is None:
+            return parser_id, self.exp_parser_code
+        return parser_id, signature
+
     def set_format_warning(self, key: Tuple[int, int, int], warning: typing.Optional[str]):
         if warning:
             self._format_warnings[key] = warning
@@ -1635,13 +1797,15 @@ class CodeArray(DataArray):
 
         #  --- ExpParser START ---  #
         if isinstance(cell_contents, (PythonCode, SpreadSheetCode)):
-            exp_parsed = cell_contents
+            exp_parsed = self._bind_code_parser_id(cell_contents)
         else:
             if self.exp_parser.handle_empty(cell_contents):
                 if return_warnings:
                     return EmptyCell, eval_warnings
                 return EmptyCell
             exp_parsed = self.exp_parser.parse(cell_contents)
+            if isinstance(exp_parsed, (PythonCode, SpreadSheetCode)):
+                exp_parsed = self._bind_code_parser_id(exp_parsed)
         if exp_parsed is EmptyCell and cell_contents.strip():
             eval_warnings.append(
                 "Expression parser returned EmptyCell for non-empty cell contents."
@@ -1713,8 +1877,8 @@ class CodeArray(DataArray):
             # Track dependencies during evaluation
             with DependencyTracker.track(key):
                 # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-                parser_signature = self.exp_parser_code
-                cache_key = (key[2], parser_signature, ref_parsed.lstrip())
+                parser_id, parser_signature = self._resolve_code_parser_signature(key, exp_parsed)
+                cache_key = (key[2], parser_id, parser_signature, ref_parsed.lstrip())
                 result = PythonEvaluator.exec_then_eval(
                     ref_parsed.lstrip(),
                     env,
