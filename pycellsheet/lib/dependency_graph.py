@@ -92,7 +92,7 @@ class DependencyGraph:
         self._invalidate_closure_cache()
         logger.debug("Added dependency %s -> %s", dependent, dependency)
 
-    def remove_cell(self, key, remove_reverse_edges=False):
+    def remove_cell(self, key, remove_reverse_edges=False, clear_dirty=True):
         """Remove dependency relationships for a cell
 
         Parameters
@@ -106,11 +106,15 @@ class DependencyGraph:
 
             Default is False to preserve dependencies from cells that reference
             this cell, allowing proper invalidation when the cell is re-added.
+        clear_dirty: bool
+            If True (default), clear the cell dirty flag. Set False when
+            rebuilding dependencies during evaluation so dirty status can be
+            resolved after evaluation logic completes.
 
         """
 
-        logger.debug("Removing cell %s (remove_reverse_edges=%s)",
-                     key, remove_reverse_edges)
+        logger.debug("Removing cell %s (remove_reverse_edges=%s, clear_dirty=%s)",
+                     key, remove_reverse_edges, clear_dirty)
 
         # Remove forward edges: this cell no longer depends on anything
         if key in self.dependencies:
@@ -126,10 +130,12 @@ class DependencyGraph:
             del self.dependents[key]
             logger.debug("Removed reverse edges for cell %s", key)
 
-        # Clear dirty flag for removed cell
-        self.dirty.discard(key)
+        # Clear dirty flag for removed cell when requested.
+        if clear_dirty:
+            self.dirty.discard(key)
         self._invalidate_closure_cache()
-        logger.debug("Cleared dirty flag for removed cell %s", key)
+        if clear_dirty:
+            logger.debug("Cleared dirty flag for removed cell %s", key)
 
     def check_for_cycles(self, start_key):
         """Check if there are any cycles starting from the given cell

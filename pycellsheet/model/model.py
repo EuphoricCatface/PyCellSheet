@@ -1619,6 +1619,14 @@ class CodeArray(DataArray):
         except Exception:
             return True
 
+    def _can_clear_dirty_after_eval(self, key: Tuple[int, int, int]) -> bool:
+        """Return True when key has no currently-dirty ancestors."""
+
+        for ancestor in self.dep_graph.get_all_dependencies(key):
+            if self.dep_graph.is_dirty(ancestor):
+                return False
+        return True
+
     def _bind_code_parser_id(self, code_obj: Union[PythonCode, SpreadSheetCode]):
         """Attach active parser_id to code objects that do not carry one yet."""
 
@@ -1739,8 +1747,9 @@ class CodeArray(DataArray):
         if code is None:
             # Store EmptyCell in cache
             self.smart_cache.set(key, EmptyCell)
-            # Clear dirty flag
-            self.dep_graph.clear_dirty(key)
+            # Keep cell dirty while any ancestors are still dirty.
+            if self._can_clear_dirty_after_eval(key):
+                self.dep_graph.clear_dirty(key)
             self._set_eval_warnings(key, [])
             return EmptyCell
 
@@ -1756,8 +1765,9 @@ class CodeArray(DataArray):
         self.smart_cache.set(key, result)
         self._set_eval_warnings(key, eval_warnings)
 
-        # Clear dirty flag after successful evaluation
-        self.dep_graph.clear_dirty(key)
+        # Keep cell dirty while any ancestors are still dirty.
+        if self._can_clear_dirty_after_eval(key):
+            self.dep_graph.clear_dirty(key)
 
         return result
 
@@ -1827,7 +1837,7 @@ class CodeArray(DataArray):
                 return exp_parsed, eval_warnings
             return exp_parsed
         if isinstance(exp_parsed, SpreadSheetCode):
-            self.dep_graph.remove_cell(key)
+            self.dep_graph.remove_cell(key, clear_dirty=False)
             try:
                 self.dep_graph.check_for_cycles(key)
             except CircularRefError as err:
@@ -1856,7 +1866,7 @@ class CodeArray(DataArray):
 
         # Rebuild this cell's forward dependency set on each evaluation.
         # Keep reverse edges so dependents of this cell remain known.
-        self.dep_graph.remove_cell(key)
+        self.dep_graph.remove_cell(key, clear_dirty=False)
 
         #  --- Dependency Tracking & Cycle Detection START ---  #
         # Check for circular references before evaluating
@@ -2059,7 +2069,8 @@ class CodeArray(DataArray):
         result, eval_warnings = self._eval_cell(key, code, return_warnings=True)
         self.smart_cache.set(key, result)
         self._set_eval_warnings(key, eval_warnings)
-        self.dep_graph.clear_dirty(key)
+        if self._can_clear_dirty_after_eval(key):
+            self.dep_graph.clear_dirty(key)
 
         if old is not SmartCache.INVALID:
             changed = self._values_differ(old, result)
