@@ -49,7 +49,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          CodeArray, CellAttribute, DefaultCellAttributeDict,
                          INITSCRIPT_DEFAULT, _get_isolated_builtins,
                          PYCEL_FORMULA_PROMOTION_ENABLED)
-from model.storage_backend import Dict3DBackend
+from model.storage_backend import MatrixSheetsBackend
 
 from lib.attrdict import AttrDict
 from lib.exceptions import SpillRefError
@@ -292,8 +292,8 @@ class TestDataArray(object):
 
         assert sorted(self.data_array.keys()) == [(1, 2, 3), (1, 2, 4)]
 
-    def test_storage_backend_defaults_to_dict3d_adapter(self):
-        assert isinstance(self.data_array.storage_backend, Dict3DBackend)
+    def test_storage_backend_defaults_to_matrix2d(self):
+        assert isinstance(self.data_array.storage_backend, MatrixSheetsBackend)
 
     def test_pop(self):
         """Unit test for pop"""
@@ -573,7 +573,7 @@ class TestDataArray(object):
     def test_insert(self, data, inspoint, notoins, axis, tab, res):
         """Unit test for insert operation"""
 
-        self.data_array.dict_grid.update(data)
+        self.data_array.storage_backend.replace_from_dict(data)
         self.data_array.insert(inspoint, notoins, axis, tab)
 
         for key in res:
@@ -593,7 +593,7 @@ class TestDataArray(object):
     def test_delete(self, data, delpoint, notodel, axis, tab, res):
         """Tests delete operation"""
 
-        self.data_array.dict_grid.update(data)
+        self.data_array.storage_backend.replace_from_dict(data)
         self.data_array.delete(delpoint, notodel, axis, tab)
 
         for key in res:
@@ -641,7 +641,7 @@ class TestCodeArray(object):
     def test_setitem(self, data, items, res_data):
         """Unit test for __setitem__"""
 
-        self.code_array.dict_grid.update(data)
+        self.code_array.storage_backend.replace_from_dict(data)
         for key in items:
             self.code_array[key] = items[key]
         for key in res_data:
