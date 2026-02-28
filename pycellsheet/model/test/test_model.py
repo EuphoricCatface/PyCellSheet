@@ -988,6 +988,24 @@ class TestCodeArray(object):
         }
         assert len(self.code_array.compile_cache) == 0
 
+    def test_recalculate_cell_only_keeps_dirty_when_ancestor_is_dirty(self):
+        self.code_array.settings.recalc_mode = "manual"
+
+        # A1 -> A2 dependency chain
+        self.code_array[0, 0, 0] = "10"
+        self.code_array[1, 0, 0] = 'C("A1") + 1'
+        assert self.code_array[1, 0, 0] == 11
+
+        # Explicitly mark ancestor dirty while dependency edge exists.
+        self.code_array.dep_graph.mark_dirty((0, 0, 0))
+        assert self.code_array.dep_graph.is_dirty((0, 0, 0))
+        assert self.code_array.dep_graph.is_dirty((1, 0, 0))
+
+        # Recalculating dependent alone should keep it dirty while ancestor is dirty.
+        self.code_array.recalculate_cell_only((1, 0, 0))
+        assert self.code_array.dep_graph.is_dirty((0, 0, 0))
+        assert self.code_array.dep_graph.is_dirty((1, 0, 0))
+
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""
 
