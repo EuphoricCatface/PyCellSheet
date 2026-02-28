@@ -442,6 +442,24 @@ def test_pycs2code_ignores_out_of_bounds_keys():
     assert code_array.dict_grid._grid == {(0, 0, 0): "ok"}
 
 
+def test_pycs2code_uses_storage_backend_when_available():
+    class _Backend:
+        def __init__(self):
+            self.calls = []
+
+        def set_code(self, key, value):
+            self.calls.append((key, value))
+
+    code_array = _DummyCodeArray(1)
+    code_array.shape = (1, 1, 1)
+    code_array.storage_backend = _Backend()
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2code("0\t0\t0\tbackend\n")
+
+    assert code_array.storage_backend.calls == [((0, 0, 0), "backend")]
+
+
 def test_attr_convert_1to2_handles_known_transforms():
     code_array = _DummyCodeArray(1)
     reader = PycsReader(BytesIO(b""), code_array)
