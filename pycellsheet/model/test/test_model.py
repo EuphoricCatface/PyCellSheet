@@ -952,6 +952,42 @@ class TestCodeArray(object):
         assert isinstance(result, ValueError)
         assert "Unresolved parser_id" in str(result)
 
+    def test_compile_cache_cleared_on_shape_change(self):
+        self.code_array[0, 0, 0] = "1 + 1"
+        assert self.code_array[0, 0, 0] == 2
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.shape = (3, 3, 1)
+        assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_cleared_on_insert_and_delete(self):
+        self.code_array[0, 0, 0] = "2 + 3"
+        assert self.code_array[0, 0, 0] == 5
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.insert(0, 1, axis=0)
+        assert len(self.code_array.compile_cache) == 0
+
+        self.code_array[0, 0, 0] = "3 + 4"
+        assert self.code_array[0, 0, 0] == 7
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.delete(0, 1, axis=0)
+        assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_cleared_on_data_setter(self):
+        self.code_array[0, 0, 0] = "10 + 5"
+        assert self.code_array[0, 0, 0] == 15
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.data = {
+            "shape": (2, 2, 1),
+            "grid": {(0, 0, 0): "1 + 2"},
+            "sheet_scripts": [""],
+            "exp_parser_code": ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"],
+        }
+        assert len(self.code_array.compile_cache) == 0
+
     def test_sorted_keys(self):
         """Unit test for _sorted_keys"""
 

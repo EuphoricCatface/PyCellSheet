@@ -678,6 +678,9 @@ class DataArray:
             if active_spec is not None:
                 self.exp_parser_code = self._parser_code_from_spec(active_spec)
 
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+
     @property
     def row_heights(self) -> defaultdict:
         """row_heights interface to dict_grid"""
@@ -950,6 +953,9 @@ class DataArray:
 
         self._adjust_rowcol(0, 0, 0)
         self._adjust_cell_attributes(0, 0, 0)
+
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
 
         return deleted_cells
 
@@ -1408,6 +1414,9 @@ class DataArray:
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
 
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+
     def delete(self, deletion_point: int, no_to_delete: int, axis: int,
                tab: int = None):
         """Deletes no_to_delete rows/cols/... starting with deletion_point
@@ -1469,6 +1478,9 @@ class DataArray:
         for key in del_keys:
             if key not in new_keys and self(key) is not None:
                 self.pop(key)
+
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
 
     def set_row_height(self, row: int, tab: int, height: float):
         """Sets row height
