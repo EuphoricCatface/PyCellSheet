@@ -36,6 +36,9 @@ class _DummyCodeArray:
     def __init__(self, grid):
         self.dict_grid = dict(grid)
 
+    def keys(self):
+        return list(self.dict_grid.keys())
+
     def __call__(self, key):
         return self.dict_grid[key]
 

@@ -149,7 +149,7 @@ def _migrate_cell(cell: str, source_mode_id: str, target_mode_id: str,
 
 def _iter_candidate_cells(code_array, tables: Optional[list[int]]):
     allowed_tables = None if tables is None else set(tables)
-    for key in sorted(code_array.dict_grid.keys()):
+    for key in sorted(code_array.keys()):
         row, col, table = key
         if allowed_tables is not None and table not in allowed_tables:
             continue
