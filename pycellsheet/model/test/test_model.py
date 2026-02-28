@@ -49,7 +49,7 @@ from model.model import (KeyValueStore, CellAttributes, DictGrid, DataArray,
                          CodeArray, CellAttribute, DefaultCellAttributeDict,
                          INITSCRIPT_DEFAULT, _get_isolated_builtins,
                          PYCEL_FORMULA_PROMOTION_ENABLED)
-from model.storage_backend import Dict3DBackend
+from model.storage_backend import MatrixSheetsBackend
 
 from lib.attrdict import AttrDict
 from lib.exceptions import SpillRefError
@@ -292,8 +292,8 @@ class TestDataArray(object):
 
         assert sorted(self.data_array.keys()) == [(1, 2, 3), (1, 2, 4)]
 
-    def test_storage_backend_defaults_to_dict3d_adapter(self):
-        assert isinstance(self.data_array.storage_backend, Dict3DBackend)
+    def test_storage_backend_defaults_to_matrix2d(self):
+        assert isinstance(self.data_array.storage_backend, MatrixSheetsBackend)
 
     def test_pop(self):
         """Unit test for pop"""
@@ -370,6 +370,37 @@ class TestDataArray(object):
         snapshot = data_array.data
         assert snapshot["grid"] == {(0, 0, 0): "x"}
         assert snapshot["exp_parser_code"] == "return PythonCode(cell)"
+        assert snapshot["active_parser_id"] == data_array.active_parser_id
+        assert snapshot["parser_specs"]
+
+    def test_data_setter_accepts_parser_specs_and_active_parser_id(self):
+        data_array = DataArray((2, 2, 1), Settings())
+        parser_specs = [
+            {
+                "id": "parser_official",
+                "name": "Official",
+                "kind": "official",
+                "version": "pure_spreadsheet",
+                "code": None,
+            },
+            {
+                "id": "parser_custom",
+                "name": "Custom",
+                "kind": "custom",
+                "version": None,
+                "code": "return PythonCode(cell)",
+            },
+        ]
+
+        DataArray.data.fset(
+            data_array,
+            parser_specs=parser_specs,
+            active_parser_id="parser_custom",
+        )
+
+        assert data_array.active_parser_id == "parser_custom"
+        assert len(data_array.parser_specs) == 2
+        assert data_array.exp_parser_code == "return PythonCode(cell)"
 
     def test_exp_parser_code_setter_updates_parser_behavior(self):
         data_array = DataArray((2, 2, 1), Settings())
@@ -542,7 +573,7 @@ class TestDataArray(object):
     def test_insert(self, data, inspoint, notoins, axis, tab, res):
         """Unit test for insert operation"""
 
-        self.data_array.dict_grid.update(data)
+        self.data_array.storage_backend.replace_from_dict(data)
         self.data_array.insert(inspoint, notoins, axis, tab)
 
         for key in res:
@@ -562,7 +593,7 @@ class TestDataArray(object):
     def test_delete(self, data, delpoint, notodel, axis, tab, res):
         """Tests delete operation"""
 
-        self.data_array.dict_grid.update(data)
+        self.data_array.storage_backend.replace_from_dict(data)
         self.data_array.delete(delpoint, notodel, axis, tab)
 
         for key in res:
@@ -610,7 +641,7 @@ class TestCodeArray(object):
     def test_setitem(self, data, items, res_data):
         """Unit test for __setitem__"""
 
-        self.code_array.dict_grid.update(data)
+        self.code_array.storage_backend.replace_from_dict(data)
         for key in items:
             self.code_array[key] = items[key]
         for key in res_data:
@@ -887,6 +918,74 @@ class TestCodeArray(object):
         assert len(self.code_array.compile_cache) == 0
 
         self.code_array.execute_sheet_script(0)
+        assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_key_includes_parser_binding(self):
+        self.code_array.parser_specs = [
+            {
+                "id": "parser_a",
+                "name": "Parser A",
+                "kind": "custom",
+                "version": None,
+                "code": "return PythonCode(cell)",
+            },
+            {
+                "id": "parser_b",
+                "name": "Parser B",
+                "kind": "custom",
+                "version": None,
+                "code": "return PythonCode(cell)",
+            },
+        ]
+        self.code_array.active_parser_id = "parser_a"
+        self.code_array[0, 0, 0] = PythonCode("1 + 2", parser_id="parser_a")
+        self.code_array[0, 1, 0] = PythonCode("1 + 2", parser_id="parser_b")
+
+        assert self.code_array[0, 0, 0] == 3
+        assert self.code_array[0, 1, 0] == 3
+        assert len(self.code_array.compile_cache) == 2
+
+    def test_unresolved_parser_id_returns_error(self):
+        self.code_array[0, 0, 0] = PythonCode("1 + 2", parser_id="missing_parser")
+
+        result = self.code_array[0, 0, 0]
+        assert isinstance(result, ValueError)
+        assert "Unresolved parser_id" in str(result)
+
+    def test_compile_cache_cleared_on_shape_change(self):
+        self.code_array[0, 0, 0] = "1 + 1"
+        assert self.code_array[0, 0, 0] == 2
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.shape = (3, 3, 1)
+        assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_cleared_on_insert_and_delete(self):
+        self.code_array[0, 0, 0] = "2 + 3"
+        assert self.code_array[0, 0, 0] == 5
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.insert(0, 1, axis=0)
+        assert len(self.code_array.compile_cache) == 0
+
+        self.code_array[0, 0, 0] = "3 + 4"
+        assert self.code_array[0, 0, 0] == 7
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.delete(0, 1, axis=0)
+        assert len(self.code_array.compile_cache) == 0
+
+    def test_compile_cache_cleared_on_data_setter(self):
+        self.code_array[0, 0, 0] = "10 + 5"
+        assert self.code_array[0, 0, 0] == 15
+        assert len(self.code_array.compile_cache) == 1
+
+        self.code_array.data = {
+            "shape": (2, 2, 1),
+            "grid": {(0, 0, 0): "1 + 2"},
+            "sheet_scripts": [""],
+            "exp_parser_code": ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"],
+        }
         assert len(self.code_array.compile_cache) == 0
 
     def test_sorted_keys(self):

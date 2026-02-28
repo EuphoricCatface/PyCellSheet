@@ -139,11 +139,28 @@ class Empty:
 EmptyCell = Empty()
 
 
-class PythonCode(str):
+class BaseCode(str):
+    """String-like code wrapper with parser-binding metadata."""
+
+    def __new__(cls, value: str, parser_id: typing.Optional[str] = None):
+        obj = super().__new__(cls, value)
+        obj.parser_id = parser_id
+        return obj
+
+    def with_parser_id(self, parser_id: typing.Optional[str]):
+        """Return same code value rebound to a parser identity."""
+
+        return type(self)(str(self), parser_id=parser_id)
+
+    def __reduce__(self):
+        return type(self), (str(self), getattr(self, "parser_id", None))
+
+
+class PythonCode(BaseCode):
     pass
 
 
-class SpreadSheetCode(str):
+class SpreadSheetCode(BaseCode):
     pass
 
 

@@ -267,7 +267,10 @@ class XlsxReader:
 
         logging.debug(f"Cell {key} set to {code}")
 
-        self.code_array.dict_grid[key] = code
+        if hasattr(self.code_array, "storage_backend"):
+            self.code_array.storage_backend.set_code(key, code)
+        else:
+            self.code_array.dict_grid[key] = code
 
     def _xlsx2attributes(self, key: (int, int, int), cell: Cell, sheet_attrs):
         """Updates attributes in code_array

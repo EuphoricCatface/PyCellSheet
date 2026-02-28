@@ -2143,7 +2143,18 @@ class GridTableModel(QAbstractTableModel):
 
         with self.model_reset():
             # Clear cells
-            self.code_array.dict_grid.clear()
+            if hasattr(self.code_array, "storage_backend"):
+                self.code_array.storage_backend.replace_from_dict({})
+            else:
+                self.code_array.dict_grid.clear()
+            if hasattr(self.code_array, "smart_cache"):
+                self.code_array.smart_cache.clear()
+            if hasattr(self.code_array, "compile_cache"):
+                self.code_array.compile_cache.clear()
+            if hasattr(self.code_array, "dep_graph"):
+                self.code_array.dep_graph.dependencies.clear()
+                self.code_array.dep_graph.dependents.clear()
+                self.code_array.dep_graph.dirty.clear()
 
             # Clear attributes
             del self.code_array.dict_grid.cell_attributes[:]
