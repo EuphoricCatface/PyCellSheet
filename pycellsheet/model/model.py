@@ -873,6 +873,28 @@ class DataArray:
 
         cur_sheet = self.ref_parser.Sheet(str(key[2]), self)
 
+        def _to_pycel_value(value):
+            """Translate PyCellSheet runtime values into pycel-compatible values."""
+
+            if value is EmptyCell:
+                return None
+            if isinstance(value, list):
+                return [_to_pycel_value(item) for item in value]
+            if isinstance(value, tuple):
+                return tuple(_to_pycel_value(item) for item in value)
+            return value
+
+        def _from_pycel_value(value):
+            """Translate pycel blank semantics back into PyCellSheet values."""
+
+            if value is None:
+                return EmptyCell
+            if isinstance(value, list):
+                return [_from_pycel_value(item) for item in value]
+            if isinstance(value, tuple):
+                return tuple(_from_pycel_value(item) for item in value)
+            return value
+
         def _normalize_addr(addr) -> str:
             if isinstance(addr, str):
                 return addr
@@ -881,19 +903,20 @@ class DataArray:
             return str(addr)
 
         def evaluate(addr):
-            return cur_sheet.cell_single_ref(_normalize_addr(addr))
+            return _to_pycel_value(cur_sheet.cell_single_ref(_normalize_addr(addr)))
 
         def evaluate_range(addr):
             addr_str = _normalize_addr(addr)
             if ":" not in addr_str:
-                return cur_sheet.cell_single_ref(addr_str)
+                return _to_pycel_value(cur_sheet.cell_single_ref(addr_str))
             addr1, addr2 = addr_str.split(":", 1)
-            return cur_sheet.cell_range_ref(addr1, addr2).normalize()  # pycel doesn't know how to handle Range itself
+            # pycel doesn't know how to handle Range itself.
+            return _to_pycel_value(cur_sheet.cell_range_ref(addr1, addr2).normalize())
 
         eval_formula = ExcelFormula.build_eval_context(evaluate, evaluate_range)
         compiled_formula = ExcelFormula(f"={formula}")
         with DependencyTracker.track(key):
-            return eval_formula(compiled_formula)
+            return _from_pycel_value(eval_formula(compiled_formula))
 
     @property
     def shape(self) -> Tuple[int, int, int]:

@@ -753,6 +753,50 @@ class TestCodeArray(object):
         assert isinstance(result, ImportError)
         assert "pycel" in str(result).lower()
 
+    def test_spreadsheet_eval_translates_emptycell_for_pycel_single_ref(self, monkeypatch):
+        class _FakeExcelFormula:
+            def __init__(self, formula):
+                self.formula = formula
+
+            @staticmethod
+            def build_eval_context(evaluate, _evaluate_range):
+                def _runner(compiled):
+                    if compiled.formula == "=A1":
+                        return evaluate("A1")
+                    raise AssertionError(f"Unexpected formula {compiled.formula!r}")
+                return _runner
+
+        monkeypatch.setitem(self.code_array._eval_spreadsheet_code.__globals__,
+                            "ExcelFormula", _FakeExcelFormula)
+        self.code_array.set_exp_parser_mode("pure_spreadsheet")
+        # A1 remains empty -> pycel side should see None and map back to EmptyCell.
+        self.code_array[0, 1, 0] = "=A1"
+
+        result = self.code_array[0, 1, 0]
+        assert result is EmptyCell
+
+    def test_spreadsheet_eval_translates_emptycell_for_pycel_range_ref(self, monkeypatch):
+        class _FakeExcelFormula:
+            def __init__(self, formula):
+                self.formula = formula
+
+            @staticmethod
+            def build_eval_context(_evaluate, evaluate_range):
+                def _runner(compiled):
+                    if compiled.formula == "=A1:B1":
+                        return evaluate_range("A1:B1")
+                    raise AssertionError(f"Unexpected formula {compiled.formula!r}")
+                return _runner
+
+        monkeypatch.setitem(self.code_array._eval_spreadsheet_code.__globals__,
+                            "ExcelFormula", _FakeExcelFormula)
+        self.code_array.set_exp_parser_mode("pure_spreadsheet")
+        self.code_array[0, 1, 0] = "5"
+        self.code_array[0, 2, 0] = "=A1:B1"
+
+        result = self.code_array[0, 2, 0]
+        assert result == [[EmptyCell, 5]]
+
     def test_pure_spreadsheet_python_marker_allows_space_after_token(self):
         self.code_array.set_exp_parser_mode("pure_spreadsheet")
         self.code_array[0, 0, 0] = "> 123"
