@@ -139,6 +139,7 @@ class PasteSelectedCellData(QUndoCommand):
         """Redo cell data deletion, updates screen"""
 
         self.old_code = {}
+        self.old_parser_ids = {}
 
         code_array = self.model.code_array
         shape = self.model.shape
@@ -164,7 +165,12 @@ class PasteSelectedCellData(QUndoCommand):
                         value = value.replace("\u000C", "\n")
                         try:
                             self.old_code[key] = code_array(key)
-                            code_array[key] = value
+                            if hasattr(code_array, "get_cell_parser_id"):
+                                self.old_parser_ids[key] = code_array.get_cell_parser_id(key)
+                            if hasattr(code_array, "set_user_input"):
+                                code_array.set_user_input(key, value)
+                            else:
+                                code_array[key] = value
                         except IndexError:
                             pass
                 else:
@@ -176,8 +182,15 @@ class PasteSelectedCellData(QUndoCommand):
         """Undo row insertion, updates screen"""
 
         for key in self.old_code:
-            self.model.code_array[key] = self.old_code[key]
+            code_array = self.model.code_array
+            if hasattr(code_array, "set_user_input"):
+                code_array.set_user_input(key, self.old_code[key])
+            else:
+                code_array[key] = self.old_code[key]
+            if hasattr(code_array, "set_cell_parser_id"):
+                code_array.set_cell_parser_id(key, self.old_parser_ids.get(key))
         self.old_code.clear()
+        self.old_parser_ids.clear()
         self.model.emit_data_changed_all()
 
 
@@ -228,7 +241,7 @@ class SetCellCode(QUndoCommand):
         with self.model.main_window.entry_line.disable_updates():
             for index, new_code in zip(self.indices, self.new_codes):
                 self.model.setData(index, new_code, Qt.ItemDataRole.EditRole,
-                                   raw=True)
+                                   raw=False)
         self.model.emit_data_changed_all()
 
     def undo(self):
@@ -437,10 +450,13 @@ class DeleteSelectedCellData(QUndoCommand):
         """Redo cell data deletion, updates screen"""
 
         self.old_code = {}
+        self.old_parser_ids = {}
         for key in self.selection.cell_generator(self.model.shape,
                                                  self.grid.table):
             if not self.model.code_array.cell_attributes[key]['locked']:
                 try:
+                    if hasattr(self.model.code_array, "get_cell_parser_id"):
+                        self.old_parser_ids[key] = self.model.code_array.get_cell_parser_id(key)
                     self.old_code[key] = self.model.code_array.pop(key)
                 except KeyError:
                     pass
@@ -450,8 +466,15 @@ class DeleteSelectedCellData(QUndoCommand):
         """Undo row insertion, updates screen"""
 
         for key in self.old_code:
-            self.model.code_array[key] = self.old_code[key]
+            code_array = self.model.code_array
+            if hasattr(code_array, "set_user_input"):
+                code_array.set_user_input(key, self.old_code[key])
+            else:
+                code_array[key] = self.old_code[key]
+            if hasattr(code_array, "set_cell_parser_id"):
+                code_array.set_cell_parser_id(key, self.old_parser_ids.get(key))
         self.old_code.clear()
+        self.old_parser_ids.clear()
         self.model.emit_data_changed_all()
 
 

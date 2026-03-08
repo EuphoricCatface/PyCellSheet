@@ -53,6 +53,7 @@ from builtins import range
 import ast
 from collections import defaultdict
 from copy import copy, deepcopy
+from dataclasses import asdict, dataclass
 from inspect import isgenerator
 import io
 import logging
@@ -171,6 +172,59 @@ DEFAULT_PARSER_SPEC_ID = "parser_main"
 
 
 class_format_functions = {}
+
+
+@dataclass(frozen=True)
+class CellParserStatusReport:
+    key: Tuple[int, int, int]
+    state: str
+    parser_id: typing.Optional[str]
+    explicit_parser_id: typing.Optional[str]
+    default_parser_id: typing.Optional[str]
+    resolved: bool
+    has_user_input: bool
+
+
+@dataclass(frozen=True)
+class ParserUsageCountReport:
+    parser_id: str
+    scope: str
+    counts: dict[str, int]
+
+
+@dataclass(frozen=True)
+class ParserMigrationCellEntryReport:
+    key: Tuple[int, int, int]
+    old_state: str
+    old_parser_id: str
+    new_parser_id: str
+    action: str
+
+
+@dataclass(frozen=True)
+class ParserMigrationSheetDefaultEntryReport:
+    table: int
+    old_parser_id: str
+    new_parser_id: str
+    action: str
+
+
+@dataclass(frozen=True)
+class ParserMigrationActiveEntryReport:
+    old_parser_id: str
+    new_parser_id: str
+    action: str
+
+
+@dataclass(frozen=True)
+class ParserMigrationReport:
+    scope: str
+    source_parser_id: str
+    target_parser_id: str
+    cell_entries: list[ParserMigrationCellEntryReport]
+    sheet_default_entries: list[ParserMigrationSheetDefaultEntryReport]
+    active_entry: typing.Optional[ParserMigrationActiveEntryReport]
+    summary: dict[str, int]
 
 
 def _default_parser_specs(parser_code: str) -> list[dict[str, typing.Any]]:
@@ -502,6 +556,10 @@ class DictGrid(KeyValueStore):
         self.exp_parser_code = u""
         self.parser_specs: list[dict[str, typing.Any]] = []
         self.active_parser_id = DEFAULT_PARSER_SPEC_ID
+        self.sheet_default_parser_ids: list[str] = [
+            DEFAULT_PARSER_SPEC_ID for _ in range(shape[2])
+        ]
+        self.parser_bindings: dict[Tuple[int, int, int], str] = {}
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
         self.col_widths = defaultdict(float)  # Keys have format (col, table)
@@ -565,6 +623,9 @@ class DataArray:
         self.dict_grid.exp_parser_code = default_parser_code
         self.dict_grid.parser_specs = _default_parser_specs(default_parser_code)
         self.dict_grid.active_parser_id = DEFAULT_PARSER_SPEC_ID
+        self.dict_grid.sheet_default_parser_ids = [
+            DEFAULT_PARSER_SPEC_ID for _ in range(shape[2])
+        ]
         self.exp_parser.set_parser(default_parser_code)
         self._saved_parser_signature = self._parser_settings_signature()
 
@@ -616,6 +677,8 @@ class DataArray:
         data["exp_parser_code"] = self.exp_parser_code
         data["parser_specs"] = deepcopy(self.parser_specs)
         data["active_parser_id"] = self.active_parser_id
+        data["sheet_default_parser_ids"] = list(self.sheet_default_parser_ids)
+        data["parser_bindings"] = dict(self.parser_bindings)
         return data
 
     @data.setter
@@ -670,6 +733,12 @@ class DataArray:
 
         if "active_parser_id" in kwargs:
             self.active_parser_id = kwargs["active_parser_id"]
+
+        if "sheet_default_parser_ids" in kwargs:
+            self.sheet_default_parser_ids = kwargs["sheet_default_parser_ids"]
+
+        if "parser_bindings" in kwargs:
+            self.parser_bindings = kwargs["parser_bindings"]
 
         if "exp_parser_code" in kwargs:
             self.exp_parser_code = kwargs["exp_parser_code"]
@@ -789,6 +858,48 @@ class DataArray:
             return
         self.exp_parser_code = self._parser_code_from_spec(spec)
 
+    @property
+    def sheet_default_parser_ids(self) -> list[str]:
+        return list(getattr(self.dict_grid, "sheet_default_parser_ids", []))
+
+    @sheet_default_parser_ids.setter
+    def sheet_default_parser_ids(self, parser_ids: typing.Iterable[str]):
+        table_count = self.shape[2]
+        values = [str(parser_id or "").strip() for parser_id in (parser_ids or [])]
+        values = [parser_id for parser_id in values if parser_id]
+        if len(values) < table_count:
+            values.extend([self.active_parser_id] * (table_count - len(values)))
+        elif len(values) > table_count:
+            values = values[:table_count]
+        self.dict_grid.sheet_default_parser_ids = values
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+
+    def default_parser_id_for_table(self, table: int) -> str:
+        parser_ids = self.sheet_default_parser_ids
+        if 0 <= table < len(parser_ids):
+            parser_id = str(parser_ids[table] or "").strip()
+            if parser_id and self.get_parser_spec(parser_id) is not None:
+                return parser_id
+        active_parser_id = str(self.active_parser_id or "").strip()
+        if active_parser_id and self.get_parser_spec(active_parser_id) is not None:
+            return active_parser_id
+        if self.parser_specs:
+            return str(self.parser_specs[0].get("id") or "")
+        return active_parser_id
+
+    def set_sheet_default_parser_id(self, table: int, parser_id: str):
+        parser_id = str(parser_id or "").strip()
+        if not parser_id:
+            raise ValueError("Sheet default parser id must be non-empty.")
+        if self.get_parser_spec(parser_id) is None:
+            raise ValueError(f"Unknown parser id: {parser_id!r}")
+        parser_ids = self.sheet_default_parser_ids
+        if not (0 <= table < len(parser_ids)):
+            raise IndexError("Sheet index out of range.")
+        parser_ids[table] = parser_id
+        self.sheet_default_parser_ids = parser_ids
+
     def parser_signature_for_id(self, parser_id: str) -> typing.Optional[str]:
         spec = self.get_parser_spec(parser_id)
         if spec is None:
@@ -796,13 +907,42 @@ class DataArray:
         code = self._parser_code_from_spec(spec)
         return f"{spec.get('kind')}::{spec.get('version')}::{code}"
 
+    @property
+    def parser_bindings(self) -> dict[Tuple[int, int, int], str]:
+        return self.dict_grid.parser_bindings
+
+    @parser_bindings.setter
+    def parser_bindings(self, value: dict[Tuple[int, int, int], str]):
+        normalized: dict[Tuple[int, int, int], str] = {}
+        for key, parser_id in (value or {}).items():
+            if not (isinstance(key, tuple) and len(key) == 3):
+                continue
+            if any(not isinstance(ele, int) for ele in key):
+                continue
+            parser_id = str(parser_id or "").strip()
+            if not parser_id:
+                continue
+            normalized[key] = parser_id
+        self.dict_grid.parser_bindings = normalized
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+
     def _parser_settings_signature(self) -> str:
         parser_specs_snapshot = [
             (spec.get("id"), spec.get("name"), spec.get("kind"),
              spec.get("version"), spec.get("code"))
             for spec in self.parser_specs
         ]
-        return repr((self.active_parser_id, parser_specs_snapshot, self.exp_parser_code))
+        parser_bindings_snapshot = tuple(sorted(
+            (key, parser_id) for key, parser_id in self.parser_bindings.items()
+        ))
+        return repr((
+            self.active_parser_id,
+            parser_specs_snapshot,
+            tuple(self.sheet_default_parser_ids),
+            parser_bindings_snapshot,
+            self.exp_parser_code,
+        ))
 
     @property
     def exp_parser_code(self) -> str:
@@ -960,6 +1100,7 @@ class DataArray:
             self.sheet_globals_copyable = self.sheet_globals_copyable[:new_tables]
             self.sheet_globals_uncopyable = self.sheet_globals_uncopyable[:new_tables]
             self.dict_grid.sheet_names = self.dict_grid.sheet_names[:new_tables]
+            self.sheet_default_parser_ids = self.sheet_default_parser_ids[:new_tables]
         elif new_tables > old_tables:
             # Extend lists
             for i in range(old_tables, new_tables):
@@ -973,6 +1114,15 @@ class DataArray:
                     fallback_index=i,
                 )
                 self.dict_grid.sheet_names.append(new_name)
+            parser_ids = self.sheet_default_parser_ids
+            parser_ids.extend([self.active_parser_id] * (new_tables - old_tables))
+            self.sheet_default_parser_ids = parser_ids
+
+        self.parser_bindings = {
+            key: parser_id
+            for key, parser_id in self.parser_bindings.items()
+            if all(0 <= key[i] < self.shape[i] for i in range(3))
+        }
 
         self._adjust_rowcol(0, 0, 0)
         self._adjust_cell_attributes(0, 0, 0)
@@ -1402,6 +1552,7 @@ class DataArray:
             raise IndexError("Insertion point not in grid")
 
         new_keys = {}
+        moved_bindings = {}
         del_keys = []
 
         for key in list(self.storage_backend.iter_keys()):
@@ -1409,7 +1560,11 @@ class DataArray:
                 new_key = list(key)
                 new_key[axis] += no_to_insert
                 if 0 <= new_key[axis] < self.shape[axis]:
-                    new_keys[tuple(new_key)] = self(key)
+                    new_key = tuple(new_key)
+                    new_keys[new_key] = self(key)
+                    parser_id = self.parser_bindings.get(key)
+                    if parser_id:
+                        moved_bindings[new_key] = parser_id
                 del_keys.append(key)
 
         # Now re-insert moved keys
@@ -1433,9 +1588,14 @@ class DataArray:
                     fallback_index=insertion_point + i,
                 )
                 self.dict_grid.sheet_names.insert(insertion_point, new_name)
+                parser_ids = self.sheet_default_parser_ids
+                parser_ids.insert(insertion_point, self.active_parser_id)
+                self.sheet_default_parser_ids = parser_ids
 
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
+            if key in moved_bindings:
+                self.set_cell_parser_id(key, moved_bindings[key])
 
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
@@ -1462,6 +1622,7 @@ class DataArray:
             raise IndexError("Deletion point not in grid")
 
         new_keys = {}
+        moved_bindings = {}
         del_keys = []
 
         # Note that the loop goes over a list that copies all dict keys
@@ -1473,8 +1634,11 @@ class DataArray:
                 elif key[axis] >= deletion_point + no_to_delete:
                     new_key = list(key)
                     new_key[axis] -= no_to_delete
-
-                    new_keys[tuple(new_key)] = self(key)
+                    new_key = tuple(new_key)
+                    new_keys[new_key] = self(key)
+                    parser_id = self.parser_bindings.get(key)
+                    if parser_id:
+                        moved_bindings[new_key] = parser_id
                     del_keys.append(key)
 
         self._adjust_rowcol(deletion_point, -no_to_delete, axis, tab=tab)
@@ -1492,11 +1656,17 @@ class DataArray:
                     self.sheet_globals_uncopyable.pop(deletion_point)
                 if deletion_point < len(self.dict_grid.sheet_names):
                     self.dict_grid.sheet_names.pop(deletion_point)
+                parser_ids = self.sheet_default_parser_ids
+                if deletion_point < len(parser_ids):
+                    parser_ids.pop(deletion_point)
+                self.sheet_default_parser_ids = parser_ids
 
         # Now re-insert moved keys
 
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
+            if key in moved_bindings:
+                self.set_cell_parser_id(key, moved_bindings[key])
 
         for key in del_keys:
             if key not in new_keys and self(key) is not None:
@@ -1650,34 +1820,443 @@ class CodeArray(DataArray):
                 return False
         return True
 
-    def _bind_code_parser_id(self, code_obj: Union[PythonCode, SpreadSheetCode]):
-        """Attach active parser_id to code objects that do not carry one yet."""
+    def get_cell_parser_id(self, key: Tuple[int, int, int]) -> typing.Optional[str]:
+        parser_id = self.parser_bindings.get(key)
+        if parser_id is None:
+            return None
+        parser_id = str(parser_id).strip()
+        return parser_id or None
 
-        parser_id = getattr(code_obj, "parser_id", None)
+    def set_cell_parser_id(self, key: Tuple[int, int, int], parser_id: typing.Optional[str]):
+        parser_id = str(parser_id or "").strip()
+        if not parser_id:
+            self.parser_bindings.pop(key, None)
+        else:
+            self.parser_bindings[key] = parser_id
+        self.compile_cache.clear()
+
+    def _validate_existing_parser_id(self, parser_id: str, argname: str = "parser_id") -> str:
+        parser_id = str(parser_id or "").strip()
+        if not parser_id:
+            raise ValueError(f"{argname} must be non-empty.")
+        if self.get_parser_spec(parser_id) is None:
+            raise ValueError(f"Unknown parser id: {parser_id!r}")
+        return parser_id
+
+    def _iter_parser_target_keys(
+            self,
+            keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+            include_empty: bool = False,
+    ) -> typing.Iterable[Tuple[int, int, int]]:
+        allowed_tables = None if tables is None else set(int(table) for table in tables)
+        if keys is None:
+            candidate_keys = sorted(self.keys())
+        else:
+            candidate_keys = sorted({
+                key for key in keys
+                if isinstance(key, tuple) and len(key) == 3
+                and all(isinstance(ele, int) for ele in key)
+            })
+        for key in candidate_keys:
+            row, col, table = key
+            rows, cols, tabs = self.shape
+            if not (0 <= row < rows and 0 <= col < cols and 0 <= table < tabs):
+                continue
+            if allowed_tables is not None and table not in allowed_tables:
+                continue
+            value = self(key)
+            if isinstance(value, str):
+                if include_empty or value != "":
+                    yield key
+
+    def _normalize_parser_scope(
+            self,
+            scope: str,
+            selection_keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            table: typing.Optional[int] = None,
+    ) -> tuple[str, typing.Optional[set[int]], typing.Optional[set[Tuple[int, int, int]]]]:
+        scope = str(scope or "workspace").strip().lower()
+        if scope not in {"workspace", "sheet", "selection"}:
+            raise ValueError("scope must be one of: workspace, sheet, selection.")
+
+        if scope == "workspace":
+            return scope, None, None
+
+        if scope == "sheet":
+            if table is None:
+                raise ValueError("table is required when scope='sheet'.")
+            table = int(table)
+            if not (0 <= table < self.shape[2]):
+                raise ValueError("table is out of range for scope='sheet'.")
+            return scope, {table}, None
+
+        selection = set()
+        rows, cols, tabs = self.shape
+        for key in selection_keys or []:
+            if not (isinstance(key, tuple) and len(key) == 3):
+                continue
+            if any(not isinstance(ele, int) for ele in key):
+                continue
+            row, col, tab = key
+            if 0 <= row < rows and 0 <= col < cols and 0 <= tab < tabs:
+                selection.add(key)
+        return scope, None, selection
+
+    def cell_parser_status(self, key: Tuple[int, int, int]) -> dict[str, typing.Any]:
+        """Return parser status for a cell as explicit/default/missing."""
+
+        explicit_parser_id = self.get_cell_parser_id(key)
+        default_parser_id = self.default_parser_id_for_table(key[2])
+
+        if explicit_parser_id:
+            state = "explicit" if self.get_parser_spec(explicit_parser_id) is not None else "missing"
+            parser_id = explicit_parser_id
+        else:
+            state = "default" if default_parser_id and self.get_parser_spec(default_parser_id) is not None else "missing"
+            parser_id = default_parser_id or None
+
+        value = self(key)
+        has_user_input = isinstance(value, str) and value != ""
+        return asdict(CellParserStatusReport(
+            key=key,
+            state=state,
+            parser_id=parser_id,
+            explicit_parser_id=explicit_parser_id,
+            default_parser_id=default_parser_id,
+            resolved=(state != "missing"),
+            has_user_input=has_user_input,
+        ))
+
+    def get_cell_parser_status(self, key: Tuple[int, int, int]) -> dict[str, typing.Any]:
+        """Compatibility alias for cell_parser_status."""
+
+        return self.cell_parser_status(key)
+
+    def parser_usage_count(
+            self,
+            parser_id: str,
+            scope: str = "workspace",
+            selection_keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            table: typing.Optional[int] = None,
+            include_empty: bool = False,
+    ) -> dict[str, typing.Any]:
+        """Return parser usage counters for a parser id."""
+
+        parser_id = str(parser_id or "").strip()
+        norm_scope, scope_tables, scope_selection = self._normalize_parser_scope(
+            scope=scope, selection_keys=selection_keys, table=table
+        )
+        counts = {"explicit": 0, "default": 0, "missing": 0, "total": 0}
+        for key in self._iter_parser_target_keys(tables=scope_tables, include_empty=include_empty):
+            if scope_selection is not None and key not in scope_selection:
+                continue
+            status = self.cell_parser_status(key)
+            if status["parser_id"] != parser_id:
+                continue
+            counts[status["state"]] += 1
+            counts["total"] += 1
+        return asdict(ParserUsageCountReport(
+            parser_id=parser_id,
+            scope=norm_scope,
+            counts=counts,
+        ))
+
+    def preview_parser_assignment(
+            self,
+            parser_id: str,
+            keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+            include_empty: bool = False,
+    ) -> dict[str, typing.Any]:
+        parser_id = self._validate_existing_parser_id(parser_id)
+        entries = []
+        changed = 0
+        for key in self._iter_parser_target_keys(keys=keys, tables=tables, include_empty=include_empty):
+            old_parser_id = self.get_cell_parser_id(key)
+            will_change = old_parser_id != parser_id
+            if will_change:
+                changed += 1
+            entries.append({
+                "key": key,
+                "old_parser_id": old_parser_id,
+                "new_parser_id": parser_id,
+                "will_change": will_change,
+            })
+        return {
+            "parser_id": parser_id,
+            "entries": entries,
+            "summary": {
+                "total": len(entries),
+                "changed": changed,
+                "unchanged": len(entries) - changed,
+            },
+        }
+
+    def apply_parser_assignment(
+            self,
+            parser_id: str,
+            keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+            include_empty: bool = False,
+    ) -> dict[str, typing.Any]:
+        report = self.preview_parser_assignment(
+            parser_id=parser_id, keys=keys, tables=tables, include_empty=include_empty
+        )
+        if report["summary"]["changed"] <= 0:
+            return report
+        new_bindings = dict(self.parser_bindings)
+        for entry in report["entries"]:
+            if not entry["will_change"]:
+                continue
+            new_bindings[entry["key"]] = report["parser_id"]
+        self.parser_bindings = new_bindings
+        return report
+
+    def preview_parser_rebind(
+            self,
+            source_parser_id: str,
+            target_parser_id: str,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+    ) -> dict[str, typing.Any]:
+        source_parser_id = self._validate_existing_parser_id(source_parser_id, "source_parser_id")
+        target_parser_id = self._validate_existing_parser_id(target_parser_id, "target_parser_id")
+        if source_parser_id == target_parser_id:
+            raise ValueError("source_parser_id and target_parser_id must be different.")
+
+        allowed_tables = None if tables is None else set(int(table) for table in tables)
+        cell_entries = []
+        for key in sorted(self.parser_bindings):
+            if self.get_cell_parser_id(key) != source_parser_id:
+                continue
+            if allowed_tables is not None and key[2] not in allowed_tables:
+                continue
+            cell_entries.append(key)
+
+        default_tables = []
+        for table_idx, parser_id in enumerate(self.sheet_default_parser_ids):
+            if parser_id != source_parser_id:
+                continue
+            if allowed_tables is not None and table_idx not in allowed_tables:
+                continue
+            default_tables.append(table_idx)
+
+        active_will_change = self.active_parser_id == source_parser_id
+        if allowed_tables is not None and not default_tables:
+            active_will_change = False
+
+        return {
+            "source_parser_id": source_parser_id,
+            "target_parser_id": target_parser_id,
+            "cell_keys": cell_entries,
+            "sheet_default_tables": default_tables,
+            "active_will_change": active_will_change,
+            "summary": {
+                "cell_changed": len(cell_entries),
+                "sheet_default_changed": len(default_tables),
+                "active_changed": 1 if active_will_change else 0,
+                "total_changed": len(cell_entries) + len(default_tables) + (1 if active_will_change else 0),
+            },
+        }
+
+    def preview_parser_migration(
+            self,
+            source_parser_id: str,
+            target_parser_id: str,
+            scope: str = "workspace",
+            selection_keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            table: typing.Optional[int] = None,
+    ) -> dict[str, typing.Any]:
+        """Preview parser-id migration over metadata scopes."""
+
+        source_parser_id = self._validate_existing_parser_id(source_parser_id, "source_parser_id")
+        target_parser_id = self._validate_existing_parser_id(target_parser_id, "target_parser_id")
+        if source_parser_id == target_parser_id:
+            raise ValueError("source_parser_id and target_parser_id must be different.")
+
+        norm_scope, scope_tables, scope_selection = self._normalize_parser_scope(
+            scope=scope, selection_keys=selection_keys, table=table
+        )
+
+        cell_entries = []
+        for key in self._iter_parser_target_keys(tables=scope_tables, include_empty=True):
+            if scope_selection is not None and key not in scope_selection:
+                continue
+            status = self.cell_parser_status(key)
+            if status["parser_id"] != source_parser_id:
+                continue
+            if status["state"] == "explicit":
+                action = "rebind_explicit"
+            elif norm_scope == "selection" and status["state"] == "default":
+                action = "assign_explicit"
+            else:
+                # For sheet/workspace scopes, default-inherited cells migrate
+                # through default parser changes rather than per-cell rewrites.
+                continue
+            cell_entries.append({
+                "key": key,
+                "old_state": status["state"],
+                "old_parser_id": status["parser_id"],
+                "new_parser_id": target_parser_id,
+                "action": action,
+            })
+
+        default_entries = []
+        if norm_scope in {"workspace", "sheet"}:
+            for table_idx, parser_id in enumerate(self.sheet_default_parser_ids):
+                if scope_tables is not None and table_idx not in scope_tables:
+                    continue
+                if parser_id != source_parser_id:
+                    continue
+                default_entries.append({
+                    "table": table_idx,
+                    "old_parser_id": source_parser_id,
+                    "new_parser_id": target_parser_id,
+                    "action": "set_sheet_default",
+                })
+
+        active_entry = None
+        if norm_scope == "workspace" and self.active_parser_id == source_parser_id:
+            active_entry = {
+                "old_parser_id": source_parser_id,
+                "new_parser_id": target_parser_id,
+                "action": "set_active",
+            }
+
+        summary = {
+            "cell_changed": len(cell_entries),
+            "sheet_default_changed": len(default_entries),
+            "active_changed": 1 if active_entry else 0,
+            "total_changed": len(cell_entries) + len(default_entries) + (1 if active_entry else 0),
+        }
+        migration_report = ParserMigrationReport(
+            scope=norm_scope,
+            source_parser_id=source_parser_id,
+            target_parser_id=target_parser_id,
+            cell_entries=[
+                ParserMigrationCellEntryReport(
+                    key=entry["key"],
+                    old_state=entry["old_state"],
+                    old_parser_id=entry["old_parser_id"],
+                    new_parser_id=entry["new_parser_id"],
+                    action=entry["action"],
+                ) for entry in cell_entries
+            ],
+            sheet_default_entries=[
+                ParserMigrationSheetDefaultEntryReport(
+                    table=entry["table"],
+                    old_parser_id=entry["old_parser_id"],
+                    new_parser_id=entry["new_parser_id"],
+                    action=entry["action"],
+                ) for entry in default_entries
+            ],
+            active_entry=None if active_entry is None else ParserMigrationActiveEntryReport(
+                old_parser_id=active_entry["old_parser_id"],
+                new_parser_id=active_entry["new_parser_id"],
+                action=active_entry["action"],
+            ),
+            summary=summary,
+        )
+        return asdict(migration_report)
+
+    def apply_parser_migration(
+            self,
+            source_parser_id: str,
+            target_parser_id: str,
+            scope: str = "workspace",
+            selection_keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            table: typing.Optional[int] = None,
+    ) -> dict[str, typing.Any]:
+        """Apply parser-id migration over metadata scopes."""
+
+        report = self.preview_parser_migration(
+            source_parser_id=source_parser_id,
+            target_parser_id=target_parser_id,
+            scope=scope,
+            selection_keys=selection_keys,
+            table=table,
+        )
+        if report["summary"]["total_changed"] <= 0:
+            return report
+
+        new_bindings = dict(self.parser_bindings)
+        for entry in report["cell_entries"]:
+            new_bindings[entry["key"]] = report["target_parser_id"]
+        self.parser_bindings = new_bindings
+
+        if report["sheet_default_entries"]:
+            parser_ids = self.sheet_default_parser_ids
+            for entry in report["sheet_default_entries"]:
+                parser_ids[entry["table"]] = report["target_parser_id"]
+            self.sheet_default_parser_ids = parser_ids
+
+        if report["active_entry"]:
+            self.active_parser_id = report["target_parser_id"]
+
+        return report
+
+    def apply_parser_rebind(
+            self,
+            source_parser_id: str,
+            target_parser_id: str,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+    ) -> dict[str, typing.Any]:
+        report = self.preview_parser_rebind(
+            source_parser_id=source_parser_id, target_parser_id=target_parser_id, tables=tables
+        )
+        if report["summary"]["total_changed"] <= 0:
+            return report
+
+        new_bindings = dict(self.parser_bindings)
+        for key in report["cell_keys"]:
+            new_bindings[key] = report["target_parser_id"]
+        self.parser_bindings = new_bindings
+
+        if report["sheet_default_tables"]:
+            parser_ids = self.sheet_default_parser_ids
+            for table_idx in report["sheet_default_tables"]:
+                parser_ids[table_idx] = report["target_parser_id"]
+            self.sheet_default_parser_ids = parser_ids
+
+        if report["active_will_change"]:
+            self.active_parser_id = report["target_parser_id"]
+
+        return report
+
+    def set_user_input(self, key: Tuple[int, int, int], text: str):
+        """Set user-authored cell text while preserving/applying parser binding rules."""
+
+        old_parser_id = self.get_cell_parser_id(key)
+        self[key] = text
+        if text in (None, ""):
+            # Empty cells default to unbound metadata.
+            self.set_cell_parser_id(key, None)
+            return
+        if old_parser_id:
+            self.set_cell_parser_id(key, old_parser_id)
+            return
+        self.set_cell_parser_id(key, self.default_parser_id_for_table(key[2]))
+
+    def effective_parser_id_for_cell(self, key: Tuple[int, int, int]) -> str:
+        """Return effective parser binding for a cell."""
+
+        parser_id = self.get_cell_parser_id(key)
         if parser_id:
-            return code_obj
-        return code_obj.with_parser_id(self.active_parser_id)
+            return parser_id
+        return self.default_parser_id_for_table(key[2])
 
     def _resolve_code_parser_signature(
-            self, key: Tuple[int, int, int], code_obj: Union[PythonCode, SpreadSheetCode]
+            self, key: Tuple[int, int, int]
     ) -> tuple[str, str]:
-        """Return parser binding id/signature for a code object.
+        """Return parser binding id/signature for code eval at key."""
 
-        Raises ValueError when explicit parser_id no longer resolves.
-        """
-
-        parser_id = getattr(code_obj, "parser_id", None)
-        if parser_id:
-            signature = self.parser_signature_for_id(parser_id)
-            if signature is None:
-                raise ValueError(
-                    f"Unresolved parser_id {parser_id!r} for cell {key}. "
-                    "Rebind parser explicitly."
-                )
-            return parser_id, signature
-
-        parser_id = self.active_parser_id
+        parser_id = self.effective_parser_id_for_cell(key)
         signature = self.parser_signature_for_id(parser_id)
+        if signature is None and self.get_cell_parser_id(key):
+            raise ValueError(
+                f"Unresolved parser_id {parser_id!r} for cell {key}. "
+                "Rebind parser explicitly."
+            )
         if signature is None:
             return parser_id, self.exp_parser_code
         return parser_id, signature
@@ -1842,15 +2421,13 @@ class CodeArray(DataArray):
 
         #  --- ExpParser START ---  #
         if isinstance(cell_contents, (PythonCode, SpreadSheetCode)):
-            exp_parsed = self._bind_code_parser_id(cell_contents)
+            exp_parsed = cell_contents
         else:
             if self.exp_parser.handle_empty(cell_contents):
                 if return_warnings:
                     return EmptyCell, eval_warnings
                 return EmptyCell
             exp_parsed = self.exp_parser.parse(cell_contents)
-            if isinstance(exp_parsed, (PythonCode, SpreadSheetCode)):
-                exp_parsed = self._bind_code_parser_id(exp_parsed)
         if exp_parsed is EmptyCell and cell_contents.strip():
             eval_warnings.append(
                 "Expression parser returned EmptyCell for non-empty cell contents."
@@ -1922,7 +2499,7 @@ class CodeArray(DataArray):
             # Track dependencies during evaluation
             with DependencyTracker.track(key):
                 # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-                parser_id, parser_signature = self._resolve_code_parser_signature(key, exp_parsed)
+                parser_id, parser_signature = self._resolve_code_parser_signature(key)
                 cache_key = (key[2], parser_id, parser_signature, ref_parsed.lstrip())
                 result = PythonEvaluator.exec_then_eval(
                     ref_parsed.lstrip(),
@@ -1978,6 +2555,7 @@ class CodeArray(DataArray):
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
         self.compile_cache.clear()
+        self.parser_bindings.pop(key, None)
         self._clear_cell_warnings(key)
         old_spill_size = self.range_output_sizes.pop(key, None)
         if old_spill_size:

@@ -823,13 +823,30 @@ class TestGrid:
     def test_is_column_data_discarded(self):
         """Unit test for is_column_data_discarded"""
 
-        self.grid.model.code_array[0, 98, 0] = "Edge data"
+        old_shape = self.grid.model.shape
+        rows, columns, tables = old_shape
+        target_columns = max(columns, 4)
+        self.grid.model.shape = (rows, target_columns, tables)
 
-        assert not self.grid.is_column_data_discarded(0)
-        assert not self.grid.is_column_data_discarded(1)
-        assert self.grid.is_column_data_discarded(2)
+        max_column = self.grid.model.shape[1] - 1
+        edge_column = max_column - 1
+        table = self.grid.table
+        last_col_backup = {}
+        for key in list(self.grid.model.code_array.keys()):
+            if key[1] == max_column and key[2] == table:
+                last_col_backup[key] = self.grid.model.code_array(key)
+                self.grid.model.code_array[key] = None
+        self.grid.model.code_array[0, edge_column, 0] = "Edge data"
 
-        self.grid.model.code_array[0, 98, 0] = None
+        try:
+            assert not self.grid.is_column_data_discarded(0)
+            assert not self.grid.is_column_data_discarded(1)
+            assert self.grid.is_column_data_discarded(2)
+        finally:
+            self.grid.model.code_array[0, edge_column, 0] = None
+            for key, value in last_col_backup.items():
+                self.grid.model.code_array[key] = value
+            self.grid.model.shape = old_shape
 
     def test_is_table_data_discarded(self):
         """Unit test for is_table_data_discarded"""

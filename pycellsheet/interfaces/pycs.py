@@ -125,6 +125,7 @@ class PycsReader:
             "[sheet_names]\n": self._pycs2sheet_names,
             "[parser_specs]\n": self._pycs2parser_specs,
             "[parser_settings]\n": self._pycs2parser_settings,
+            "[parser_bindings]\n": self._pycs2parser_bindings,
             "[sheet_scripts]\n": self._pycs2sheet_scripts,
             "[grid]\n": self._pycs2code,
             "[attributes]\n": self._pycs2attributes,
@@ -146,6 +147,8 @@ class PycsReader:
         self._parser_spec_header_re = re.compile(r"^\(parser_spec:(.+)\)\s+([0-9]+)$")
         self._loaded_parser_specs = []
         self._pending_active_parser_id = None
+        self._pending_sheet_default_parser_ids = None
+        self._pending_parser_bindings: dict[Tuple[int, int, int], str] = {}
 
     def __iter__(self):
         """Iterates over self.pycs_file, replacing everything in code_array"""
@@ -173,6 +176,15 @@ class PycsReader:
             self.code_array.parser_specs = self._loaded_parser_specs
         if self._pending_active_parser_id is not None:
             self.code_array.active_parser_id = self._pending_active_parser_id
+        if self._pending_sheet_default_parser_ids is not None \
+           and hasattr(self.code_array, "sheet_default_parser_ids"):
+            self.code_array.sheet_default_parser_ids = self._pending_sheet_default_parser_ids
+        if self._pending_parser_bindings:
+            if hasattr(self.code_array, "set_cell_parser_id"):
+                for key, parser_id in self._pending_parser_bindings.items():
+                    self.code_array.set_cell_parser_id(key, parser_id)
+            elif hasattr(self.code_array, "parser_bindings"):
+                self.code_array.parser_bindings = dict(self._pending_parser_bindings)
 
     # Decorators
 
@@ -470,10 +482,14 @@ class PycsReader:
             self.code_array.exp_parser_code = value
         elif key == "active_parser_id":
             self._pending_active_parser_id = str(value)
+        elif key == "sheet_default_parser_ids":
+            if not isinstance(value, (list, tuple)):
+                raise ValueError("sheet_default_parser_ids must be a list/tuple.")
+            self._pending_sheet_default_parser_ids = [str(parser_id) for parser_id in value]
         else:
             raise ValueError(
                 f"Unknown parser_settings key: {key}. "
-                "Supported keys in v0.6+: exp_parser_code, active_parser_id."
+                "Supported keys in v0.6+: exp_parser_code, active_parser_id, sheet_default_parser_ids."
             )
 
     def _pycs2parser_specs(self, line: str):
@@ -507,6 +523,20 @@ class PycsReader:
         self.current_parser_spec_id = str(parsed_identifier)
         self.current_parser_spec_remaining = int(line_count_str)
 
+    def _pycs2parser_bindings(self, line: str):
+        """Updates parser binding metadata from [parser_bindings] section."""
+
+        row, col, tab, parser_id_repr = self._split_tidy(line, maxsplit=3)
+        key = self._get_key(row, col, tab)
+        if not all(0 <= key[i] < self.code_array.shape[i] for i in range(3)):
+            return
+
+        parser_id = ast.literal_eval(parser_id_repr)
+        parser_id = str(parser_id or "").strip()
+        if not parser_id:
+            return
+        self._pending_parser_bindings[key] = parser_id
+
 class PycsWriter(object):
     """Interface between code_array and pycs file data
 
@@ -530,6 +560,7 @@ class PycsWriter(object):
             ("[sheet_names]\n", self._sheet_names2pycs),
             ("[parser_specs]\n", self._parser_specs2pycs),
             ("[parser_settings]\n", self._parser_settings2pycs),
+            ("[parser_bindings]\n", self._parser_bindings2pycs),
             ("[sheet_scripts]\n", self._sheet_scripts2pycs),
             ("[grid]\n", self._code2pycs),
             ("[attributes]\n", self._attributes2pycs),
@@ -599,6 +630,9 @@ class PycsWriter(object):
         active_parser_id = getattr(self.code_array, "active_parser_id", None)
         if active_parser_id is not None:
             yield f"active_parser_id\t{active_parser_id!r}\n"
+        sheet_default_parser_ids = getattr(self.code_array, "sheet_default_parser_ids", None)
+        if sheet_default_parser_ids is not None:
+            yield f"sheet_default_parser_ids\t{list(sheet_default_parser_ids)!r}\n"
         yield f"exp_parser_code\t{self.code_array.exp_parser_code!r}\n"
 
     def _parser_specs2pycs(self) -> Iterable[str]:
@@ -617,6 +651,17 @@ class PycsWriter(object):
                 "",
             ]
             yield "\n".join(block)
+
+    def _parser_bindings2pycs(self) -> Iterable[str]:
+        """Returns parser binding metadata in pycs format."""
+
+        parser_bindings = getattr(self.code_array, "parser_bindings", None) or {}
+        for key in sorted(parser_bindings):
+            row, col, tab = key
+            parser_id = str(parser_bindings[key] or "").strip()
+            if not parser_id:
+                continue
+            yield f"{row}\t{col}\t{tab}\t{parser_id!r}\n"
 
     def _code2pycs(self) -> Iterable[str]:
         """Returns cell code information in pycs format

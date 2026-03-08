@@ -2078,7 +2078,7 @@ class GridTableModel(QAbstractTableModel):
                 else:
                     self.code_array[key] = value
             else:
-                self.code_array[key] = f"{value}"
+                self.code_array.set_user_input(key, f"{value}")
 
             if not self.main_window.prevent_updates:
                 # Emit dataChanged for the edited cell
