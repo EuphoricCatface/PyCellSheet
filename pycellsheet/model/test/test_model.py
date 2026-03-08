@@ -1015,6 +1015,59 @@ class TestCodeArray(object):
         assert isinstance(result, ValueError)
         assert "Unresolved parser_id" in str(result)
 
+    def test_preview_and_apply_parser_assignment_metadata_only(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_alt", "name": "Alt", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array[0, 0, 0] = "alpha"
+        self.code_array[0, 1, 0] = "beta"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_main")
+
+        preview = self.code_array.preview_parser_assignment("parser_alt")
+        assert preview["summary"] == {"total": 2, "changed": 2, "unchanged": 0}
+
+        applied = self.code_array.apply_parser_assignment("parser_alt")
+        assert applied["summary"]["changed"] == 2
+        assert self.code_array.get_cell_parser_id((0, 0, 0)) == "parser_alt"
+        assert self.code_array.get_cell_parser_id((0, 1, 0)) == "parser_alt"
+        assert self.code_array((0, 0, 0)) == "alpha"
+        assert self.code_array((0, 1, 0)) == "beta"
+
+    def test_preview_and_apply_parser_rebind_updates_cell_sheet_and_active(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_alt", "name": "Alt", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.shape = (3, 3, 2)
+        self.code_array.active_parser_id = "parser_main"
+        self.code_array.sheet_default_parser_ids = ["parser_main", "parser_alt"]
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_main")
+        self.code_array.set_cell_parser_id((0, 1, 1), "parser_main")
+
+        preview = self.code_array.preview_parser_rebind("parser_main", "parser_alt")
+        assert preview["summary"]["cell_changed"] == 2
+        assert preview["summary"]["sheet_default_changed"] == 1
+        assert preview["summary"]["active_changed"] == 1
+
+        applied = self.code_array.apply_parser_rebind("parser_main", "parser_alt")
+        assert applied["summary"]["total_changed"] == 4
+        assert self.code_array.active_parser_id == "parser_alt"
+        assert self.code_array.sheet_default_parser_ids == ["parser_alt", "parser_alt"]
+        assert self.code_array.get_cell_parser_id((0, 0, 0)) == "parser_alt"
+        assert self.code_array.get_cell_parser_id((0, 1, 1)) == "parser_alt"
+
+    def test_preview_parser_assignment_rejects_unknown_parser(self):
+        with pytest.raises(ValueError, match="Unknown parser id"):
+            self.code_array.preview_parser_assignment("parser_missing")
+
+    def test_preview_parser_rebind_rejects_equal_source_target(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        with pytest.raises(ValueError, match="must be different"):
+            self.code_array.preview_parser_rebind("parser_main", "parser_main")
+
     def test_compile_cache_cleared_on_shape_change(self):
         self.code_array[0, 0, 0] = "1 + 1"
         assert self.code_array[0, 0, 0] == 2

@@ -1758,6 +1758,166 @@ class CodeArray(DataArray):
             self.parser_bindings[key] = parser_id
         self.compile_cache.clear()
 
+    def _validate_existing_parser_id(self, parser_id: str, argname: str = "parser_id") -> str:
+        parser_id = str(parser_id or "").strip()
+        if not parser_id:
+            raise ValueError(f"{argname} must be non-empty.")
+        if self.get_parser_spec(parser_id) is None:
+            raise ValueError(f"Unknown parser id: {parser_id!r}")
+        return parser_id
+
+    def _iter_parser_target_keys(
+            self,
+            keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+            include_empty: bool = False,
+    ) -> typing.Iterable[Tuple[int, int, int]]:
+        allowed_tables = None if tables is None else set(int(table) for table in tables)
+        if keys is None:
+            candidate_keys = sorted(self.keys())
+        else:
+            candidate_keys = sorted({
+                key for key in keys
+                if isinstance(key, tuple) and len(key) == 3
+                and all(isinstance(ele, int) for ele in key)
+            })
+        for key in candidate_keys:
+            row, col, table = key
+            rows, cols, tabs = self.shape
+            if not (0 <= row < rows and 0 <= col < cols and 0 <= table < tabs):
+                continue
+            if allowed_tables is not None and table not in allowed_tables:
+                continue
+            value = self(key)
+            if isinstance(value, str):
+                if include_empty or value != "":
+                    yield key
+
+    def preview_parser_assignment(
+            self,
+            parser_id: str,
+            keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+            include_empty: bool = False,
+    ) -> dict[str, typing.Any]:
+        parser_id = self._validate_existing_parser_id(parser_id)
+        entries = []
+        changed = 0
+        for key in self._iter_parser_target_keys(keys=keys, tables=tables, include_empty=include_empty):
+            old_parser_id = self.get_cell_parser_id(key)
+            will_change = old_parser_id != parser_id
+            if will_change:
+                changed += 1
+            entries.append({
+                "key": key,
+                "old_parser_id": old_parser_id,
+                "new_parser_id": parser_id,
+                "will_change": will_change,
+            })
+        return {
+            "parser_id": parser_id,
+            "entries": entries,
+            "summary": {
+                "total": len(entries),
+                "changed": changed,
+                "unchanged": len(entries) - changed,
+            },
+        }
+
+    def apply_parser_assignment(
+            self,
+            parser_id: str,
+            keys: typing.Optional[typing.Iterable[Tuple[int, int, int]]] = None,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+            include_empty: bool = False,
+    ) -> dict[str, typing.Any]:
+        report = self.preview_parser_assignment(
+            parser_id=parser_id, keys=keys, tables=tables, include_empty=include_empty
+        )
+        if report["summary"]["changed"] <= 0:
+            return report
+        new_bindings = dict(self.parser_bindings)
+        for entry in report["entries"]:
+            if not entry["will_change"]:
+                continue
+            new_bindings[entry["key"]] = report["parser_id"]
+        self.parser_bindings = new_bindings
+        return report
+
+    def preview_parser_rebind(
+            self,
+            source_parser_id: str,
+            target_parser_id: str,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+    ) -> dict[str, typing.Any]:
+        source_parser_id = self._validate_existing_parser_id(source_parser_id, "source_parser_id")
+        target_parser_id = self._validate_existing_parser_id(target_parser_id, "target_parser_id")
+        if source_parser_id == target_parser_id:
+            raise ValueError("source_parser_id and target_parser_id must be different.")
+
+        allowed_tables = None if tables is None else set(int(table) for table in tables)
+        cell_entries = []
+        for key in sorted(self.parser_bindings):
+            if self.get_cell_parser_id(key) != source_parser_id:
+                continue
+            if allowed_tables is not None and key[2] not in allowed_tables:
+                continue
+            cell_entries.append(key)
+
+        default_tables = []
+        for table_idx, parser_id in enumerate(self.sheet_default_parser_ids):
+            if parser_id != source_parser_id:
+                continue
+            if allowed_tables is not None and table_idx not in allowed_tables:
+                continue
+            default_tables.append(table_idx)
+
+        active_will_change = self.active_parser_id == source_parser_id
+        if allowed_tables is not None and not default_tables:
+            active_will_change = False
+
+        return {
+            "source_parser_id": source_parser_id,
+            "target_parser_id": target_parser_id,
+            "cell_keys": cell_entries,
+            "sheet_default_tables": default_tables,
+            "active_will_change": active_will_change,
+            "summary": {
+                "cell_changed": len(cell_entries),
+                "sheet_default_changed": len(default_tables),
+                "active_changed": 1 if active_will_change else 0,
+                "total_changed": len(cell_entries) + len(default_tables) + (1 if active_will_change else 0),
+            },
+        }
+
+    def apply_parser_rebind(
+            self,
+            source_parser_id: str,
+            target_parser_id: str,
+            tables: typing.Optional[typing.Iterable[int]] = None,
+    ) -> dict[str, typing.Any]:
+        report = self.preview_parser_rebind(
+            source_parser_id=source_parser_id, target_parser_id=target_parser_id, tables=tables
+        )
+        if report["summary"]["total_changed"] <= 0:
+            return report
+
+        new_bindings = dict(self.parser_bindings)
+        for key in report["cell_keys"]:
+            new_bindings[key] = report["target_parser_id"]
+        self.parser_bindings = new_bindings
+
+        if report["sheet_default_tables"]:
+            parser_ids = self.sheet_default_parser_ids
+            for table_idx in report["sheet_default_tables"]:
+                parser_ids[table_idx] = report["target_parser_id"]
+            self.sheet_default_parser_ids = parser_ids
+
+        if report["active_will_change"]:
+            self.active_parser_id = report["target_parser_id"]
+
+        return report
+
     def set_user_input(self, key: Tuple[int, int, int], text: str):
         """Set user-authored cell text while preserving/applying parser binding rules."""
 
