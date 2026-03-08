@@ -53,6 +53,7 @@ from builtins import range
 import ast
 from collections import defaultdict
 from copy import copy, deepcopy
+from dataclasses import asdict, dataclass
 from inspect import isgenerator
 import io
 import logging
@@ -171,6 +172,59 @@ DEFAULT_PARSER_SPEC_ID = "parser_main"
 
 
 class_format_functions = {}
+
+
+@dataclass(frozen=True)
+class CellParserStatusReport:
+    key: Tuple[int, int, int]
+    state: str
+    parser_id: typing.Optional[str]
+    explicit_parser_id: typing.Optional[str]
+    default_parser_id: typing.Optional[str]
+    resolved: bool
+    has_user_input: bool
+
+
+@dataclass(frozen=True)
+class ParserUsageCountReport:
+    parser_id: str
+    scope: str
+    counts: dict[str, int]
+
+
+@dataclass(frozen=True)
+class ParserMigrationCellEntryReport:
+    key: Tuple[int, int, int]
+    old_state: str
+    old_parser_id: str
+    new_parser_id: str
+    action: str
+
+
+@dataclass(frozen=True)
+class ParserMigrationSheetDefaultEntryReport:
+    table: int
+    old_parser_id: str
+    new_parser_id: str
+    action: str
+
+
+@dataclass(frozen=True)
+class ParserMigrationActiveEntryReport:
+    old_parser_id: str
+    new_parser_id: str
+    action: str
+
+
+@dataclass(frozen=True)
+class ParserMigrationReport:
+    scope: str
+    source_parser_id: str
+    target_parser_id: str
+    cell_entries: list[ParserMigrationCellEntryReport]
+    sheet_default_entries: list[ParserMigrationSheetDefaultEntryReport]
+    active_entry: typing.Optional[ParserMigrationActiveEntryReport]
+    summary: dict[str, int]
 
 
 def _default_parser_specs(parser_code: str) -> list[dict[str, typing.Any]]:
@@ -1841,15 +1895,15 @@ class CodeArray(DataArray):
 
         value = self(key)
         has_user_input = isinstance(value, str) and value != ""
-        return {
-            "key": key,
-            "state": state,
-            "parser_id": parser_id,
-            "explicit_parser_id": explicit_parser_id,
-            "default_parser_id": default_parser_id,
-            "resolved": state != "missing",
-            "has_user_input": has_user_input,
-        }
+        return asdict(CellParserStatusReport(
+            key=key,
+            state=state,
+            parser_id=parser_id,
+            explicit_parser_id=explicit_parser_id,
+            default_parser_id=default_parser_id,
+            resolved=(state != "missing"),
+            has_user_input=has_user_input,
+        ))
 
     def get_cell_parser_status(self, key: Tuple[int, int, int]) -> dict[str, typing.Any]:
         """Compatibility alias for cell_parser_status."""
@@ -1879,7 +1933,11 @@ class CodeArray(DataArray):
                 continue
             counts[status["state"]] += 1
             counts["total"] += 1
-        return {"parser_id": parser_id, "scope": norm_scope, "counts": counts}
+        return asdict(ParserUsageCountReport(
+            parser_id=parser_id,
+            scope=norm_scope,
+            counts=counts,
+        ))
 
     def preview_parser_assignment(
             self,
@@ -2048,15 +2106,35 @@ class CodeArray(DataArray):
             "active_changed": 1 if active_entry else 0,
             "total_changed": len(cell_entries) + len(default_entries) + (1 if active_entry else 0),
         }
-        return {
-            "scope": norm_scope,
-            "source_parser_id": source_parser_id,
-            "target_parser_id": target_parser_id,
-            "cell_entries": cell_entries,
-            "sheet_default_entries": default_entries,
-            "active_entry": active_entry,
-            "summary": summary,
-        }
+        migration_report = ParserMigrationReport(
+            scope=norm_scope,
+            source_parser_id=source_parser_id,
+            target_parser_id=target_parser_id,
+            cell_entries=[
+                ParserMigrationCellEntryReport(
+                    key=entry["key"],
+                    old_state=entry["old_state"],
+                    old_parser_id=entry["old_parser_id"],
+                    new_parser_id=entry["new_parser_id"],
+                    action=entry["action"],
+                ) for entry in cell_entries
+            ],
+            sheet_default_entries=[
+                ParserMigrationSheetDefaultEntryReport(
+                    table=entry["table"],
+                    old_parser_id=entry["old_parser_id"],
+                    new_parser_id=entry["new_parser_id"],
+                    action=entry["action"],
+                ) for entry in default_entries
+            ],
+            active_entry=None if active_entry is None else ParserMigrationActiveEntryReport(
+                old_parser_id=active_entry["old_parser_id"],
+                new_parser_id=active_entry["new_parser_id"],
+                action=active_entry["action"],
+            ),
+            summary=summary,
+        )
+        return asdict(migration_report)
 
     def apply_parser_migration(
             self,
