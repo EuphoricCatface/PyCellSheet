@@ -21,7 +21,9 @@ def insert_path(path):
 
 with insert_path(PYSPREADPATH):
     from ..commands import (
+        DeleteSelectedCellData,
         MakeButtonCell,
+        PasteSelectedCellData,
         RemoveButtonCell,
         RenameSheet,
         SetCellCode,
@@ -89,6 +91,9 @@ class DummyCodeArray:
         self._data = {}
         self.row_heights = {}
         self.col_widths = {}
+        self.parser_bindings = {}
+        self.active_parser_id = "parser_main"
+        self.sheet_default_parser_ids = ["parser_main", "parser_main"]
         self.cell_attributes = DummyCellAttributes()
         self.dict_grid = SimpleNamespace(
             row_heights=self.row_heights,
@@ -116,7 +121,34 @@ class DummyCodeArray:
         return list(self._data.keys())
 
     def pop(self, key):
+        self.parser_bindings.pop(key, None)
         return self._data.pop(key)
+
+    def get_cell_parser_id(self, key):
+        return self.parser_bindings.get(key)
+
+    def set_cell_parser_id(self, key, parser_id):
+        parser_id = str(parser_id or "").strip()
+        if parser_id:
+            self.parser_bindings[key] = parser_id
+        else:
+            self.parser_bindings.pop(key, None)
+
+    def default_parser_id_for_table(self, table):
+        if 0 <= table < len(self.sheet_default_parser_ids):
+            return self.sheet_default_parser_ids[table]
+        return self.active_parser_id
+
+    def set_user_input(self, key, text):
+        old_parser_id = self.get_cell_parser_id(key)
+        self[key] = text
+        if text in (None, ""):
+            self.set_cell_parser_id(key, None)
+            return
+        if old_parser_id:
+            self.set_cell_parser_id(key, old_parser_id)
+            return
+        self.set_cell_parser_id(key, self.default_parser_id_for_table(key[2]))
 
 
 class DummyHighlighter:
@@ -352,3 +384,38 @@ def test_make_button_cell_skips_widget_update_if_table_changed_after_init():
     cmd.redo()
     assert grid_a.update_index_widgets_calls == 0
     assert grid_b.update_index_widgets_calls == 0
+
+
+def test_paste_selected_cell_data_undo_restores_original_parser_binding():
+    model, grid, _ = build_grid_pair(table=0)
+    key = (0, 0, 0)
+    model.code_array[key] = "old"
+    model.code_array.set_cell_parser_id(key, "parser_old")
+    model.code_array.sheet_default_parser_ids[0] = "parser_sheet"
+    selection = Selection([], [], [], [], [(0, 0)])
+
+    cmd = PasteSelectedCellData(grid, model, selection, "new", "Paste")
+    cmd.redo()
+    assert model.code_array[key] == "new"
+    assert model.code_array.get_cell_parser_id(key) == "parser_old"
+
+    cmd.undo()
+    assert model.code_array[key] == "old"
+    assert model.code_array.get_cell_parser_id(key) == "parser_old"
+
+
+def test_delete_selected_cell_data_undo_restores_original_parser_binding():
+    model, grid, _ = build_grid_pair(table=0)
+    key = (0, 0, 0)
+    model.code_array[key] = "old"
+    model.code_array.set_cell_parser_id(key, "parser_old")
+    selection = Selection([], [], [], [], [(0, 0)])
+
+    cmd = DeleteSelectedCellData(grid, model, selection, "Delete")
+    cmd.redo()
+    assert key not in model.code_array
+    assert model.code_array.get_cell_parser_id(key) is None
+
+    cmd.undo()
+    assert model.code_array[key] == "old"
+    assert model.code_array.get_cell_parser_id(key) == "parser_old"
