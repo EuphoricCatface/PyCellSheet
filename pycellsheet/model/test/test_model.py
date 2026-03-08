@@ -402,6 +402,18 @@ class TestDataArray(object):
         assert len(data_array.parser_specs) == 2
         assert data_array.exp_parser_code == "return PythonCode(cell)"
 
+    def test_sheet_default_parser_ids_contract(self):
+        data_array = DataArray((2, 2, 2), Settings())
+        assert data_array.sheet_default_parser_ids == ["parser_main", "parser_main"]
+
+        data_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_alt", "name": "Alt", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        data_array.set_sheet_default_parser_id(1, "parser_alt")
+        assert data_array.sheet_default_parser_ids == ["parser_main", "parser_alt"]
+        assert data_array.default_parser_id_for_table(1) == "parser_alt"
+
     def test_exp_parser_code_setter_updates_parser_behavior(self):
         data_array = DataArray((2, 2, 1), Settings())
         data_array.exp_parser_code = ExpressionParser.DEFAULT_PARSERS["Pure Spreadsheet"]
@@ -946,6 +958,41 @@ class TestCodeArray(object):
         assert self.code_array[0, 0, 0] == 3
         assert self.code_array[0, 1, 0] == 3
         assert len(self.code_array.compile_cache) == 2
+
+    def test_set_user_input_binding_rule_prefers_existing_cell_binding(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_sheet", "name": "Sheet", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_old", "name": "Old", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.active_parser_id = "parser_main"
+        self.code_array.sheet_default_parser_ids = ["parser_sheet"]
+        self.code_array[0, 0, 0] = "old"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_old")
+
+        self.code_array.set_user_input((0, 0, 0), "new")
+        assert self.code_array((0, 0, 0)) == "new"
+        assert self.code_array.get_cell_parser_id((0, 0, 0)) == "parser_old"
+
+    def test_set_user_input_binding_rule_uses_sheet_default_for_new_cell(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_sheet", "name": "Sheet", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.active_parser_id = "parser_main"
+        self.code_array.sheet_default_parser_ids = ["parser_sheet"]
+
+        self.code_array.set_user_input((0, 0, 0), "hello")
+        assert self.code_array((0, 0, 0)) == "hello"
+        assert self.code_array.get_cell_parser_id((0, 0, 0)) == "parser_sheet"
+
+    def test_set_user_input_empty_cell_clears_binding_by_default(self):
+        self.code_array[0, 0, 0] = "hello"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_main")
+
+        self.code_array.set_user_input((0, 0, 0), "")
+        assert self.code_array((0, 0, 0)) in (None, "")
+        assert self.code_array.get_cell_parser_id((0, 0, 0)) is None
 
     def test_unresolved_cell_parser_binding_returns_error(self):
         self.code_array[0, 0, 0] = "1 + 2"

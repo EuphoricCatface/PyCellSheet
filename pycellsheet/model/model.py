@@ -502,6 +502,9 @@ class DictGrid(KeyValueStore):
         self.exp_parser_code = u""
         self.parser_specs: list[dict[str, typing.Any]] = []
         self.active_parser_id = DEFAULT_PARSER_SPEC_ID
+        self.sheet_default_parser_ids: list[str] = [
+            DEFAULT_PARSER_SPEC_ID for _ in range(shape[2])
+        ]
         self.parser_bindings: dict[Tuple[int, int, int], str] = {}
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
@@ -566,6 +569,9 @@ class DataArray:
         self.dict_grid.exp_parser_code = default_parser_code
         self.dict_grid.parser_specs = _default_parser_specs(default_parser_code)
         self.dict_grid.active_parser_id = DEFAULT_PARSER_SPEC_ID
+        self.dict_grid.sheet_default_parser_ids = [
+            DEFAULT_PARSER_SPEC_ID for _ in range(shape[2])
+        ]
         self.exp_parser.set_parser(default_parser_code)
         self._saved_parser_signature = self._parser_settings_signature()
 
@@ -617,6 +623,7 @@ class DataArray:
         data["exp_parser_code"] = self.exp_parser_code
         data["parser_specs"] = deepcopy(self.parser_specs)
         data["active_parser_id"] = self.active_parser_id
+        data["sheet_default_parser_ids"] = list(self.sheet_default_parser_ids)
         data["parser_bindings"] = dict(self.parser_bindings)
         return data
 
@@ -673,6 +680,9 @@ class DataArray:
         if "active_parser_id" in kwargs:
             self.active_parser_id = kwargs["active_parser_id"]
 
+        if "sheet_default_parser_ids" in kwargs:
+            self.sheet_default_parser_ids = kwargs["sheet_default_parser_ids"]
+
         if "parser_bindings" in kwargs:
             self.parser_bindings = kwargs["parser_bindings"]
 
@@ -685,8 +695,6 @@ class DataArray:
 
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
-        if hasattr(self, "parser_bindings"):
-            self.parser_bindings = {}
 
     @property
     def row_heights(self) -> defaultdict:
@@ -779,8 +787,6 @@ class DataArray:
         self.dict_grid.parser_specs = normalized
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
-        if hasattr(self, "parser_bindings"):
-            self.parser_bindings = {}
 
     @property
     def active_parser_id(self) -> str:
@@ -792,13 +798,53 @@ class DataArray:
         self.dict_grid.active_parser_id = parser_id
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
-        if hasattr(self, "parser_bindings"):
-            self.parser_bindings = {}
         spec = self.get_parser_spec(parser_id)
         if spec is None:
             # Keep unresolved binding explicit; do not silently remap.
             return
         self.exp_parser_code = self._parser_code_from_spec(spec)
+
+    @property
+    def sheet_default_parser_ids(self) -> list[str]:
+        return list(getattr(self.dict_grid, "sheet_default_parser_ids", []))
+
+    @sheet_default_parser_ids.setter
+    def sheet_default_parser_ids(self, parser_ids: typing.Iterable[str]):
+        table_count = self.shape[2]
+        values = [str(parser_id or "").strip() for parser_id in (parser_ids or [])]
+        values = [parser_id for parser_id in values if parser_id]
+        if len(values) < table_count:
+            values.extend([self.active_parser_id] * (table_count - len(values)))
+        elif len(values) > table_count:
+            values = values[:table_count]
+        self.dict_grid.sheet_default_parser_ids = values
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+
+    def default_parser_id_for_table(self, table: int) -> str:
+        parser_ids = self.sheet_default_parser_ids
+        if 0 <= table < len(parser_ids):
+            parser_id = str(parser_ids[table] or "").strip()
+            if parser_id and self.get_parser_spec(parser_id) is not None:
+                return parser_id
+        active_parser_id = str(self.active_parser_id or "").strip()
+        if active_parser_id and self.get_parser_spec(active_parser_id) is not None:
+            return active_parser_id
+        if self.parser_specs:
+            return str(self.parser_specs[0].get("id") or "")
+        return active_parser_id
+
+    def set_sheet_default_parser_id(self, table: int, parser_id: str):
+        parser_id = str(parser_id or "").strip()
+        if not parser_id:
+            raise ValueError("Sheet default parser id must be non-empty.")
+        if self.get_parser_spec(parser_id) is None:
+            raise ValueError(f"Unknown parser id: {parser_id!r}")
+        parser_ids = self.sheet_default_parser_ids
+        if not (0 <= table < len(parser_ids)):
+            raise IndexError("Sheet index out of range.")
+        parser_ids[table] = parser_id
+        self.sheet_default_parser_ids = parser_ids
 
     def parser_signature_for_id(self, parser_id: str) -> typing.Optional[str]:
         spec = self.get_parser_spec(parser_id)
@@ -839,6 +885,7 @@ class DataArray:
         return repr((
             self.active_parser_id,
             parser_specs_snapshot,
+            tuple(self.sheet_default_parser_ids),
             parser_bindings_snapshot,
             self.exp_parser_code,
         ))
@@ -976,6 +1023,7 @@ class DataArray:
             self.sheet_globals_copyable = self.sheet_globals_copyable[:new_tables]
             self.sheet_globals_uncopyable = self.sheet_globals_uncopyable[:new_tables]
             self.dict_grid.sheet_names = self.dict_grid.sheet_names[:new_tables]
+            self.sheet_default_parser_ids = self.sheet_default_parser_ids[:new_tables]
         elif new_tables > old_tables:
             # Extend lists
             for i in range(old_tables, new_tables):
@@ -989,6 +1037,15 @@ class DataArray:
                     fallback_index=i,
                 )
                 self.dict_grid.sheet_names.append(new_name)
+            parser_ids = self.sheet_default_parser_ids
+            parser_ids.extend([self.active_parser_id] * (new_tables - old_tables))
+            self.sheet_default_parser_ids = parser_ids
+
+        self.parser_bindings = {
+            key: parser_id
+            for key, parser_id in self.parser_bindings.items()
+            if all(0 <= key[i] < self.shape[i] for i in range(3))
+        }
 
         self._adjust_rowcol(0, 0, 0)
         self._adjust_cell_attributes(0, 0, 0)
@@ -1418,6 +1475,7 @@ class DataArray:
             raise IndexError("Insertion point not in grid")
 
         new_keys = {}
+        moved_bindings = {}
         del_keys = []
 
         for key in list(self.storage_backend.iter_keys()):
@@ -1425,7 +1483,11 @@ class DataArray:
                 new_key = list(key)
                 new_key[axis] += no_to_insert
                 if 0 <= new_key[axis] < self.shape[axis]:
-                    new_keys[tuple(new_key)] = self(key)
+                    new_key = tuple(new_key)
+                    new_keys[new_key] = self(key)
+                    parser_id = self.parser_bindings.get(key)
+                    if parser_id:
+                        moved_bindings[new_key] = parser_id
                 del_keys.append(key)
 
         # Now re-insert moved keys
@@ -1449,9 +1511,14 @@ class DataArray:
                     fallback_index=insertion_point + i,
                 )
                 self.dict_grid.sheet_names.insert(insertion_point, new_name)
+                parser_ids = self.sheet_default_parser_ids
+                parser_ids.insert(insertion_point, self.active_parser_id)
+                self.sheet_default_parser_ids = parser_ids
 
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
+            if key in moved_bindings:
+                self.set_cell_parser_id(key, moved_bindings[key])
 
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
@@ -1478,6 +1545,7 @@ class DataArray:
             raise IndexError("Deletion point not in grid")
 
         new_keys = {}
+        moved_bindings = {}
         del_keys = []
 
         # Note that the loop goes over a list that copies all dict keys
@@ -1489,8 +1557,11 @@ class DataArray:
                 elif key[axis] >= deletion_point + no_to_delete:
                     new_key = list(key)
                     new_key[axis] -= no_to_delete
-
-                    new_keys[tuple(new_key)] = self(key)
+                    new_key = tuple(new_key)
+                    new_keys[new_key] = self(key)
+                    parser_id = self.parser_bindings.get(key)
+                    if parser_id:
+                        moved_bindings[new_key] = parser_id
                     del_keys.append(key)
 
         self._adjust_rowcol(deletion_point, -no_to_delete, axis, tab=tab)
@@ -1508,11 +1579,17 @@ class DataArray:
                     self.sheet_globals_uncopyable.pop(deletion_point)
                 if deletion_point < len(self.dict_grid.sheet_names):
                     self.dict_grid.sheet_names.pop(deletion_point)
+                parser_ids = self.sheet_default_parser_ids
+                if deletion_point < len(parser_ids):
+                    parser_ids.pop(deletion_point)
+                self.sheet_default_parser_ids = parser_ids
 
         # Now re-insert moved keys
 
         for key in new_keys:
             self.__setitem__(key, new_keys[key])
+            if key in moved_bindings:
+                self.set_cell_parser_id(key, moved_bindings[key])
 
         for key in del_keys:
             if key not in new_keys and self(key) is not None:
@@ -1680,6 +1757,20 @@ class CodeArray(DataArray):
         else:
             self.parser_bindings[key] = parser_id
         self.compile_cache.clear()
+
+    def set_user_input(self, key: Tuple[int, int, int], text: str):
+        """Set user-authored cell text while preserving/applying parser binding rules."""
+
+        old_parser_id = self.get_cell_parser_id(key)
+        self[key] = text
+        if text in (None, ""):
+            # Empty cells default to unbound metadata.
+            self.set_cell_parser_id(key, None)
+            return
+        if old_parser_id:
+            self.set_cell_parser_id(key, old_parser_id)
+            return
+        self.set_cell_parser_id(key, self.default_parser_id_for_table(key[2]))
 
     def _resolve_code_parser_signature(
             self, key: Tuple[int, int, int]

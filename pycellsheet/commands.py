@@ -228,7 +228,7 @@ class SetCellCode(QUndoCommand):
         with self.model.main_window.entry_line.disable_updates():
             for index, new_code in zip(self.indices, self.new_codes):
                 self.model.setData(index, new_code, Qt.ItemDataRole.EditRole,
-                                   raw=True)
+                                   raw=False)
         self.model.emit_data_changed_all()
 
     def undo(self):
