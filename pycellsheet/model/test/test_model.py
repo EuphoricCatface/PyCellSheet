@@ -1068,6 +1068,104 @@ class TestCodeArray(object):
         with pytest.raises(ValueError, match="must be different"):
             self.code_array.preview_parser_rebind("parser_main", "parser_main")
 
+    def test_cell_parser_status_reports_explicit_default_missing(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_alt", "name": "Alt", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.active_parser_id = "parser_main"
+        self.code_array.sheet_default_parser_ids = ["parser_main"]
+        self.code_array[0, 0, 0] = "a"
+        self.code_array[0, 1, 0] = "b"
+        self.code_array[0, 2, 0] = "c"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_alt")
+        self.code_array.set_cell_parser_id((0, 2, 0), "parser_missing")
+
+        explicit = self.code_array.cell_parser_status((0, 0, 0))
+        default = self.code_array.cell_parser_status((0, 1, 0))
+        missing = self.code_array.cell_parser_status((0, 2, 0))
+
+        assert explicit["state"] == "explicit"
+        assert explicit["parser_id"] == "parser_alt"
+        assert default["state"] == "default"
+        assert default["parser_id"] == "parser_main"
+        assert missing["state"] == "missing"
+        assert missing["parser_id"] == "parser_missing"
+
+    def test_parser_usage_count_scoped_by_parser_id(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_alt", "name": "Alt", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.shape = (3, 3, 2)
+        self.code_array.sheet_default_parser_ids = ["parser_main", "parser_alt"]
+        self.code_array[0, 0, 0] = "a"  # default parser_main
+        self.code_array[0, 1, 0] = "b"  # explicit parser_alt
+        self.code_array[0, 0, 1] = "c"  # default parser_alt
+        self.code_array.set_cell_parser_id((0, 1, 0), "parser_alt")
+
+        usage = self.code_array.parser_usage_count("parser_alt")
+        assert usage["counts"]["total"] == 2
+        assert usage["counts"]["explicit"] == 1
+        assert usage["counts"]["default"] == 1
+
+    def test_preview_and_apply_parser_migration_selection_scope(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_alt", "name": "Alt", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.shape = (3, 3, 1)
+        self.code_array.sheet_default_parser_ids = ["parser_main"]
+        self.code_array[0, 0, 0] = "a"
+        self.code_array[0, 1, 0] = "b"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_main")
+
+        preview = self.code_array.preview_parser_migration(
+            "parser_main", "parser_alt", scope="selection",
+            selection_keys=[(0, 0, 0), (0, 1, 0)]
+        )
+        assert preview["summary"]["cell_changed"] == 2
+        assert preview["summary"]["sheet_default_changed"] == 0
+        assert preview["summary"]["active_changed"] == 0
+        actions = {entry["key"]: entry["action"] for entry in preview["cell_entries"]}
+        assert actions[(0, 0, 0)] == "rebind_explicit"
+        assert actions[(0, 1, 0)] == "assign_explicit"
+
+        applied = self.code_array.apply_parser_migration(
+            "parser_main", "parser_alt", scope="selection",
+            selection_keys=[(0, 0, 0), (0, 1, 0)]
+        )
+        assert applied["summary"]["total_changed"] == 2
+        assert self.code_array.get_cell_parser_id((0, 0, 0)) == "parser_alt"
+        assert self.code_array.get_cell_parser_id((0, 1, 0)) == "parser_alt"
+        assert self.code_array.sheet_default_parser_ids == ["parser_main"]
+
+    def test_preview_and_apply_parser_migration_workspace_scope(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_alt", "name": "Alt", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.shape = (3, 3, 2)
+        self.code_array.active_parser_id = "parser_main"
+        self.code_array.sheet_default_parser_ids = ["parser_main", "parser_alt"]
+        self.code_array[0, 0, 0] = "a"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_main")
+
+        preview = self.code_array.preview_parser_migration(
+            "parser_main", "parser_alt", scope="workspace"
+        )
+        assert preview["summary"]["cell_changed"] == 1
+        assert preview["summary"]["sheet_default_changed"] == 1
+        assert preview["summary"]["active_changed"] == 1
+
+        applied = self.code_array.apply_parser_migration(
+            "parser_main", "parser_alt", scope="workspace"
+        )
+        assert applied["summary"]["total_changed"] == 3
+        assert self.code_array.active_parser_id == "parser_alt"
+        assert self.code_array.sheet_default_parser_ids == ["parser_alt", "parser_alt"]
+        assert self.code_array.get_cell_parser_id((0, 0, 0)) == "parser_alt"
+
     def test_compile_cache_cleared_on_shape_change(self):
         self.code_array[0, 0, 0] = "1 + 1"
         assert self.code_array[0, 0, 0] == 2
