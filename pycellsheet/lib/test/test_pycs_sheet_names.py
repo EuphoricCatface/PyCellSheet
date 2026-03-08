@@ -78,6 +78,7 @@ class _DummyCodeArray:
         self.cell_attributes = []
         self.exp_parser_code = "return cell"
         self.active_parser_id = "parser_main"
+        self.parser_bindings = {}
         self.parser_specs = [{
             "id": "parser_main",
             "name": "Active Parser",
@@ -85,6 +86,13 @@ class _DummyCodeArray:
             "version": None,
             "code": self.exp_parser_code,
         }]
+
+    def set_cell_parser_id(self, key, parser_id):
+        parser_id = str(parser_id or "").strip()
+        if parser_id:
+            self.parser_bindings[key] = parser_id
+        else:
+            self.parser_bindings.pop(key, None)
 
 
 class _DummyWriterCodeArray:
@@ -99,6 +107,7 @@ class _DummyWriterCodeArray:
         self._code = {}
         self.exp_parser_code = "return cell"
         self.active_parser_id = "parser_main"
+        self.parser_bindings = {}
         self.parser_specs = [{
             "id": "parser_main",
             "name": "Active Parser",
@@ -125,6 +134,7 @@ class _DummyCodeArrayNoNames:
         self.cell_attributes = []
         self.exp_parser_code = "return cell"
         self.active_parser_id = "parser_main"
+        self.parser_bindings = {}
         self.parser_specs = [{
             "id": "parser_main",
             "name": "Active Parser",
@@ -411,6 +421,21 @@ def test_writer_reader_round_trip_preserves_parser_specs_section():
     assert "PythonCode" in target.parser_specs[1]["code"]
 
 
+def test_writer_reader_round_trip_preserves_parser_bindings_section():
+    source = _DummyWriterCodeArray(["Main"], ["x = 9"])
+    source._code[(0, 0, 0)] = "1 + 2"
+    source.parser_bindings = {
+        (0, 0, 0): "parser_main",
+    }
+
+    serialized = "".join(list(PycsWriter(source))).encode("utf-8")
+    target = _DummyCodeArray(1)
+    target._code = {(0, 0, 0): "1 + 2"}
+    list(PycsReader(BytesIO(serialized), target))
+
+    assert target.parser_bindings == {(0, 0, 0): "parser_main"}
+
+
 def test_color_and_weight_conversion_helpers():
     assert wxcolor2rgb(0x112233) == (0x11, 0x22, 0x33)
     assert qt52qt6_fontweights(50) == 405
@@ -503,6 +528,17 @@ def test_pycs2parser_settings_rejects_unknown_key():
 
     with pytest.raises(ValueError, match="Unknown parser_settings key.*active_parser_id"):
         reader._pycs2parser_settings("pycel_formula_opt_in\tTrue\n")
+
+
+def test_pycs2parser_bindings_ignores_out_of_bounds():
+    code_array = _DummyCodeArray(1)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2parser_bindings("0\t0\t0\t'parser_main'\n")
+    reader._pycs2parser_bindings("1\t0\t0\t'parser_main'\n")
+    list(reader)
+
+    assert code_array.parser_bindings == {(0, 0, 0): "parser_main"}
 
 
 def test_writer_code_serializes_repr_when_version_gt_1():
