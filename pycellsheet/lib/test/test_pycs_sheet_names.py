@@ -78,6 +78,7 @@ class _DummyCodeArray:
         self.cell_attributes = []
         self.exp_parser_code = "return cell"
         self.active_parser_id = "parser_main"
+        self.sheet_default_parser_ids = ["parser_main" for _ in range(tables)]
         self.parser_bindings = {}
         self.parser_specs = [{
             "id": "parser_main",
@@ -107,6 +108,7 @@ class _DummyWriterCodeArray:
         self._code = {}
         self.exp_parser_code = "return cell"
         self.active_parser_id = "parser_main"
+        self.sheet_default_parser_ids = ["parser_main" for _ in range(len(sheet_scripts))]
         self.parser_bindings = {}
         self.parser_specs = [{
             "id": "parser_main",
@@ -134,6 +136,7 @@ class _DummyCodeArrayNoNames:
         self.cell_attributes = []
         self.exp_parser_code = "return cell"
         self.active_parser_id = "parser_main"
+        self.sheet_default_parser_ids = ["parser_main" for _ in range(tables)]
         self.parser_bindings = {}
         self.parser_specs = [{
             "id": "parser_main",
@@ -389,6 +392,16 @@ def test_pycs2parser_settings_sets_active_parser_id():
     assert code_array.active_parser_id == "parser_custom"
 
 
+def test_pycs2parser_settings_sets_sheet_default_parser_ids():
+    code_array = _DummyCodeArray(2)
+    reader = PycsReader(BytesIO(b""), code_array)
+
+    reader._pycs2parser_settings("sheet_default_parser_ids\t['parser_a', 'parser_b']\n")
+    list(reader)
+
+    assert code_array.sheet_default_parser_ids == ["parser_a", "parser_b"]
+
+
 def test_writer_reader_round_trip_preserves_parser_specs_section():
     source = _DummyWriterCodeArray(["Main"], ["x = 9"])
     source.parser_specs = [
@@ -526,7 +539,7 @@ def test_pycs2parser_settings_rejects_unknown_key():
     code_array = _DummyCodeArray(1)
     reader = PycsReader(BytesIO(b""), code_array)
 
-    with pytest.raises(ValueError, match="Unknown parser_settings key.*active_parser_id"):
+    with pytest.raises(ValueError, match="Unknown parser_settings key.*sheet_default_parser_ids"):
         reader._pycs2parser_settings("pycel_formula_opt_in\tTrue\n")
 
 

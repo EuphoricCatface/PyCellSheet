@@ -147,6 +147,7 @@ class PycsReader:
         self._parser_spec_header_re = re.compile(r"^\(parser_spec:(.+)\)\s+([0-9]+)$")
         self._loaded_parser_specs = []
         self._pending_active_parser_id = None
+        self._pending_sheet_default_parser_ids = None
         self._pending_parser_bindings: dict[Tuple[int, int, int], str] = {}
 
     def __iter__(self):
@@ -175,6 +176,9 @@ class PycsReader:
             self.code_array.parser_specs = self._loaded_parser_specs
         if self._pending_active_parser_id is not None:
             self.code_array.active_parser_id = self._pending_active_parser_id
+        if self._pending_sheet_default_parser_ids is not None \
+           and hasattr(self.code_array, "sheet_default_parser_ids"):
+            self.code_array.sheet_default_parser_ids = self._pending_sheet_default_parser_ids
         if self._pending_parser_bindings:
             if hasattr(self.code_array, "set_cell_parser_id"):
                 for key, parser_id in self._pending_parser_bindings.items():
@@ -478,10 +482,14 @@ class PycsReader:
             self.code_array.exp_parser_code = value
         elif key == "active_parser_id":
             self._pending_active_parser_id = str(value)
+        elif key == "sheet_default_parser_ids":
+            if not isinstance(value, (list, tuple)):
+                raise ValueError("sheet_default_parser_ids must be a list/tuple.")
+            self._pending_sheet_default_parser_ids = [str(parser_id) for parser_id in value]
         else:
             raise ValueError(
                 f"Unknown parser_settings key: {key}. "
-                "Supported keys in v0.6+: exp_parser_code, active_parser_id."
+                "Supported keys in v0.6+: exp_parser_code, active_parser_id, sheet_default_parser_ids."
             )
 
     def _pycs2parser_specs(self, line: str):
@@ -622,6 +630,9 @@ class PycsWriter(object):
         active_parser_id = getattr(self.code_array, "active_parser_id", None)
         if active_parser_id is not None:
             yield f"active_parser_id\t{active_parser_id!r}\n"
+        sheet_default_parser_ids = getattr(self.code_array, "sheet_default_parser_ids", None)
+        if sheet_default_parser_ids is not None:
+            yield f"sheet_default_parser_ids\t{list(sheet_default_parser_ids)!r}\n"
         yield f"exp_parser_code\t{self.code_array.exp_parser_code!r}\n"
 
     def _parser_specs2pycs(self) -> Iterable[str]:
