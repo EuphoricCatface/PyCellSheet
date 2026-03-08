@@ -986,6 +986,19 @@ class TestCodeArray(object):
         assert self.code_array((0, 0, 0)) == "hello"
         assert self.code_array.get_cell_parser_id((0, 0, 0)) == "parser_sheet"
 
+    def test_effective_parser_id_for_cell_prefers_cell_then_sheet_default(self):
+        self.code_array.parser_specs = [
+            {"id": "parser_main", "name": "Main", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_sheet", "name": "Sheet", "kind": "custom", "version": None, "code": "return cell"},
+            {"id": "parser_cell", "name": "Cell", "kind": "custom", "version": None, "code": "return cell"},
+        ]
+        self.code_array.active_parser_id = "parser_main"
+        self.code_array.sheet_default_parser_ids = ["parser_sheet"]
+
+        assert self.code_array.effective_parser_id_for_cell((0, 0, 0)) == "parser_sheet"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_cell")
+        assert self.code_array.effective_parser_id_for_cell((0, 0, 0)) == "parser_cell"
+
     def test_set_user_input_empty_cell_clears_binding_by_default(self):
         self.code_array[0, 0, 0] = "hello"
         self.code_array.set_cell_parser_id((0, 0, 0), "parser_main")

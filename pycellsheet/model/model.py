@@ -1772,23 +1772,26 @@ class CodeArray(DataArray):
             return
         self.set_cell_parser_id(key, self.default_parser_id_for_table(key[2]))
 
+    def effective_parser_id_for_cell(self, key: Tuple[int, int, int]) -> str:
+        """Return effective parser binding for a cell."""
+
+        parser_id = self.get_cell_parser_id(key)
+        if parser_id:
+            return parser_id
+        return self.default_parser_id_for_table(key[2])
+
     def _resolve_code_parser_signature(
             self, key: Tuple[int, int, int]
     ) -> tuple[str, str]:
         """Return parser binding id/signature for code eval at key."""
 
-        parser_id = self.get_cell_parser_id(key)
-        if parser_id:
-            signature = self.parser_signature_for_id(parser_id)
-            if signature is None:
-                raise ValueError(
-                    f"Unresolved parser_id {parser_id!r} for cell {key}. "
-                    "Rebind parser explicitly."
-                )
-            return parser_id, signature
-
-        parser_id = self.active_parser_id
+        parser_id = self.effective_parser_id_for_cell(key)
         signature = self.parser_signature_for_id(parser_id)
+        if signature is None and self.get_cell_parser_id(key):
+            raise ValueError(
+                f"Unresolved parser_id {parser_id!r} for cell {key}. "
+                "Rebind parser explicitly."
+            )
         if signature is None:
             return parser_id, self.exp_parser_code
         return parser_id, signature
