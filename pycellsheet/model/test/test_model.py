@@ -938,15 +938,18 @@ class TestCodeArray(object):
             },
         ]
         self.code_array.active_parser_id = "parser_a"
-        self.code_array[0, 0, 0] = PythonCode("1 + 2", parser_id="parser_a")
-        self.code_array[0, 1, 0] = PythonCode("1 + 2", parser_id="parser_b")
+        self.code_array[0, 0, 0] = "1 + 2"
+        self.code_array[0, 1, 0] = "1 + 2"
+        self.code_array.set_cell_parser_id((0, 0, 0), "parser_a")
+        self.code_array.set_cell_parser_id((0, 1, 0), "parser_b")
 
         assert self.code_array[0, 0, 0] == 3
         assert self.code_array[0, 1, 0] == 3
         assert len(self.code_array.compile_cache) == 2
 
-    def test_unresolved_parser_id_returns_error(self):
-        self.code_array[0, 0, 0] = PythonCode("1 + 2", parser_id="missing_parser")
+    def test_unresolved_cell_parser_binding_returns_error(self):
+        self.code_array[0, 0, 0] = "1 + 2"
+        self.code_array.set_cell_parser_id((0, 0, 0), "missing_parser")
 
         result = self.code_array[0, 0, 0]
         assert isinstance(result, ValueError)

@@ -502,6 +502,7 @@ class DictGrid(KeyValueStore):
         self.exp_parser_code = u""
         self.parser_specs: list[dict[str, typing.Any]] = []
         self.active_parser_id = DEFAULT_PARSER_SPEC_ID
+        self.parser_bindings: dict[Tuple[int, int, int], str] = {}
 
         self.row_heights = defaultdict(float)  # Keys have format (row, table)
         self.col_widths = defaultdict(float)  # Keys have format (col, table)
@@ -616,6 +617,7 @@ class DataArray:
         data["exp_parser_code"] = self.exp_parser_code
         data["parser_specs"] = deepcopy(self.parser_specs)
         data["active_parser_id"] = self.active_parser_id
+        data["parser_bindings"] = dict(self.parser_bindings)
         return data
 
     @data.setter
@@ -671,6 +673,9 @@ class DataArray:
         if "active_parser_id" in kwargs:
             self.active_parser_id = kwargs["active_parser_id"]
 
+        if "parser_bindings" in kwargs:
+            self.parser_bindings = kwargs["parser_bindings"]
+
         if "exp_parser_code" in kwargs:
             self.exp_parser_code = kwargs["exp_parser_code"]
         elif "active_parser_id" in kwargs or "parser_specs" in kwargs:
@@ -680,6 +685,8 @@ class DataArray:
 
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
+        if hasattr(self, "parser_bindings"):
+            self.parser_bindings = {}
 
     @property
     def row_heights(self) -> defaultdict:
@@ -772,6 +779,8 @@ class DataArray:
         self.dict_grid.parser_specs = normalized
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
+        if hasattr(self, "parser_bindings"):
+            self.parser_bindings = {}
 
     @property
     def active_parser_id(self) -> str:
@@ -783,6 +792,8 @@ class DataArray:
         self.dict_grid.active_parser_id = parser_id
         if hasattr(self, "compile_cache"):
             self.compile_cache.clear()
+        if hasattr(self, "parser_bindings"):
+            self.parser_bindings = {}
         spec = self.get_parser_spec(parser_id)
         if spec is None:
             # Keep unresolved binding explicit; do not silently remap.
@@ -796,13 +807,41 @@ class DataArray:
         code = self._parser_code_from_spec(spec)
         return f"{spec.get('kind')}::{spec.get('version')}::{code}"
 
+    @property
+    def parser_bindings(self) -> dict[Tuple[int, int, int], str]:
+        return self.dict_grid.parser_bindings
+
+    @parser_bindings.setter
+    def parser_bindings(self, value: dict[Tuple[int, int, int], str]):
+        normalized: dict[Tuple[int, int, int], str] = {}
+        for key, parser_id in (value or {}).items():
+            if not (isinstance(key, tuple) and len(key) == 3):
+                continue
+            if any(not isinstance(ele, int) for ele in key):
+                continue
+            parser_id = str(parser_id or "").strip()
+            if not parser_id:
+                continue
+            normalized[key] = parser_id
+        self.dict_grid.parser_bindings = normalized
+        if hasattr(self, "compile_cache"):
+            self.compile_cache.clear()
+
     def _parser_settings_signature(self) -> str:
         parser_specs_snapshot = [
             (spec.get("id"), spec.get("name"), spec.get("kind"),
              spec.get("version"), spec.get("code"))
             for spec in self.parser_specs
         ]
-        return repr((self.active_parser_id, parser_specs_snapshot, self.exp_parser_code))
+        parser_bindings_snapshot = tuple(sorted(
+            (key, parser_id) for key, parser_id in self.parser_bindings.items()
+        ))
+        return repr((
+            self.active_parser_id,
+            parser_specs_snapshot,
+            parser_bindings_snapshot,
+            self.exp_parser_code,
+        ))
 
     @property
     def exp_parser_code(self) -> str:
@@ -1627,23 +1666,27 @@ class CodeArray(DataArray):
                 return False
         return True
 
-    def _bind_code_parser_id(self, code_obj: Union[PythonCode, SpreadSheetCode]):
-        """Attach active parser_id to code objects that do not carry one yet."""
+    def get_cell_parser_id(self, key: Tuple[int, int, int]) -> typing.Optional[str]:
+        parser_id = self.parser_bindings.get(key)
+        if parser_id is None:
+            return None
+        parser_id = str(parser_id).strip()
+        return parser_id or None
 
-        parser_id = getattr(code_obj, "parser_id", None)
-        if parser_id:
-            return code_obj
-        return code_obj.with_parser_id(self.active_parser_id)
+    def set_cell_parser_id(self, key: Tuple[int, int, int], parser_id: typing.Optional[str]):
+        parser_id = str(parser_id or "").strip()
+        if not parser_id:
+            self.parser_bindings.pop(key, None)
+        else:
+            self.parser_bindings[key] = parser_id
+        self.compile_cache.clear()
 
     def _resolve_code_parser_signature(
-            self, key: Tuple[int, int, int], code_obj: Union[PythonCode, SpreadSheetCode]
+            self, key: Tuple[int, int, int]
     ) -> tuple[str, str]:
-        """Return parser binding id/signature for a code object.
+        """Return parser binding id/signature for code eval at key."""
 
-        Raises ValueError when explicit parser_id no longer resolves.
-        """
-
-        parser_id = getattr(code_obj, "parser_id", None)
+        parser_id = self.get_cell_parser_id(key)
         if parser_id:
             signature = self.parser_signature_for_id(parser_id)
             if signature is None:
@@ -1819,15 +1862,13 @@ class CodeArray(DataArray):
 
         #  --- ExpParser START ---  #
         if isinstance(cell_contents, (PythonCode, SpreadSheetCode)):
-            exp_parsed = self._bind_code_parser_id(cell_contents)
+            exp_parsed = cell_contents
         else:
             if self.exp_parser.handle_empty(cell_contents):
                 if return_warnings:
                     return EmptyCell, eval_warnings
                 return EmptyCell
             exp_parsed = self.exp_parser.parse(cell_contents)
-            if isinstance(exp_parsed, (PythonCode, SpreadSheetCode)):
-                exp_parsed = self._bind_code_parser_id(exp_parsed)
         if exp_parsed is EmptyCell and cell_contents.strip():
             eval_warnings.append(
                 "Expression parser returned EmptyCell for non-empty cell contents."
@@ -1899,7 +1940,7 @@ class CodeArray(DataArray):
             # Track dependencies during evaluation
             with DependencyTracker.track(key):
                 # lstrip() here prevents IndentationError, in case the user puts a space after a "code marker"
-                parser_id, parser_signature = self._resolve_code_parser_signature(key, exp_parsed)
+                parser_id, parser_signature = self._resolve_code_parser_signature(key)
                 cache_key = (key[2], parser_id, parser_signature, ref_parsed.lstrip())
                 result = PythonEvaluator.exec_then_eval(
                     ref_parsed.lstrip(),
@@ -1955,6 +1996,7 @@ class CodeArray(DataArray):
         self.dep_graph.remove_cell(key)
         self.smart_cache.invalidate(key)
         self.compile_cache.clear()
+        self.parser_bindings.pop(key, None)
         self._clear_cell_warnings(key)
         old_spill_size = self.range_output_sizes.pop(key, None)
         if old_spill_size:
